@@ -40,3 +40,36 @@ streamlit run app.py
 ```
 
 Open the local Streamlit URL shown in the terminal, then upload your Excel file. If no file is uploaded, the app displays the sample data from the request.
+
+## Beauty device trend sourcing script (Apify + AI)
+
+Use `beauty_device_trend_sourcing.py` to discover trendy foreign beauty devices from social sources (`Xiaohongshu`, `Instagram`, `TikTok`, `X`) for Hong Kong sourcing trials.
+
+### Required environment variables
+
+- `APIFY_API_TOKEN`
+- `APIFY_ACTOR_XHS_ID`
+- `APIFY_ACTOR_INSTAGRAM_ID`
+- `APIFY_ACTOR_TIKTOK_ID`
+- `APIFY_ACTOR_X_ID`
+
+Optional:
+
+- `MISTRAL_API_KEY` (AI extraction + source-date validation)
+- `BRAVE_API_KEY` (distributor-site lookup)
+
+### Run
+
+```bash
+python beauty_device_trend_sourcing.py \
+  --min-results-per-source 3 \
+  --max-results-per-source 5
+```
+
+Offline dry-run with fixture:
+
+```bash
+python beauty_device_trend_sourcing.py \
+  --offline-fixture sample_apify_fixture.json \
+  --skip-distributor-search
+```
