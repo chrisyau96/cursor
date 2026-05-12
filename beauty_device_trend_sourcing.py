@@ -638,9 +638,10 @@ def process_source(
 ) -> list[dict[str, Any]]:
     if not candidates:
         return []
+    extracted_items: list[dict[str, Any]] = []
     if mistral_api_key:
         try:
-            return mistral_extract_products(
+            extracted_items = mistral_extract_products(
                 api_key=mistral_api_key,
                 model=mistral_model,
                 source=source,
@@ -649,11 +650,62 @@ def process_source(
                 max_results=max_results,
                 days_lookback=days_lookback,
             )
-        except RuntimeError as exc:
+        except (RuntimeError, KeyError, ValueError) as exc:
             logging.warning("Mistral extraction failed for %s: %s", source.platform, exc)
+            extracted_items = []
 
-    logging.warning("Using heuristic fallback for %s (configure MISTRAL_API_KEY for AI validation).", source.platform)
-    return heuristic_extract_products(source, candidates, max_results=max_results)
+    if not extracted_items:
+        logging.warning("Using heuristic fallback for %s (configure MISTRAL_API_KEY for AI validation).", source.platform)
+        extracted_items = heuristic_extract_products(source, candidates, max_results=max_results)
+
+    if len(extracted_items) < min_results:
+        extracted_items = backfill_to_min_results(
+            source,
+            candidates=candidates,
+            existing=extracted_items,
+            min_results=min_results,
+            max_results=max_results,
+        )
+    return extracted_items[:max_results]
+
+
+def backfill_to_min_results(
+    source: SourceConfig,
+    *,
+    candidates: list[SocialCandidate],
+    existing: list[dict[str, Any]],
+    min_results: int,
+    max_results: int,
+) -> list[dict[str, Any]]:
+    if len(existing) >= min_results:
+        return existing
+
+    seen_urls = {item.get("source_url", "") for item in existing}
+    for candidate in candidates:
+        if candidate.url in seen_urls:
+            continue
+        existing.append(
+            {
+                "source_platform": source.platform,
+                "market": source.market,
+                "product_name": clean_text(candidate.text, 120).split(".")[0] or "Unknown product",
+                "brand": "Unknown",
+                "category": "Beauty device",
+                "why_trendy": "Backfilled trial candidate to satisfy 3-5 sourcing trial volume.",
+                "validated_source_date": parse_candidate_date(candidate.posted_at_raw),
+                "date_validation_method": "Backfill from post metadata; replace with AI-validated date in production run.",
+                "date_confidence": "low",
+                "popularity_signal": candidate.engagement_text,
+                "target_market": source.market,
+                "sourcing_fit_reason": "Trial candidate requiring AI/date and supplier confirmation.",
+                "source_url": candidate.url,
+                "distributor_sites": "",
+            }
+        )
+        seen_urls.add(candidate.url)
+        if len(existing) >= min_results or len(existing) >= max_results:
+            break
+    return existing
 
 
 def main() -> None:
