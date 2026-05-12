@@ -5,4 +5,3 @@ openpyxl
 xlrd
 requests
 pillow
-python-dateutil
