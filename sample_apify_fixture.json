@@ -1,62 +1,4 @@
 {
-  "Xiaohongshu": [
-    {
-      "title": "新品美容仪测评：LumaSkin Pro LED 面罩",
-      "caption": "这款 LED 面罩在 2026-04-18 上线，最近小红书讨论很热。",
-      "url": "https://www.xiaohongshu.com/example/lumaskin-pro",
-      "createdAt": "2026-04-20T10:20:00Z",
-      "likes": 3200,
-      "comments": 248,
-      "shares": 122,
-      "authorName": "beautytech_cn"
-    },
-    {
-      "title": "家用微电流仪 NovaLift mini",
-      "caption": "香港代购问得很多，官方刚发布。",
-      "url": "https://www.xiaohongshu.com/example/novalift-mini",
-      "createdAt": "2026-05-02T08:10:00Z",
-      "likes": 1900,
-      "comments": 130,
-      "shares": 66,
-      "authorName": "skincarelab"
-    },
-    {
-      "title": "射频美容仪 GlowRF Air 2 体验",
-      "caption": "新品开箱，主打家用紧致。",
-      "url": "https://www.xiaohongshu.com/example/glowrf-air2",
-      "createdAt": "2026-04-26T09:00:00Z",
-      "likes": 1450,
-      "comments": 98,
-      "shares": 54,
-      "authorName": "kbeautyfinder"
-    }
-  ],
-  "Instagram": [
-    {
-      "caption": "New launch: LumiPulse LED Neck & Face Device. Viral in Seoul and Tokyo this month.",
-      "postUrl": "https://instagram.com/p/example-lumipulse",
-      "createdAt": "2026-05-01T12:00:00Z",
-      "likeCount": 4021,
-      "commentCount": 211,
-      "ownerUsername": "globalbeautywatch"
-    },
-    {
-      "caption": "NovaSculpt microcurrent wand now available in Japan and Taiwan stores.",
-      "postUrl": "https://instagram.com/p/example-novasculpt",
-      "createdAt": "2026-04-28T13:30:00Z",
-      "likeCount": 2811,
-      "commentCount": 163,
-      "ownerUsername": "beautyretailradar"
-    },
-    {
-      "caption": "GlowTherm RF home device restock + new app mode.",
-      "postUrl": "https://instagram.com/p/example-glowtherm",
-      "createdAt": "2026-04-22T11:00:00Z",
-      "likeCount": 1904,
-      "commentCount": 101,
-      "ownerUsername": "beautytechdigest"
-    }
-  ],
   "TikTok": [
     {
       "desc": "LED mask that sold out in 3 days: DermaRay FlexMask",
@@ -87,38 +29,6 @@
       "shareCount": 255,
       "playCount": 199002,
       "author": "beautygeek"
-    }
-  ],
-  "X": [
-    {
-      "text": "Seeing lots of posts about the new LumiPulse LED mask across Asia beauty retail.",
-      "url": "https://x.com/beautyintel/status/1001",
-      "createdAt": "2026-05-04T10:00:00Z",
-      "likeCount": 640,
-      "commentCount": 54,
-      "retweetCount": 112,
-      "viewCount": 78000,
-      "authorName": "beautyintel"
-    },
-    {
-      "text": "NovaSculpt microcurrent wand enters HK grey market demand this week.",
-      "url": "https://x.com/beautyintel/status/1002",
-      "createdAt": "2026-04-30T10:00:00Z",
-      "likeCount": 488,
-      "commentCount": 33,
-      "retweetCount": 85,
-      "viewCount": 53000,
-      "authorName": "beautyintel"
-    },
-    {
-      "text": "DermaRay FlexMask picked by creators as top at-home light therapy trend.",
-      "url": "https://x.com/skindevicenews/status/2001",
-      "createdAt": "2026-04-27T10:00:00Z",
-      "likeCount": 520,
-      "commentCount": 41,
-      "retweetCount": 90,
-      "viewCount": 62000,
-      "authorName": "skindevicenews"
     }
   ]
 }

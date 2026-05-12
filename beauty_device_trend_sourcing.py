@@ -92,28 +92,10 @@ class SocialCandidate:
 
 SOURCES: list[SourceConfig] = [
     SourceConfig(
-        platform="Xiaohongshu",
-        market="Mainland China / Chinese-speaking markets",
-        actor_env="APIFY_ACTOR_XHS_ID",
-        default_queries=["美容仪 新品", "家用美容仪 爆款", "LED 面罩 美容仪"],
-    ),
-    SourceConfig(
-        platform="Instagram",
-        market="International",
-        actor_env="APIFY_ACTOR_INSTAGRAM_ID",
-        default_queries=["beauty device", "led mask", "microcurrent device"],
-    ),
-    SourceConfig(
         platform="TikTok",
         market="International",
         actor_env="APIFY_ACTOR_TIKTOK_ID",
         default_queries=["beauty device", "led mask", "rf facial device", "ipl device"],
-    ),
-    SourceConfig(
-        platform="X",
-        market="International",
-        actor_env="APIFY_ACTOR_X_ID",
-        default_queries=["beauty device", "home beauty tech", "microcurrent"],
     ),
 ]
 
