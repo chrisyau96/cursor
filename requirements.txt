@@ -3,3 +3,7 @@ pandas
 plotly
 openpyxl
 xlrd
+requests
+beautifulsoup4
+python-dateutil
+pillow
