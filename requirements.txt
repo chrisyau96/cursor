@@ -3,3 +3,7 @@ pandas
 plotly
 openpyxl
 xlrd
+# beauty_device_scanner.py dependencies
+requests
+pillow
+python-dateutil
