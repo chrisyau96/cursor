@@ -20,8 +20,7 @@ export const moodEmoji = (n) => MOODS[n] ?? "";
 export const MOOD_LIST = MOODS;
 
 // Default habits seeded from the Self-Discipline OS guide.
-function defaultHabits() {
-  const base = addDaysISO(todayISO(), -34);
+function defaultHabits(base = addDaysISO(todayISO(), -34)) {
   const mk = (o) => ({
     id: uid(),
     name: o.name,
@@ -458,7 +457,7 @@ export function importData(json) {
 }
 
 export function clearAllData() {
-  store.habits = defaultHabits();
+  store.habits = defaultHabits(todayISO());
   store.records = {};
   store.notes = {};
   store.meta = {};
