@@ -35,6 +35,30 @@ is built into the in-app Guide tab.
   backup (export/import/reset), habit management (reorder / edit / add), and the built-in
   **Self-Discipline OS** guide.
 
+## Use it on your phone (with Google Drive auto-sync)
+
+Google sign-in needs an **HTTPS URL with a registered origin**, so publish the app once and
+then open it on your phone. Easiest path (the repo is already on GitHub):
+
+1. **Publish with GitHub Pages** — in the GitHub repo: *Settings → Pages → Build and
+   deployment → Source: Deploy from a branch*, pick your branch and `/ (root)`, Save. After
+   a minute your app is live at `https://<user>.github.io/<repo>/`.
+2. **Create a Google OAuth Client ID** — in the [Google Cloud Console](https://console.cloud.google.com/):
+   create/select a project → *APIs & Services* → enable the **Google Drive API** → *OAuth
+   consent screen* (External; add yourself as a **Test user**) → *Credentials → Create
+   credentials → OAuth client ID → Web application*. Under **Authorized JavaScript origins**
+   add your Pages origin exactly, e.g. `https://<user>.github.io`. Copy the Client ID.
+3. **On your phone**, open the Pages URL in Chrome/Safari → browser menu → **Add to Home
+   Screen / Install app**. It installs as a standalone app (offline-capable PWA).
+4. **Connect Drive** — open the app → gear ⚙️ *Settings → Google Drive sync* → paste the
+   Client ID → **Connect Drive** → turn **Auto live-sync** on. Your records now upload to
+   your private Drive app folder after every edit, and **Restore** pulls them back on any
+   device.
+
+No phone setup? Any static HTTPS host works (Netlify/Vercel/Cloudflare Pages) — just add
+that origin to the OAuth client. Without Drive, **Settings → Export/Import** is a no-setup
+backup.
+
 ## Google Drive sync
 
 Settings → *Google Drive sync* backs up your data to your own Drive (in the private
