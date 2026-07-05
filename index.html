@@ -6,7 +6,14 @@
   <meta name="theme-color" content="#4f46e5" />
   <meta name="description" content="Momentum — a mobile habit tracker with records, streaks, and trend reports." />
   <title>Momentum · Habit Tracker</title>
-  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Ctext y='.9em' font-size='90'%3E%E2%9C%85%3C/text%3E%3C/svg%3E" />
+  <link rel="icon" href="assets/icon.svg" />
+  <link rel="icon" type="image/png" sizes="192x192" href="assets/icon-192.png" />
+  <link rel="apple-touch-icon" href="assets/icon-180.png" />
+  <link rel="manifest" href="manifest.webmanifest" />
+  <meta name="mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="default" />
+  <meta name="apple-mobile-web-app-title" content="Momentum" />
   <link rel="stylesheet" href="assets/css/styles.css" />
 </head>
 <body>
@@ -53,5 +60,13 @@
   <div class="toast-host" id="toastHost" aria-live="polite"></div>
 
   <script type="module" src="assets/js/app.js"></script>
+  <script>
+    // Register the service worker for offline / installable PWA support.
+    if ("serviceWorker" in navigator) {
+      window.addEventListener("load", () => {
+        navigator.serviceWorker.register("sw.js").catch((e) => console.warn("SW registration failed", e));
+      });
+    }
+  </script>
 </body>
 </html>
