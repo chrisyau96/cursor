@@ -1,14 +1,19 @@
-// App controller: routing, sheet/toast host, and view rendering.
+// App controller: routing, sheet/toast host, view rendering, settings gear,
+// live clock, font-size, and Google Drive auto-sync wiring.
 import { $, $$, el, todayISO } from "./utils.js";
-import { load, subscribe, getSettings } from "./store.js";
+import { load, subscribe, onChange, getSettings, setSetting } from "./store.js";
+import { computeStats } from "./gamify.js";
 import { habitFormSheet } from "./habitForm.js";
+import { initDrive, scheduleAutoSync } from "./drive.js";
 
 import * as today from "./views/today.js";
 import * as calendar from "./views/calendar.js";
 import * as reports from "./views/reports.js";
-import * as guide from "./views/guide.js";
+import * as rewards from "./views/rewards.js";
+import * as settings from "./views/settings.js";
+import { applyTheme, applyFontSize } from "./views/settings.js";
 
-const views = { today, calendar, reports, guide };
+const views = { today, calendar, reports, rewards, settings };
 
 const app = {
   state: {
@@ -17,6 +22,7 @@ const app = {
     calHabitId: "all",
     calYear: null,
     calMonth: null,
+    calMode: "month",
     reportRange: "weekly",
   },
 };
@@ -47,11 +53,9 @@ sheetHost.addEventListener("click", (e) => {
 });
 
 // ---------- Toast ----------
-let toastTimer;
 function toast(msg) {
   const t = el("div", { class: "toast", text: msg });
   toastHost.appendChild(t);
-  clearTimeout(toastTimer);
   setTimeout(() => {
     t.classList.add("out");
     setTimeout(() => t.remove(), 260);
@@ -91,9 +95,29 @@ function renderView() {
   const bar = mod.topbarFor ? mod.topbarFor(ctx) : { title: app.state.view, sub: "" };
   topbarTitle.textContent = bar.title;
   topbarSub.textContent = bar.sub || "";
+  renderTopbarActions();
 }
 
-// ---------- Wire up tabbar ----------
+function renderTopbarActions() {
+  topbarActions.innerHTML = "";
+  // level chip -> rewards
+  const stats = computeStats();
+  const chip = el("button", {
+    class: "level-chip",
+    title: `Level ${stats.level.level} · ${stats.level.identity}`,
+  }, [
+    el("span", { class: "lc-lvl", text: `L${stats.level.level}` }),
+    el("span", { class: "lc-credit", text: `HK$${stats.balance}` }),
+  ]);
+  chip.addEventListener("click", () => goTo("rewards"));
+  topbarActions.appendChild(chip);
+
+  const gear = el("button", { class: "icon-btn", "aria-label": "Settings", text: "⚙️" });
+  gear.addEventListener("click", () => goTo("settings"));
+  topbarActions.appendChild(gear);
+}
+
+// ---------- Tabbar ----------
 $$(".tab").forEach((tab) => {
   tab.addEventListener("click", () => {
     if (tab.dataset.action === "add-habit") { ctx.addHabit(); return; }
@@ -101,20 +125,31 @@ $$(".tab").forEach((tab) => {
   });
 });
 
-// scrolled shadow on topbar
 viewHost.addEventListener("scroll", () => {
   topbar.classList.toggle("scrolled", viewHost.scrollTop > 4);
 });
 
-// re-render on store changes
 subscribe(() => renderView());
+
+// Auto-sync to Drive whenever data changes (if enabled + connected).
+onChange(() => scheduleAutoSync());
+
+// ---------- Live clock (updates the Today subtitle) ----------
+function tickClock() {
+  if (app.state.view === "today") {
+    topbarSub.textContent = views.today.topbarFor(ctx).sub;
+  }
+}
 
 // ---------- Init ----------
 function init() {
   load();
-  const theme = getSettings().theme;
-  if (theme) document.documentElement.setAttribute("data-theme", theme);
+  const s = getSettings();
+  applyTheme(s.theme);
+  applyFontSize(s.fontSize);
+  initDrive(toast, () => renderView());
   goTo("today");
+  setInterval(tickClock, 15000);
 }
 
 init();

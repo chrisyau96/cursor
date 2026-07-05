@@ -664,6 +664,116 @@ h1, h2, h3, h4 { margin: 0; }
 
 .note-preview { font-size: 12.5px; color: var(--muted); }
 
+/* ---------- Topbar level chip ---------- */
+.level-chip {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 10px;
+  border-radius: 999px;
+  background: linear-gradient(140deg, var(--brand), var(--brand-2));
+  color: #fff;
+  box-shadow: var(--shadow-sm);
+}
+.level-chip .lc-lvl { font-weight: 800; font-size: 12px; }
+.level-chip .lc-credit { font-weight: 700; font-size: 12px; background: rgba(255,255,255,.22); padding: 2px 7px; border-radius: 999px; }
+
+/* ---------- Gamify summary strip (Today) ---------- */
+.gamify-strip {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  width: 100%;
+  margin-top: 12px;
+  padding: 12px 14px;
+  border-radius: 18px;
+  background: var(--card);
+  border: 1px solid var(--line);
+  box-shadow: var(--shadow-sm);
+  text-align: left;
+}
+.gamify-strip:active { transform: scale(.99); }
+.gs-level { display: flex; align-items: center; gap: 10px; min-width: 0; }
+.gs-badge {
+  flex: 0 0 auto; width: 40px; height: 40px; border-radius: 12px;
+  display: grid; place-items: center; font-weight: 800; color: #fff; font-size: 14px;
+  background: linear-gradient(140deg, var(--brand), var(--brand-2));
+}
+.gs-identity { font-weight: 800; font-size: 14px; }
+.gs-xpbar { height: 5px; width: 120px; max-width: 40vw; border-radius: 999px; background: var(--line); overflow: hidden; margin-top: 5px; }
+.gs-xpbar > i { display: block; height: 100%; background: linear-gradient(90deg, var(--brand), var(--brand-2)); }
+.gs-stats { display: flex; gap: 14px; text-align: center; }
+.gs-stats .gs-v { font-weight: 800; font-size: 15px; }
+.gs-stats .gs-l { font-size: 10px; color: var(--muted); font-weight: 700; }
+
+/* ---------- Rewards: level card ---------- */
+.level-card {
+  border-radius: var(--radius);
+  padding: 18px;
+  color: #fff;
+  background: linear-gradient(140deg, #1e293b 0%, #4f46e5 60%, #7c3aed 100%);
+  box-shadow: var(--shadow);
+  margin-bottom: 14px;
+}
+.lvl-top { display: flex; align-items: center; gap: 14px; }
+.lvl-ring {
+  flex: 0 0 auto; width: 58px; height: 58px; border-radius: 18px;
+  display: grid; place-items: center; font-weight: 800; font-size: 18px;
+  background: rgba(255,255,255,.18); border: 1px solid rgba(255,255,255,.28);
+}
+.lvl-eyebrow { font-size: 11px; text-transform: uppercase; letter-spacing: .1em; opacity: .82; font-weight: 800; }
+.lvl-identity { font-size: 22px; font-weight: 800; letter-spacing: -.02em; }
+.lvl-xp { font-size: 12px; opacity: .85; margin-top: 2px; }
+.lvl-bar { height: 9px; border-radius: 999px; background: rgba(255,255,255,.2); overflow: hidden; margin-top: 14px; }
+.lvl-bar > i { display: block; height: 100%; border-radius: 999px; background: #fff; }
+.lvl-next { font-size: 12px; opacity: .85; margin-top: 8px; }
+
+.credit-badge { width: 46px; height: 46px; border-radius: 14px; display: grid; place-items: center; font-size: 24px; background: var(--brand-soft); }
+
+/* ---------- Rewards: buffet ---------- */
+.buffet-card {
+  border-radius: var(--radius);
+  padding: 16px;
+  margin: 14px 0;
+  color: #fff;
+  background: linear-gradient(135deg, #f59e0b, #ea580c);
+  box-shadow: var(--shadow);
+}
+
+/* ---------- Rewards: gifts ---------- */
+.gift-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 10px; }
+.gift-cell {
+  display: flex; flex-direction: column; align-items: center; gap: 4px;
+  padding: 14px 10px; border-radius: 16px; background: var(--card);
+  border: 1px solid var(--line); box-shadow: var(--shadow-sm); text-align: center;
+}
+.gift-cell.locked { opacity: .62; }
+.gift-ico { font-size: 30px; }
+.gift-name { font-weight: 700; font-size: 13px; }
+.gift-tag { font-size: 10.5px; color: var(--faint); font-weight: 700; text-transform: uppercase; letter-spacing: .05em; }
+.gift-btn { margin-top: 6px; padding: 7px 16px; border-radius: 999px; font-weight: 800; font-size: 13px; background: linear-gradient(140deg, var(--brand), var(--brand-2)); color: #fff; }
+.gift-btn.disabled { background: var(--line); color: var(--faint); }
+
+.rules-list { margin: 0; padding-left: 18px; color: var(--muted); font-size: 13px; }
+.rules-list li { margin: 6px 0; }
+
+/* ---------- Calendar chips + overlays ---------- */
+.cal-chip {
+  padding: 8px 14px; font-size: 13px; font-weight: 700; white-space: nowrap;
+  border-radius: 999px; background: var(--card); border: 1px solid var(--line); color: var(--muted);
+}
+.cal-chip.active { background: linear-gradient(140deg, var(--brand), var(--brand-2)); color: #fff; border-color: transparent; }
+.cal-emoji { font-size: 11px; line-height: 1; }
+
+/* ---------- Sync dot + score slider ---------- */
+.sync-dot { width: 10px; height: 10px; border-radius: 50%; background: var(--faint); }
+.sync-dot.on { background: var(--green); box-shadow: 0 0 0 3px var(--green-soft); }
+
+.score-slider { width: 100%; accent-color: var(--brand); height: 26px; }
+
+.journal-card textarea { min-height: 64px; }
+
 /* misc */
 .spacer-sm { height: 8px; }
 .row-between { display: flex; align-items: center; justify-content: space-between; gap: 10px; }

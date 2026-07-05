@@ -21,7 +21,7 @@ export const MOOD_LIST = MOODS;
 
 // Default habits seeded from the Self-Discipline OS guide.
 function defaultHabits() {
-  const base = todayISO();
+  const base = addDaysISO(todayISO(), -34);
   const mk = (o) => ({
     id: uid(),
     name: o.name,
@@ -52,11 +52,22 @@ const store = {
   habits: [],
   // records[dateISO] = { [habitId]: number }
   records: {},
-  // notes[dateISO] = { text, mood }
+  // notes[dateISO] = { text, mood, score, updatedAt }
   notes: {},
+  // meta[dateISO] = { lastEntryAt: <ISO timestamp> }
+  meta: {},
+  // wallet: redemption ledger + buffet claim tracking
+  wallet: { redemptions: [], lastBuffetClaim: null },
 };
 
-let settings = { theme: "light", weekStart: 0 };
+let settings = {
+  theme: "light",
+  weekStart: 0,
+  fontSize: "md",
+  driveClientId: "",
+  driveAutoSync: false,
+  driveLastSync: null,
+};
 
 const listeners = new Set();
 export function subscribe(fn) { listeners.add(fn); return () => listeners.delete(fn); }
@@ -70,6 +81,9 @@ export function load() {
       store.habits = Array.isArray(data.habits) ? data.habits : [];
       store.records = data.records || {};
       store.notes = data.notes || {};
+      store.meta = data.meta || {};
+      store.wallet = data.wallet || { redemptions: [], lastBuffetClaim: null };
+      if (!store.wallet.redemptions) store.wallet.redemptions = [];
     } else {
       store.habits = defaultHabits();
       seedDemoRecords();
@@ -85,12 +99,18 @@ export function load() {
   } catch (e) { /* ignore */ }
 }
 
+const changeHooks = new Set();
+export function onChange(fn) { changeHooks.add(fn); return () => changeHooks.delete(fn); }
+
 function persist() {
   localStorage.setItem(STORAGE_KEY, JSON.stringify({
     habits: store.habits,
     records: store.records,
     notes: store.notes,
+    meta: store.meta,
+    wallet: store.wallet,
   }));
+  changeHooks.forEach((fn) => fn());
 }
 
 function persistSettings() {
@@ -208,7 +228,21 @@ export function setRecord(dateISO, habitId, value, doEmit = true) {
   if (value <= 0) delete store.records[dateISO][habitId];
   else store.records[dateISO][habitId] = value;
   if (Object.keys(store.records[dateISO]).length === 0) delete store.records[dateISO];
-  if (doEmit) { persist(); emit(); }
+  if (doEmit) {
+    stampEntry(dateISO);
+    persist();
+    emit();
+  }
+}
+
+// Record when the most recent entry was made for a given day.
+function stampEntry(dateISO) {
+  if (!store.meta[dateISO]) store.meta[dateISO] = {};
+  store.meta[dateISO].lastEntryAt = new Date().toISOString();
+}
+
+export function getLastEntry(dateISO) {
+  return store.meta[dateISO]?.lastEntryAt || null;
 }
 
 export function toggleCheck(dateISO, habitId) {
@@ -234,14 +268,33 @@ export function progressFor(habit, dateISO) {
   return Math.min(1, v / target);
 }
 
-// ---------- Notes / mood ----------
-export function getNote(dateISO) { return store.notes[dateISO] || { text: "", mood: null }; }
+// ---------- Journal: note / mood / score ----------
+export function getNote(dateISO) {
+  return store.notes[dateISO] || { text: "", mood: null, score: null, updatedAt: null };
+}
 export function setNote(dateISO, note) {
-  if (!note || (!note.text && note.mood == null)) delete store.notes[dateISO];
-  else store.notes[dateISO] = { text: note.text || "", mood: note.mood ?? null };
+  const empty = !note || (!note.text && note.mood == null && note.score == null);
+  if (empty) {
+    delete store.notes[dateISO];
+  } else {
+    store.notes[dateISO] = {
+      text: note.text || "",
+      mood: note.mood ?? null,
+      score: note.score ?? null,
+      updatedAt: new Date().toISOString(),
+    };
+  }
   persist();
   emit();
 }
+export function deleteNote(dateISO) {
+  delete store.notes[dateISO];
+  persist();
+  emit();
+}
+export function allNotes() { return store.notes; }
+export function getScore(dateISO) { return store.notes[dateISO]?.score ?? null; }
+export function getMood(dateISO) { return store.notes[dateISO]?.mood ?? null; }
 
 // ---------- Scheduling ----------
 export function isScheduled(habit, dateISO) {
@@ -351,16 +404,45 @@ export function dayProgress(dateISO) {
   return sum / habits.length;
 }
 
+// ---------- Wallet / redemptions ----------
+export function getWallet() { return store.wallet; }
+export function addRedemption(entry) {
+  store.wallet.redemptions.unshift({
+    id: uid(),
+    at: new Date().toISOString(),
+    ...entry,
+  });
+  persist();
+  emit();
+}
+export function removeRedemption(id) {
+  store.wallet.redemptions = store.wallet.redemptions.filter((r) => r.id !== id);
+  persist();
+  emit();
+}
+export function setBuffetClaim(dateISO) {
+  store.wallet.lastBuffetClaim = dateISO;
+  persist();
+  emit();
+}
+export function redemptionsTotal() {
+  return store.wallet.redemptions.reduce((s, r) => s + (r.cost || 0), 0);
+}
+
 // ---------- Import / Export ----------
 export function exportData() {
   return JSON.stringify({
-    version: 1,
+    version: 2,
     exportedAt: new Date().toISOString(),
     habits: store.habits,
     records: store.records,
     notes: store.notes,
+    meta: store.meta,
+    wallet: store.wallet,
   }, null, 2);
 }
+
+export function serialize() { return exportData(); }
 
 export function importData(json) {
   const data = typeof json === "string" ? JSON.parse(json) : json;
@@ -368,6 +450,9 @@ export function importData(json) {
   store.habits = data.habits;
   store.records = data.records || {};
   store.notes = data.notes || {};
+  store.meta = data.meta || {};
+  store.wallet = data.wallet || { redemptions: [], lastBuffetClaim: null };
+  if (!store.wallet.redemptions) store.wallet.redemptions = [];
   persist();
   emit();
 }
@@ -376,6 +461,19 @@ export function clearAllData() {
   store.habits = defaultHabits();
   store.records = {};
   store.notes = {};
+  store.meta = {};
+  store.wallet = { redemptions: [], lastBuffetClaim: null };
   persist();
   emit();
+}
+
+// Earliest date we should consider "tracked" for stats/gamification.
+export function firstTrackedDate() {
+  let earliest = todayISO();
+  for (const h of store.habits) {
+    if (h.createdAt && h.createdAt < earliest) earliest = h.createdAt;
+  }
+  const recDates = Object.keys(store.records);
+  for (const d of recDates) if (d < earliest) earliest = d;
+  return earliest;
 }

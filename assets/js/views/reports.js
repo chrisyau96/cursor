@@ -3,8 +3,10 @@ import { el, iso, todayISO, parseISO, addDaysISO, startOfWeek, dowShort, dowLett
 import {
   activeHabits, dayCompletion, dayProgress, isScheduled, isComplete,
   currentStreak, bestStreak, totalCompletions, completionRate, getHabit,
+  getMood, getScore, moodEmoji,
 } from "../store.js";
 import { barChart, lineChart, yearHeat, heatLegend } from "../charts.js";
+import { computeStats } from "../gamify.js";
 
 export function topbarFor() { return { title: "Reports", sub: "See your trends & results" }; }
 
@@ -33,8 +35,37 @@ export function render(ctx) {
   else if (range === "monthly") renderMonthly(ctx, view);
   else renderYearly(ctx, view);
 
+  view.appendChild(moodScoreCard(range));
   view.appendChild(habitBreakdown(ctx, range));
   return view;
+}
+
+// Number of days back for each range's mood/score trend.
+function rangeDays(range) { return range === "weekly" ? 7 : range === "monthly" ? 30 : 90; }
+
+// Merged journal analytics: day score trend + average mood.
+function moodScoreCard(range) {
+  const today = todayISO();
+  const n = rangeDays(range);
+  const points = [];
+  let moodSum = 0, moodN = 0, scoreSum = 0, scoreN = 0;
+  for (let i = n - 1; i >= 0; i--) {
+    const dISO = addDaysISO(today, -i);
+    const sc = getScore(dISO);
+    const m = getMood(dISO);
+    if (sc != null) { scoreSum += sc; scoreN++; }
+    if (m != null) { moodSum += m; moodN++; }
+    const d = parseISO(dISO);
+    points.push({ label: `${d.getMonth() + 1}/${d.getDate()}`, value: sc != null ? sc / 10 : 0 });
+  }
+  const card = el("div", { class: "card chart-card", style: "margin-top:14px" });
+  card.appendChild(el("div", { class: "row-between" }, [
+    el("h3", { text: "Journal: mood & score" }),
+    el("span", { class: "tiny", text: `${moodN ? moodEmoji(Math.round(moodSum / moodN)) : "—"} avg mood` }),
+  ]));
+  card.appendChild(el("div", { class: "chart-sub", text: scoreN ? `Average day score ${(scoreSum / scoreN).toFixed(1)}/10 · ${scoreN} entries` : "No journal scores yet — add one from Today." }));
+  card.appendChild(lineChart(points, { color: "#059669" }));
+  return card;
 }
 
 // ---------------- Weekly ----------------
@@ -58,7 +89,7 @@ function renderWeekly(ctx, view) {
   stats.appendChild(statTile("📈", "Week completion", `${rate}%`, "so far"));
   stats.appendChild(statTile("✅", "Habits done", String(weekDone), `of ${weekTotal}`));
   stats.appendChild(statTile("⭐", "Perfect days", String(perfect), "this week"));
-  stats.appendChild(statTile("🏆", "Best day", best && best.total ? dowShort(best.dow) : "—", best && best.total ? `${Math.round(best.ratio * 100)}%` : ""));
+  stats.appendChild(statTile("🔥", "Longest 100%", String(computeStats().longest100), "day streak"));
   view.appendChild(stats);
 
   const chart = el("div", { class: "card chart-card", style: "margin-top:14px" });
@@ -98,7 +129,7 @@ function renderMonthly(ctx, view) {
   stats.appendChild(statTile("📈", "Avg completion", `${avg}%`, "30 days"));
   stats.appendChild(statTile("✅", "Total check-ins", String(totalDone), "this month"));
   stats.appendChild(statTile("⭐", "Perfect days", String(perfect), "of " + activeDays));
-  stats.appendChild(statTile("🔥", "Best streak", String(Math.max(0, ...activeHabits().map((h) => bestStreak(h)))), "any habit"));
+  stats.appendChild(statTile("🔥", "Longest 100%", String(computeStats().longest100), "day streak"));
   view.appendChild(stats);
 
   const chart = el("div", { class: "card chart-card", style: "margin-top:14px" });
@@ -157,7 +188,7 @@ function renderYearly(ctx, view) {
   stats.appendChild(statTile("📅", "Active days", String(ytdActive), `in ${year}`));
   stats.appendChild(statTile("⭐", "Perfect days", String(perfect), "all done"));
   stats.appendChild(statTile("✅", "Total check-ins", String(totalCheckins), "all time"));
-  stats.appendChild(statTile("🔥", "Longest streak", String(Math.max(0, ...activeHabits().map((h) => bestStreak(h)))), "days"));
+  stats.appendChild(statTile("🔥", "Longest 100%", String(computeStats().longest100), "day streak"));
   view.appendChild(stats);
 
   const heatCard = el("div", { class: "card chart-card", style: "margin-top:14px" });
