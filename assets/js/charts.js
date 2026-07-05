@@ -56,7 +56,7 @@ export function barChart(data, { max, color, unit = "" } = {}) {
 
 // Line chart of percentages (0..1). points: [{label, value}]
 export function lineChart(points, { color = "#4f46e5" } = {}) {
-  const W = 320, H = 150, padL = 4, padR = 4, padT = 12, padB = 22;
+  const W = 320, H = 150, padL = 10, padR = 10, padT = 12, padB = 22;
   const innerW = W - padL - padR;
   const innerH = H - padT - padB;
   const n = points.length;
@@ -93,10 +93,11 @@ export function lineChart(points, { color = "#4f46e5" } = {}) {
   }
 
   // x labels (show a subset to avoid clutter)
-  const step = Math.ceil(n / 6);
+  const step = Math.max(1, Math.ceil(n / 6));
   points.forEach((p, i) => {
     if (i % step !== 0 && i !== n - 1) return;
-    const t = svgEl("text", { class: "axis-label", x: x(i), y: H - 6, "text-anchor": "middle" });
+    const anchor = i === 0 ? "start" : i === n - 1 ? "end" : "middle";
+    const t = svgEl("text", { class: "axis-label", x: x(i), y: H - 6, "text-anchor": anchor });
     t.textContent = p.label;
     svg.appendChild(t);
   });

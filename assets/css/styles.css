@@ -442,7 +442,7 @@ h1, h2, h3, h4 { margin: 0; }
 .bars .barcol .bval { font-size: 10px; color: var(--muted); font-weight: 700; }
 
 /* line chart */
-.linechart { width: 100%; height: 160px; display: block; overflow: visible; }
+.linechart { width: 100%; height: 160px; display: block; overflow: hidden; }
 .linechart .grid-line { stroke: var(--line); stroke-width: 1; }
 .linechart .area { fill: url(#areaGrad); opacity: .9; }
 .linechart .line { fill: none; stroke: var(--brand); stroke-width: 2.5; stroke-linejoin: round; stroke-linecap: round; }
