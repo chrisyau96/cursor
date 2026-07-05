@@ -4,7 +4,7 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
   <meta name="theme-color" content="#4f46e5" />
-  <meta name="description" content="Momentum — a mobile habit tracker with records, streaks, and trend reports." />
+  <meta name="description" content="Momentum — habit tracker with journal, streaks, rewards, level identities and local file sync." />
   <title>Momentum · Habit Tracker</title>
   <link rel="icon" href="assets/icon.svg" />
   <link rel="icon" type="image/png" sizes="192x192" href="assets/icon-192.png" />
@@ -12,60 +12,166 @@
   <link rel="manifest" href="manifest.webmanifest" />
   <meta name="mobile-web-app-capable" content="yes" />
   <meta name="apple-mobile-web-app-capable" content="yes" />
-  <meta name="apple-mobile-web-app-status-bar-style" content="default" />
   <meta name="apple-mobile-web-app-title" content="Momentum" />
   <link rel="stylesheet" href="assets/css/styles.css" />
 </head>
 <body>
-  <div id="app" class="app-shell">
+  <div class="app-shell">
     <!-- Top bar -->
     <header class="topbar" id="topbar">
-      <div class="topbar-left">
-        <h1 class="topbar-title" id="topbarTitle">Today</h1>
-        <p class="topbar-sub" id="topbarSub"></p>
+      <button class="profile-pill" id="profileQuick" type="button" aria-label="Open level">
+        <div class="profile-avatar" id="topProfileAvatar">🌱</div>
+        <div class="profile-meta">
+          <div class="profile-title"><span id="topLevel">Lv 1</span> · <span id="topIdentity">Seed Planter</span></div>
+          <div class="profile-sub"><span id="topXp">0 XP</span><div class="level-bar"><div class="level-fill" id="topLevelFill"></div></div></div>
+        </div>
+      </button>
+      <div class="top-actions">
+        <button class="top-icon" id="topGiftBtn" type="button" aria-label="Gifts">🎁<span class="badge" id="topGiftBadge">0</span></button>
+        <button class="top-icon" id="topSettingsBtn" type="button" aria-label="Settings">⚙️</button>
       </div>
-      <div class="topbar-actions" id="topbarActions"></div>
     </header>
+    <div class="status-row" id="statusRow">
+      <div class="status-pill" id="syncStatus"><span class="status-dot"></span><span>Sync Off</span></div>
+      <div class="status-pill" id="fileStatus"><span class="status-dot"></span><span>No File</span></div>
+      <div class="status-pill" id="reminderStatus"><span class="status-dot"></span><span>Reminders Off</span></div>
+    </div>
 
-    <!-- Main scroll area, views injected here -->
-    <main class="view-host" id="viewHost"></main>
+    <!-- Scrolling views -->
+    <main class="view-host">
+      <!-- HOME -->
+      <section class="view active" id="homeView">
+        <div class="card week-card">
+          <div class="week-nav">
+            <button class="round-nav" id="weekPrev" aria-label="Previous week">‹</button>
+            <button class="week-label" id="weekLabel">This week</button>
+            <button class="round-nav" id="weekNext" aria-label="Next week">›</button>
+          </div>
+          <div class="week-strip" id="weekStrip"></div>
+          <div class="week-legend">
+            <span><i class="band-perfect"></i>100%</span>
+            <span><i class="band-good"></i>80%+</span>
+            <span><i class="band-partial"></i>50%+</span>
+            <span><i class="band-low"></i>1–49%</span>
+            <span><i class="band-zero"></i>0%</span>
+          </div>
+        </div>
 
-    <!-- Bottom navigation -->
-    <nav class="tabbar" id="tabbar">
-      <button class="tab" data-view="today" aria-label="Today">
-        <span class="tab-ico">📋</span><span class="tab-label">Today</span>
-      </button>
-      <button class="tab" data-view="calendar" aria-label="Calendar">
-        <span class="tab-ico">🗓️</span><span class="tab-label">Calendar</span>
-      </button>
-      <button class="tab tab-fab" data-action="add-habit" aria-label="Add habit">
-        <span class="fab-plus">+</span>
-      </button>
-      <button class="tab" data-view="reports" aria-label="Reports">
-        <span class="tab-ico">📊</span><span class="tab-label">Reports</span>
-      </button>
-      <button class="tab" data-view="rewards" aria-label="Rewards">
-        <span class="tab-ico">🎁</span><span class="tab-label">Rewards</span>
-      </button>
+        <div class="cards home-stats">
+          <div class="stat-card" style="--c:var(--green)"><div class="stat-label">Streak</div><div class="stat-value" id="homeStreakValue">0 / 0</div><div class="stat-sub" id="homeStreakSub">100% days</div></div>
+          <div class="stat-card" style="--c:var(--orange)"><div class="stat-label">Credit</div><div class="stat-value" id="homeCreditValue">HK$0</div><div class="stat-sub" id="homeCreditSub">available</div></div>
+          <div class="stat-card" style="--c:var(--brand)"><div class="stat-label">Next Gift</div><div class="stat-value stat-emoji" id="homeNextGiftIcon">🎁</div><div class="stat-sub" id="homeNextGiftSub">No gift rule yet</div><div class="progress-mini"><span id="homeNextGiftFill"></span></div></div>
+        </div>
+
+        <div class="section-title"><h2 id="greeting">Today</h2><span id="todayEntryStamp"></span></div>
+        <div class="card">
+          <div class="card-head"><h3>Today's Habits</h3><div class="today-achievement"><span class="chip" id="todayPctBadge">0%</span><button class="btn-inline red" id="resetTodayBtn">Reset</button></div></div>
+          <div class="habit-list" id="todayHabitList"></div>
+        </div>
+
+        <div class="card collapsed" id="flexHabitCard" style="display:none">
+          <button class="collapsible-head" id="flexHabitToggle"><div><h3 style="margin:0">Not Specified Date</h3><div class="small-note" id="flexHabitSummary">0 unfinished targets</div></div><span class="collapse-caret">⌄</span></button>
+          <div class="collapsible-body" style="margin-top:12px"><div class="habit-list" id="flexHabitList"></div></div>
+        </div>
+
+        <div class="card"><div class="card-head"><h3>Today's Journal</h3><span class="chip blue">Mood + Energy</span></div><div class="form-grid journal-area" id="homeJournalForm"></div></div>
+
+        <div class="quote-card" id="dailyQuote"></div>
+      </section>
+
+      <!-- HABITS -->
+      <section class="view" id="habitsView">
+        <div class="section-title"><h2>Habits</h2><span>Tune habit rules and review records</span></div>
+        <div class="card"><div class="card-head"><h3>Habit Setup</h3><span class="chip" id="habitCountChip">0 habits</span></div><div class="habit-list" id="allHabitList"></div><button class="btn-primary" style="margin-top:12px" data-open-habit>+ Add Habit</button></div>
+        <div class="card"><div class="card-head"><h3>Recent Habit Records</h3><span class="chip green">Editable</span></div><div class="activity-log" id="recentActivityLog"></div><button class="btn-secondary" id="viewFullLogBtn" style="margin-top:12px">View Full Log</button></div>
+      </section>
+
+      <!-- REPORT -->
+      <section class="view" id="reportView">
+        <div class="section-title"><h2>Report</h2><span>Trends, month &amp; quarter</span></div>
+        <div class="card"><div class="card-head"><h3>Performance Trend</h3><div class="segmented" id="rangeTabs"><button data-days="7" class="active">7D</button><button data-days="14">14D</button><button data-days="30">30D</button></div></div><div class="canvas-wrap"><canvas id="trendCanvas"></canvas></div><p class="small-note" id="trendNote"></p></div>
+        <div class="card">
+          <div class="card-head"><h3>Calendar Review</h3><div class="segmented" id="reportMode"><button data-mode="month" class="active">Month</button><button data-mode="quarter">Quarter</button></div></div>
+          <div class="report-toolbar"><button class="round-nav" id="reportPrev">‹</button><div class="report-title" id="reportTitle">Month</div><button class="round-nav" id="reportNext">›</button></div>
+          <div id="monthReport"><div class="calendar-weekdays" id="calendarWeekdays"></div><div class="calendar-grid" id="calendarGrid"></div></div>
+          <div id="quarterReport" class="quarter-grid" style="display:none"></div>
+          <div class="legend"><span><i class="band-perfect"></i>100%</span><span><i class="band-good"></i>80%+</span><span><i class="band-partial"></i>50%+</span><span><i class="band-low"></i>1–49%</span><span><i class="band-zero"></i>0%</span><span><i class="band-future"></i>Future</span></div>
+        </div>
+      </section>
+
+      <!-- JOURNAL -->
+      <section class="view" id="journalView">
+        <div class="section-title"><h2>Journal</h2><span>Review and edit past entries</span></div>
+        <div class="card"><div class="card-head"><h3>Journal History</h3><span class="chip blue">Editable</span></div><div class="journal-history" id="journalHistory"></div></div>
+      </section>
+
+      <!-- LEVEL -->
+      <section class="view" id="levelView">
+        <div class="section-title"><h2>Level</h2><span>Identity ladder and XP history</span></div>
+        <div class="level-card">
+          <div class="level-avatar" id="levelProfileAvatar">🌱</div>
+          <div style="min-width:0;flex:1">
+            <div class="level-eyebrow">Current identity</div>
+            <div class="level-value" id="levelPageValue">Lv 1</div>
+            <div class="level-identity" id="levelPageIdentity">Seed Planter</div>
+            <div class="lvl-bar"><div class="lvl-fill" id="levelPageFill"></div></div>
+            <div class="level-xp" id="levelPageXp">0 XP</div>
+          </div>
+        </div>
+        <div class="card"><div class="card-head"><h3>Identity Ladder</h3><span class="chip">10 tiers</span></div><div class="identity-ladder" id="identityPath"></div></div>
+        <div class="card"><div class="card-head"><h3>XP History</h3><span class="chip green">Recent</span></div><div class="xp-history" id="xpHistory"></div></div>
+      </section>
+
+      <!-- GIFT -->
+      <section class="view" id="giftView">
+        <div class="section-title"><h2>Gift</h2><span>Credits and earned rewards</span></div>
+        <div class="cards">
+          <div class="stat-card" style="--c:var(--orange)"><div class="stat-label">Credits</div><div class="stat-value" id="creditValue">HK$0</div><div class="stat-sub">Available balance</div></div>
+          <div class="stat-card" style="--c:var(--green)"><div class="stat-label">80%+ Streak</div><div class="stat-value" id="streak80Value">0</div><div class="stat-sub">days in a row</div></div>
+          <div class="stat-card" style="--c:var(--brand)"><div class="stat-label">Gift Balance</div><div class="stat-value" id="giftUnlockValue">0</div><div class="stat-sub" id="giftUnlockSub">available gifts</div></div>
+        </div>
+        <div class="card"><div class="card-head"><h3>Redeem</h3><span class="chip orange">Use rewards</span></div><div class="reward-grid" id="redeemGrid"></div></div>
+        <div class="card"><div class="card-head"><h3>Reward Ledger</h3><span class="chip green">Auto updated</span></div><div class="ledger-list" id="ledgerList"></div></div>
+      </section>
+
+      <!-- SETTINGS -->
+      <section class="view" id="settingsView">
+        <div class="section-title"><h2>Settings</h2><span>Backup, rewards and reminders</span></div>
+        <div class="card"><div class="card-head"><h3>Profile Icon</h3><span class="chip">Personal</span></div><div class="upload-profile-box"><div class="profile-avatar" id="settingsProfileAvatar">🌱</div><div class="upload-profile-copy"><strong>Choose your avatar</strong><span>Upload a photo — it is fitted into a circle.</span><label class="upload-file-btn">Upload Photo<input type="file" id="profileIconInput" accept="image/*" hidden></label></div></div></div>
+        <div class="card"><div class="card-head"><h3>Tracker Start Date</h3><span class="date-pill" id="startDateDisplay">—</span></div><div class="field"><label>Start Date</label><input type="date" id="trackerStartDate"></div><div class="small-note">Reports, XP, rewards and streaks count from this date onward.</div></div>
+        <div class="card"><div class="card-head"><h3>Reward Rules</h3><button class="help-dot" data-help="rewardRules">?</button></div><div class="form-grid" id="rewardSettings"></div></div>
+        <div class="card"><div class="card-head"><h3>Penalty Rules</h3><span class="chip red">0% completion</span></div><div class="form-grid" id="penaltySettings"></div></div>
+        <div class="card"><div class="card-head"><h3>Backup &amp; Sync</h3><button class="help-dot" data-help="fileSync">?</button></div><div class="backup-status" id="backupStatus">No backup file connected.</div><div class="sync-grid" style="margin-top:12px">
+          <button class="btn-secondary" id="connectFileBtn">Connect File</button>
+          <button class="btn-secondary" id="createFileBtn">Create New File</button>
+          <button class="btn-secondary" id="disconnectFileBtn">Disconnect</button>
+          <button class="btn-secondary" id="exportBtn">Export JSON</button>
+          <label class="btn-secondary" style="text-align:center;cursor:pointer">Import JSON<input type="file" id="importInput" accept="application/json" hidden></label>
+        </div><div class="switch-row" style="margin-top:14px"><div><strong>Auto Sync</strong><div class="small-note">When a file is connected, every edit writes to the backup file.</div></div><button class="switch" id="autoSyncSwitch" aria-label="Auto sync toggle"></button></div></div>
+        <div class="card"><div class="card-head"><h3>Reminders</h3><button class="help-dot" data-help="reminders">?</button></div><div class="switch-row"><div><strong>Enable Reminders</strong><div class="small-note">When off, habit-level reminder setup is disabled.</div></div><button class="switch" id="reminderSwitch" aria-label="Reminder toggle"></button></div><div class="form-grid" id="reminderSettings" style="margin-top:12px"></div></div>
+        <div class="card"><div class="card-head"><h3>Add to Phone Home Screen</h3><button class="help-dot" data-help="homeScreen">?</button></div><p class="small-note">Install this page on your phone home screen for faster daily use.</p><button class="btn-secondary" data-help="homeScreen">Show Setup Steps</button></div>
+        <div class="card"><div class="card-head"><h3>Danger Zone</h3><span class="chip gray">Protected</span></div><p class="small-note">To erase all data, type <strong>Confirm</strong> exactly.</p><div class="field"><input id="confirmDeleteInput" placeholder="Type Confirm"></div><button class="btn-danger" id="resetAllBtn" style="margin-top:10px">Erase All Data</button></div>
+      </section>
+    </main>
+
+    <!-- Bottom nav with center FAB add button -->
+    <nav class="tabbar">
+      <button class="nav-item active" data-view="homeView"><span class="nav-ico">🏠</span><span>Home</span></button>
+      <button class="nav-item" data-view="habitsView"><span class="nav-ico">✅</span><span>Habits</span></button>
+      <button class="fab-add" id="fabAdd" aria-label="Add habit"><span class="fab-plus">+</span></button>
+      <button class="nav-item" data-view="reportView"><span class="nav-ico">📊</span><span>Report</span></button>
+      <button class="nav-item" data-view="journalView"><span class="nav-ico">📓</span><span>Journal</span></button>
     </nav>
   </div>
 
-  <!-- Modal / sheet host -->
-  <div class="sheet-host" id="sheetHost" hidden>
-    <div class="sheet-backdrop" data-close="1"></div>
-    <div class="sheet" id="sheet" role="dialog" aria-modal="true"></div>
-  </div>
+  <!-- Modal -->
+  <div class="modal-backdrop" id="modalBackdrop"><div class="modal"><div class="sheet-handle"></div><div class="modal-head"><h3 id="modalTitle">Modal</h3><button class="close-x" id="modalClose">×</button></div><div id="modalBody"></div></div></div>
+  <div class="toast" id="toast">Saved</div>
 
-  <!-- Toast host -->
-  <div class="toast-host" id="toastHost" aria-live="polite"></div>
-
-  <script type="module" src="assets/js/app.js"></script>
+  <script src="assets/js/app.js"></script>
   <script>
-    // Register the service worker for offline / installable PWA support.
     if ("serviceWorker" in navigator) {
-      window.addEventListener("load", () => {
-        navigator.serviceWorker.register("sw.js").catch((e) => console.warn("SW registration failed", e));
-      });
+      window.addEventListener("load", () => navigator.serviceWorker.register("sw.js").catch(()=>{}));
     }
   </script>
 </body>
