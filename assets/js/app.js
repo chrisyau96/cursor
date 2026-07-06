@@ -42,28 +42,36 @@
   let state=load(); normalizeState();
 
   const ONBOARD_STEPS=[
-    {title:'Welcome to Momentum',body:'Track habits, journal mood & energy, and grow through an identity ladder — all private in your browser.',action:'Next'},
-    {title:'Bottom navigation',body:'Home for daily logging · Habits for setup · + to add · Report for trends · Progress for level & rewards.',nav:true},
-    {title:'Log with one tap',body:'Tap +1 on any habit. Swipe a row left for Edit or Undo last tap. Habits can be grouped into routines like Morning block.',action:'Next'},
-    {title:'Rewards system',body:'Earn XP (max 5 per habit/day), credits at 50%/100% days, and gift streaks. Penalties apply only on consecutive 0% days — paused during vacation.',action:'Next'},
-    {title:'Journal insights',body:'Mood and energy feed weekly reviews and correlation insights on the Progress tab.',action:'Next'},
-    {title:'Backup (optional)',body:'On desktop Chrome, connect a JSON file inside Google Drive and turn on Auto Sync. Your data stays yours — no account needed.',action:'Get started'}
+    {title:'Welcome to Momentum',body:'A private habit system for daily execution, reflection, and long-term identity. Your data stays on your device unless you choose to back it up.',view:null},
+    {title:'Set up your first habit',body:'Open Habits to create routines, assign groups, and configure schedules. You can skip this and add habits later.',view:'habitsView',action:()=>openHabitModal()},
+    {title:'Personalize appearance',body:'Choose a theme, display name, and app icon in Settings. These preferences apply across the app.',view:'settingsView'},
+    {title:'Configure rewards',body:'Define credit tiers, gift streaks, and penalty rules in Settings → Reward Rules. Defaults work well if you prefer to start simple.',view:'settingsView',scroll:'#rewardSettings'},
+    {title:'Daily workflow',body:'Log completions on Home, review trends in Report, and redeem credits or gifts in Rewards. Tap the level bar anytime to view your identity ladder.',view:'homeView'},
+    {title:'Backup (optional)',body:'On desktop Chrome or Edge, create a JSON backup file in a synced folder and enable Auto Sync. On mobile, use Export and Import as needed.',view:'settingsView',scroll:'#syncActionsGrid',final:true}
   ];
 
   const ICON_EDIT='<svg viewBox="0 0 24 24" class="ai"><path fill="currentColor" d="M3 17.25V21h3.75L17.81 9.94l-3.75-3.75L3 17.25zM20.71 7.04a1 1 0 0 0 0-1.41l-2.34-2.34a1 1 0 0 0-1.41 0l-1.83 1.83 3.75 3.75 1.83-1.83z"/></svg>';
   const ICON_DEL='<svg viewBox="0 0 24 24" class="ai"><path fill="currentColor" d="M6 7h12l-1 13.1A2 2 0 0 1 16 22H8a2 2 0 0 1-2-1.9L5 7h1zm3-3h6l1 2h4v2H2V6h4l1-2z"/></svg>';
-  const PREVIEW=5;
+  const PREVIEW=1;
+  const LAZY_CHUNK=10;
+  const REMINDER_MSG_LIMIT=80;
+  const APP_ICON_PRESETS=[
+    {id:'default',label:'Default',src:'assets/icon-192.png'},
+    {id:'brand',label:'Indigo',emoji:'🌱',bg:'#4f46e5'},
+    {id:'green',label:'Growth',emoji:'🌿',bg:'#059669'},
+    {id:'sunrise',label:'Sunrise',emoji:'🌅',bg:'#ea580c'}
+  ];
   const iconBtn=(cls,svg,title)=>{const b=document.createElement('button'); b.className='act-btn '+cls; b.innerHTML=svg; b.title=title; b.setAttribute('aria-label',title); return b;};
 
   function defaults(){
     const habits=[
-      {id:uid(),name:'Bible Time & Prayer',emoji:'📖',color:'#7c3aed',target:1,frequency:{mode:'daily',days:[0,1,2,3,4,5,6]},reminder:{enabled:false,time:'07:15'}},
-      {id:uid(),name:'Morning Movement',emoji:'🏃',color:'#059669',target:1,frequency:{mode:'daily',days:[1,2,3,4,5]},reminder:{enabled:false,time:'07:35'}},
-      {id:uid(),name:'Plan the Day',emoji:'📝',color:'#ea580c',target:1,frequency:{mode:'daily',days:[1,2,3,4,5]},reminder:{enabled:false,time:'08:00'}},
-      {id:uid(),name:'Drink Water',emoji:'💧',color:'#0ea5e9',target:6,frequency:{mode:'daily',days:[0,1,2,3,4,5,6]},reminder:{enabled:false,time:'12:00'}},
-      {id:uid(),name:'After-work Learning',emoji:'💻',color:'#2563eb',target:1,frequency:{mode:'daily',days:[1,2,3,4]},reminder:{enabled:false,time:'20:30'}},
-      {id:uid(),name:'Weekend Deep Work',emoji:'🎯',color:'#4f46e5',target:1,frequency:{mode:'daily',days:[6,0]},reminder:{enabled:false,time:'09:30'}},
-      {id:uid(),name:'Quarterly Review',emoji:'📚',color:'#9333ea',target:1,frequency:{mode:'custom',period:'quarter',times:1,schedule:{type:'weekday',monthInPeriod:1,ordinal:1,weekday:3}},reminder:{enabled:false,time:'10:00'}}
+      {id:uid(),name:'Bible Time & Prayer',emoji:'📖',color:'#7c3aed',target:1,xpReward:5,frequency:{mode:'daily',days:[0,1,2,3,4,5,6]},reminder:{enabled:false,time:'07:15',message:''}},
+      {id:uid(),name:'Morning Movement',emoji:'🏃',color:'#059669',target:1,xpReward:5,frequency:{mode:'daily',days:[1,2,3,4,5]},reminder:{enabled:false,time:'07:35',message:''}},
+      {id:uid(),name:'Plan the Day',emoji:'📝',color:'#ea580c',target:1,xpReward:5,frequency:{mode:'daily',days:[1,2,3,4,5]},reminder:{enabled:false,time:'08:00',message:''}},
+      {id:uid(),name:'Drink Water',emoji:'💧',color:'#0ea5e9',target:6,xpReward:10,frequency:{mode:'daily',days:[0,1,2,3,4,5,6]},reminder:{enabled:false,time:'12:00',message:''}},
+      {id:uid(),name:'After-work Learning',emoji:'💻',color:'#2563eb',target:1,xpReward:5,frequency:{mode:'daily',days:[1,2,3,4]},reminder:{enabled:false,time:'20:30',message:''}},
+      {id:uid(),name:'Weekend Deep Work',emoji:'🎯',color:'#4f46e5',target:1,xpReward:5,frequency:{mode:'daily',days:[6,0]},reminder:{enabled:false,time:'09:30',message:''}},
+      {id:uid(),name:'Quarterly Review',emoji:'📚',color:'#9333ea',target:1,xpReward:5,frequency:{mode:'custom',period:'quarter',times:1,schedule:{type:'weekday',monthInPeriod:1,ordinal:1,weekday:3}},reminder:{enabled:false,time:'10:00',message:''}}
     ];
     const morningId=uid(); habits[0].groupId=morningId; habits[0].sortOrder=0; habits[1].groupId=morningId; habits[1].sortOrder=1; habits[2].groupId=morningId; habits[2].sortOrder=2;
     const groups=[{id:morningId,name:'Morning block',emoji:'🌅',color:'#ea580c',sortOrder:0}];
@@ -97,7 +105,10 @@
     if(!Array.isArray(state.settings.vacations)) state.settings.vacations=[];
     state.groups=state.groups||[];
     state.habits=state.habits||[]; state.records=state.records||[]; state.journals=state.journals||{}; state.redemptions=state.redemptions||[];
-    state.habits.forEach((h,i)=>{h.target=Number(h.target||1); h.frequency=h.frequency||{mode:'daily',days:[0,1,2,3,4,5,6]}; if(!h.frequency.schedule&&h.frequency.mode!=='daily') h.frequency.schedule={type:'any'}; if(h.sortOrder===undefined) h.sortOrder=i; if(h.paused===undefined) h.paused=false; if(h.archived===undefined) h.archived=false; if(h.groupId===undefined) h.groupId=null;});
+    state.habits.forEach((h,i)=>{h.target=Number(h.target||1); h.xpReward=Math.max(1,Math.round(Number(h.xpReward)||5)); h.frequency=h.frequency||{mode:'daily',days:[0,1,2,3,4,5,6]}; if(!h.frequency.schedule&&h.frequency.mode!=='daily') h.frequency.schedule={type:'any'}; if(h.sortOrder===undefined) h.sortOrder=i; if(h.paused===undefined) h.paused=false; if(h.archived===undefined) h.archived=false; if(h.groupId===undefined) h.groupId=null; h.reminder=h.reminder||{enabled:false,time:state.settings.globalReminderTime||'20:30',message:''}; if(h.reminder.message===undefined) h.reminder.message='';});
+    if(!state.settings.defaultReminderMessage) state.settings.defaultReminderMessage='Time for {habit}';
+    if(state.settings.appIcon===undefined) state.settings.appIcon='default';
+    if(state.settings.appIconCustom===undefined) state.settings.appIconCustom='';
     state.groups.forEach((g,i)=>{if(!g.id)g.id=uid(); if(g.sortOrder===undefined) g.sortOrder=i; if(!g.emoji)g.emoji='📋'; if(!g.color)g.color='#4f46e5';});
     ensureRewardShape(); localStorage.setItem(STORAGE,JSON.stringify(state));
   }
@@ -197,13 +208,15 @@
   function dayPct(date){const scheduled=dayScheduledHabits(date); if(!scheduled.length) return null; let points=0,total=0; scheduled.forEach(h=>{const target=(h.frequency.mode==='daily')?periodTarget(h):1; const count=(h.frequency.mode==='daily')?todayHabitCount(h,date):(periodCount(h,date)>0?1:0); points+=Math.min(count,target); total+=target;}); return total?Math.round(points/total*100):null;}
   function completionOfHabit(habit,date=hkNow()){const target=periodTarget(habit); const count=habit.frequency.mode==='daily'?todayHabitCount(habit,date):periodCount(habit,date); return {count,target,pct:Math.min(100,Math.round(count/target*100)),done:count>=target};}
   function habitXpKey(habit,date){return habit.id+'|'+currentPeriodKey(habit,date);}
+  function habitXpPerTap(habit){const total=Math.max(1,Math.round(Number(habit.xpReward)||5)); const target=Math.max(1,periodTarget(habit)); return Math.max(1,Math.round(total/target));}
   function habitPeriodXp(habit,date){
     const pk=currentPeriodKey(habit,date); const k=dateKey(date);
     if(isVacationDay(k)) return 0;
     const count=state.records.filter(r=>r.habitId===habit.id&&currentPeriodKey(habit,parseDate(r.date))===pk&&afterStart(r.date)).length;
     if(!count) return 0;
     const target=Math.max(1,periodTarget(habit));
-    return Math.round(Math.min(5,Math.min(count,target)/target*5)*10)/10;
+    const total=Math.max(1,Math.round(Number(habit.xpReward)||5));
+    return Math.min(total, count*habitXpPerTap(habit));
   }
   function recordsXpTotal(){
     const seen=new Set(); let total=0;
@@ -215,7 +228,7 @@
     return total;
   }
   function journalXpTotal(){return Object.keys(state.journals).filter(k=>afterStart(k)&&!isVacationDay(k)).length*5;}
-  function fmtXp(x){return Number.isInteger(Number(x))?String(Math.round(Number(x))):Number(x).toFixed(1).replace(/\.0$/,'');}
+  function fmtXp(x){return String(Math.round(Number(x)||0));}
   function ensureRewardShape(){
     const r=state.settings.rewards=state.settings.rewards||{};
     if(!Array.isArray(r.creditRules)){
@@ -271,7 +284,7 @@
     const cur100=streakAt(now,100), best=longestPerfectStreak(); $('#homeStreakValue').textContent=`${cur100} / ${best}`; $('#homeStreakSub').textContent='current / best 100% streak';
     const ng=nextGiftInfo(); $('#homeNextGiftIcon').textContent=ng.icon; $('#homeNextGiftSub').textContent=ng.label; $('#homeNextGiftFill').style.width=ng.pct+'%';
     renderTodayHabitGroups(now, scheduled);
-    renderWeekStrip(); renderFlexibleHabits(now); renderHomeJournal(); renderQuote(); renderTopProfile(); renderWeeklyReviewCard();
+    renderWeekStrip(); renderFlexibleHabits(now); renderHomeJournalPreview(); renderQuote(); renderTopProfile(); renderWeeklyReviewCard();
     const wt=$('#weekToday'); if(wt) wt.style.display=weekOffset===0?'none':'inline-grid';
   }
   function renderTodayHabitGroups(now, scheduled){
@@ -281,13 +294,13 @@
     const used=new Set(); const groups=sortedGroups();
     groups.forEach(g=>{const hs=scheduled.filter(h=>h.groupId===g.id); if(!hs.length)return; hs.forEach(h=>used.add(h.id)); box.appendChild(renderHabitGroupBlock(g,hs,now));});
     const rest=scheduled.filter(h=>!used.has(h.id));
-    if(rest.length) box.appendChild(renderHabitGroupBlock({id:'_ungrouped',name:'Other',emoji:'📌',color:'#66758c'},rest,now));
+    if(rest.length) box.appendChild(renderHabitGroupBlock({id:'_ungrouped',name:'Ungrouped',emoji:'📌',color:'#66758c'},rest,now));
   }
   function renderHabitGroupBlock(group, habits, now){
     const wrap=document.createElement('div'); wrap.className='habit-group';
     let done=0,tot=0; habits.forEach(h=>{const c=completionOfHabit(h,now); done+=Math.min(c.count,c.target); tot+=c.target;});
     const head=document.createElement('div'); head.className='group-head';
-    head.innerHTML=`<div class="group-icon" style="background:${group.color}22;color:${group.color}">${group.emoji||'📋'}</div><div class="group-name">${escapeHtml(group.name||'Routine')}</div><div class="group-progress">${done}/${tot}</div>`;
+    head.innerHTML=`<div class="group-icon" style="background:${group.color}22;color:${group.color}">${group.emoji||'📋'}</div><div class="group-name">${escapeHtml(group.name||'Group')}</div><div class="group-progress">${done}/${tot}</div>`;
     wrap.appendChild(head);
     const list=document.createElement('div'); list.className='habit-list';
     habits.forEach(h=>list.appendChild(todayHabitRow(h,now)));
@@ -334,7 +347,7 @@
     row.querySelector('.habit-name').textContent=h.name;
     wrap.appendChild(actions); wrap.appendChild(row);
     if(!c.done) row.onclick=async(e)=>{if(e.target.closest('button'))return; await addRecord(h.id,'',k); after&&after();};
-    const reset=row.querySelector('[data-reset]'); if(reset) reset.onclick=async(e)=>{e.stopPropagation(); if(!confirm('Reset all taps for this habit today?'))return; await resetHabitForDate(h.id,k); after&&after();};
+    const reset=row.querySelector('[data-reset]'); if(reset) reset.onclick=async(e)=>{e.stopPropagation(); await resetHabitForDate(h.id,k); after&&after();};
     attachSwipeRow(wrap,h,k,after);
     return wrap;
   }
@@ -357,18 +370,31 @@
   async function resetTodayRecords(){if(!confirm('Reset all habit records for today?'))return; const k=todayKey(); state.records=state.records.filter(r=>r.date!==k); await save(); toast('Today reset')}
   async function resetHabitForDate(habitId,k){state.records=state.records.filter(r=>!(r.date===k&&r.habitId===habitId)); await save(); toast('Habit reset')}
 
-  /* Shared: preview 5 + "More" with a date-range filter (default last 3 days). */
+  /* Shared: preview 1 row + "View all" modal with lazy loading (10 at a time). */
   function renderPreview(box,items,itemFn,moreTitle){
     if(!box)return; box.innerHTML=''; if(!items.length){box.innerHTML='<div class="empty">Nothing here yet.</div>'; return;}
     items.slice(0,PREVIEW).forEach(x=>box.appendChild(itemFn(x)));
-    if(items.length>PREVIEW){const more=document.createElement('button'); more.className='btn-secondary more-btn'; more.textContent=`View all ${items.length}`; more.onclick=()=>openLedgerModal(moreTitle,items,itemFn); box.appendChild(more);}
+    const more=document.createElement('button'); more.className='view-all-btn'; more.textContent='View all'; more.onclick=()=>openLazyModal(moreTitle,items,itemFn); box.appendChild(more);
   }
-  function openLedgerModal(title,items,itemFn){
+  function openLazyModal(title,items,itemFn){
     const to=todayKey(); const fromD=hkNow(); fromD.setDate(fromD.getDate()-2); const from=dateKey(fromD);
-    openModal(title,`<div class="log-filter-grid"><div class="field"><label>From</label><input type="date" id="lfFrom" value="${from}"></div><div class="field"><label>To</label><input type="date" id="lfTo" value="${to}"></div><button class="btn-inline pink" id="lfApply">Apply</button></div><div class="filtered-list" id="lfList" style="margin-top:12px"></div>`);
-    const draw=()=>{const f=$('#lfFrom').value||from,t=$('#lfTo').value||to; const box=$('#lfList'); const l=items.filter(x=>x.date>=f&&x.date<=t); box.innerHTML=l.length?'':'<div class="empty">No records in this period.</div>'; l.forEach(x=>box.appendChild(itemFn(x)));};
-    $('#lfApply').onclick=draw; draw();
+    openModal(title,`<div class="log-filter-grid"><div class="field"><label>From</label><input type="date" id="lfFrom" value="${from}"></div><div class="field"><label>To</label><input type="date" id="lfTo" value="${to}"></div><button class="btn-inline pink" id="lfApply">Apply</button></div><div class="filtered-list" id="lfList" style="margin-top:12px"></div><button class="btn-secondary load-more-btn" id="lfMore" style="display:none">Load more</button>`);
+    let filtered=[], shown=0;
+    const draw=(reset=true)=>{
+      const f=$('#lfFrom').value||from,t=$('#lfTo').value||to; const box=$('#lfList');
+      if(reset){filtered=items.filter(x=>x.date>=f&&x.date<=t); shown=0; box.innerHTML='';}
+      if(!filtered.length){box.innerHTML='<div class="empty">No records in this period.</div>'; $('#lfMore').style.display='none'; return;}
+      const chunk=filtered.slice(shown,shown+LAZY_CHUNK);
+      chunk.forEach(x=>box.appendChild(itemFn(x)));
+      shown+=chunk.length;
+      const moreBtn=$('#lfMore');
+      if(moreBtn) moreBtn.style.display=shown<filtered.length?'block':'none';
+    };
+    $('#lfApply').onclick=()=>draw(true);
+    $('#lfMore').onclick=()=>draw(false);
+    draw(true);
   }
+  function openLedgerModal(title,items,itemFn){openLazyModal(title,items,itemFn);}
   function ledgerNode(x){const div=document.createElement('div'); div.className='ledger-item';
     const amt=x.credit?('HK$'+x.credit):((x.type==='gift'||x.type==='redeemGift')?((x.giftIcon||'🎁')+' '+(x.gift||'')):'');
     div.innerHTML=`<div class="lg-main"><div class="ledger-head"><span>${escapeHtml(x.desc||'')}</span><span>${amt}</span></div><div class="ledger-sub">${x.date} · XP ${fmtXp(x.xp||0)}</div></div>`;
@@ -382,27 +408,55 @@
     const d=iconBtn('del',ICON_DEL,'Delete'); d.onclick=async()=>{if(confirm('Delete this journal?')){delete state.journals[k]; await save(); if(after)after();}};
     acts.appendChild(e); acts.appendChild(d); div.appendChild(acts); return div;}
   function editRecord(id){const r=state.records.find(x=>x.id===id); if(!r)return; openModal('Edit Record Note',`<div class="note-area"><textarea id="recordNoteInput" placeholder="Add note for this completion">${escapeHtml(r.note||'')}</textarea></div><div class="modal-actions"><button class="btn-secondary" data-close>Cancel</button><button class="btn-primary" id="saveRecordNote">Save</button></div>`); $('#saveRecordNote').onclick=async()=>{r.note=$('#recordNoteInput').value.trim(); await save(); closeModal(); toast('Record updated')}; }
-  function renderRecentActivity(){const box=$('#recentActivityLog'); if(!box)return; const logs=state.records.filter(r=>afterStart(r.date)).slice().sort((a,b)=>b.at.localeCompare(a.at)).slice(0,5); box.innerHTML=''; if(!logs.length){box.innerHTML='<div class="empty">No records yet.</div>';return;} logs.forEach(r=>box.appendChild(activityItem(r))); const btn=$('#viewFullLogBtn'); if(btn)btn.onclick=openFullLog;}
-  function openFullLog(){const now=hkNow(); const start=new Date(now); start.setDate(start.getDate()-2); openModal('Full Habit Log',`<div class="log-filter-grid"><div class="field"><label>From</label><input type="date" id="logFrom" value="${dateKey(start)}"></div><div class="field"><label>To</label><input type="date" id="logTo" value="${todayKey()}"></div><button class="btn-inline pink" id="applyLogFilter">Apply</button></div><div class="activity-log" id="fullActivityLog" style="margin-top:12px"></div>`); const render=()=>{const from=$('#logFrom').value||trackerStart(), to=$('#logTo').value||todayKey(); const logs=state.records.filter(r=>afterStart(r.date)&&r.date>=from&&r.date<=to).slice().sort((a,b)=>b.at.localeCompare(a.at)); const box=$('#fullActivityLog'); box.innerHTML=logs.length?'':'<div class="empty">No records in this period.</div>'; logs.forEach(r=>box.appendChild(activityItem(r)));}; $('#applyLogFilter').onclick=render; render();}
+  function renderRecentActivity(){const box=$('#recentActivityLog'); if(!box)return; const logs=state.records.filter(r=>afterStart(r.date)).slice().sort((a,b)=>b.at.localeCompare(a.at)); renderPreview(box,logs,r=>activityItem(r),'Habit Records');}
+  function openFullLog(){const logs=state.records.filter(r=>afterStart(r.date)).slice().sort((a,b)=>b.at.localeCompare(a.at)); openLazyModal('Habit Records',logs,r=>activityItem(r));}
   function activityItem(r){const h=state.habits.find(x=>x.id===r.habitId)||{}; const div=document.createElement('div'); div.className='activity'; div.innerHTML=`<div class="activity-emoji" style="background:${(h.color||'#4f46e5')}22">${h.emoji||'✓'}</div><div class="a-main"><div class="activity-title"></div><div class="activity-sub">${r.date} · ${new Date(r.at).toLocaleTimeString([], {hour:'2-digit',minute:'2-digit',timeZone:'Asia/Hong_Kong'})}${r.note?' · '+escapeHtml(r.note):''}</div></div>`; div.querySelector('.activity-title').textContent=h.name||'Habit'; const acts=document.createElement('div'); acts.className='row-actions'; const e=iconBtn('edit',ICON_EDIT,'Edit'); e.onclick=()=>editRecord(r.id); const d=iconBtn('del',ICON_DEL,'Remove'); d.onclick=()=>confirm('Remove this record?')&&removeRecord(r.id); acts.appendChild(e); acts.appendChild(d); div.appendChild(acts); return div;}
-  function renderHomeJournal(){const k=todayKey(), j=state.journals[k]||{mood:'',energy:5,text:''}; const el=$('#homeJournalForm'); el.innerHTML=`<div class="field"><label>Mood</label><div class="mood-row">${MOODS.map(m=>`<button class="mood ${j.mood===m?'active':''}" data-mood="${m}">${m}</button>`).join('')}</div></div><div class="field"><label>Energy Score</label><div class="energy-panel"><div class="range-value" id="homeEnergyValue">${j.energy}</div><div class="energy-scale"><input type="range" min="0" max="10" value="${j.energy}" id="homeEnergy"><div class="ticks">${Array.from({length:11},(_,i)=>`<span style="left:calc(10px + ${i}/10*(100% - 20px))">${i}</span>`).join('')}</div></div></div></div><div class="field journal-area"><label>Reflection</label><textarea id="homeJournalText" placeholder="What went well? What needs adjustment?">${escapeHtml(j.text)}</textarea></div><button class="btn-primary" id="saveJournalHome">Save Journal</button>`;
-    $$('.mood').forEach(b=>b.onclick=()=>{$$('.mood').forEach(x=>x.classList.remove('active')); b.classList.add('active')}); $('#homeEnergy').oninput=e=>$('#homeEnergyValue').textContent=e.target.value; $('#saveJournalHome').onclick=async()=>{const mood=$('#homeJournalForm .mood.active')?.dataset.mood||''; const wasNew=!state.journals[k]; state.journals[k]={mood,energy:Number($('#homeEnergy').value),text:$('#homeJournalText').value.trim(),updatedAt:new Date().toISOString()}; await save(); if(wasNew) showXpPop('+5 XP'); toast('Journal saved')}; }
+  function renderHomeJournalPreview(){
+    const box=$('#homeJournalPreview'); if(!box)return;
+    const items=Object.keys(state.journals).sort((a,b)=>b.localeCompare(a)).map(k=>({date:k}));
+    const btn=$('#homeJournalViewAll');
+    if(!items.length){
+      box.innerHTML='<div class="empty">No journal entries yet.</div><button class="btn-primary" id="logJournalToday" style="margin-top:10px">Log today</button>';
+      $('#logJournalToday')?.addEventListener('click',()=>openJournalEditor(todayKey()));
+      if(btn) btn.onclick=()=>openJournalListModal();
+      return;
+    }
+    renderPreview(box,items,x=>journalNode(x.date),'Journal');
+    if(btn) btn.onclick=()=>openJournalListModal();
+  }
+  function openJournalListModal(){
+    const items=Object.keys(state.journals).sort((a,b)=>b.localeCompare(a)).map(k=>({date:k}));
+    openLazyModal('Journal',items,x=>journalNode(x.date,()=>openJournalListModal()));
+    setTimeout(()=>{
+      const body=$('#modalBody');
+      if(body && !body.querySelector('#addJournalFromModal')){
+        const add=document.createElement('button'); add.className='btn-primary'; add.id='addJournalFromModal'; add.style.marginTop='12px'; add.textContent='+ Log today'; add.onclick=()=>{closeModal(); openJournalEditor(todayKey());};
+        body.appendChild(add);
+      }
+    },0);
+  }
   function renderQuote(){const el=$('#dailyQuote'); if(!el)return; const q=[['Commit to the LORD whatever you do, and he will establish your plans.','Proverbs 16:3'],['Small actions become identity when repeated.','Habit principle'],['Discipline today, freedom tomorrow.','Reminder']][hkNow().getDate()%3]; el.innerHTML=`<div class="quote-text">${q[0]}</div><div class="quote-ref">${q[1]}</div>`;}
 
   /* ---------- HABITS ---------- */
   function renderGroupManager(){
     const box=$('#groupManager'); if(!box)return;
-    if(!state.groups.length){box.innerHTML='<div class="empty">No routines yet. Group habits like a Morning block.</div>'; return;}
+    if(!state.groups.length){box.innerHTML='<div class="empty">No groups yet. Organize habits into blocks like Morning or Evening.</div>'; return;}
     box.innerHTML='';
     sortedGroups().forEach((g,gi)=>{
       const div=document.createElement('div'); div.className='group-manage-item';
-      div.innerHTML=`<span style="font-size:20px">${g.emoji}</span><input value="${escapeAttr(g.name)}" data-gname><div class="sort-btns"><button type="button" data-gup>↑</button><button type="button" data-gdown>↓</button></div><button class="btn-inline red" type="button" data-gdel>×</button>`;
-      div.querySelector('[data-gname]').onchange=e=>{g.name=e.target.value.trim()||'Routine'; save();};
+      div.innerHTML=`<button type="button" class="group-icon-btn" data-gicon title="Change icon">${g.emoji||'📋'}</button><input value="${escapeAttr(g.name)}" data-gname><div class="sort-btns"><button type="button" data-gup>↑</button><button type="button" data-gdown>↓</button></div><button class="btn-inline red" type="button" data-gdel>×</button>`;
+      div.querySelector('[data-gname]').onchange=e=>{g.name=e.target.value.trim()||'Group'; save();};
+      div.querySelector('[data-gicon]').onclick=()=>openGroupIconPicker(g);
       div.querySelector('[data-gup]').onclick=()=>{if(gi>0){const o=state.groups[gi-1]; g.sortOrder=(o.sortOrder||gi)-1; o.sortOrder=(g.sortOrder||gi)+1; save();}};
       div.querySelector('[data-gdown]').onclick=()=>{if(gi<state.groups.length-1){const o=state.groups[gi+1]; g.sortOrder=(o.sortOrder||gi)+1; o.sortOrder=(g.sortOrder||gi)-1; save();}};
-      div.querySelector('[data-gdel]').onclick=()=>{if(confirm('Delete this routine? Habits become ungrouped.')){state.habits.forEach(h=>{if(h.groupId===g.id)h.groupId=null;}); state.groups=state.groups.filter(x=>x.id!==g.id); save();}};
+      div.querySelector('[data-gdel]').onclick=()=>{if(confirm('Delete this group? Habits will move to Ungrouped.')){state.habits.forEach(h=>{if(h.groupId===g.id)h.groupId=null;}); state.groups=state.groups.filter(x=>x.id!==g.id); save();}};
       box.appendChild(div);
     });
+  }
+  function openGroupIconPicker(group){
+    openModal('Group Icon',`<div class="emoji-row">${EMOJIS.map(e=>`<button class="emoji-swatch ${group.emoji===e?'active':''}" data-emoji="${e}">${e}</button>`).join('')}</div><div class="field" style="margin-top:12px"><label>Custom emoji</label><input id="groupEmojiInput" value="${escapeAttr(group.emoji||'📋')}" maxlength="4"></div><div class="modal-actions"><button class="btn-secondary" data-close>Cancel</button><button class="btn-primary" id="saveGroupIcon">Save</button></div>`);
+    $$('.emoji-swatch').forEach(b=>b.onclick=()=>{$$('.emoji-swatch').forEach(x=>x.classList.remove('active')); b.classList.add('active'); $('#groupEmojiInput').value=b.dataset.emoji;});
+    $('#saveGroupIcon').onclick=async()=>{group.emoji=$('#groupEmojiInput').value.trim()||'📋'; await save(); closeModal(); toast('Group icon updated');};
   }
   function renderHabits(){
     renderGroupManager();
@@ -413,7 +467,7 @@
     habits.forEach((h,idx)=>{
       const grp=state.groups.find(g=>g.id===h.groupId);
       const row=document.createElement('div'); row.className='habit-row'+(h.paused?' paused-habit':''); row.style.cursor='default';
-      row.innerHTML=`<div class="sort-btns"><button type="button" data-up>↑</button><button type="button" data-down>↓</button></div><div class="habit-icon" style="background:${h.color}22;color:${h.color}">${h.emoji}</div><div class="habit-main"><div class="habit-name"></div><div class="habit-meta"><span>${frequencyLabel(h)}</span>${grp?`<span class="mini-dot"></span><span>${escapeHtml(grp.name)}</span>`:''}<span class="mini-dot"></span><span class="count-pill">Target ${periodTarget(h)}</span>${h.paused?'<span class="chip gray">Paused</span>':''}</div></div>`;
+      row.innerHTML=`<div class="sort-btns"><button type="button" data-up>↑</button><button type="button" data-down>↓</button></div><div class="habit-icon" style="background:${h.color}22;color:${h.color}">${h.emoji}</div><div class="habit-main"><div class="habit-name"></div><div class="habit-meta"><span>${frequencyLabel(h)}</span>${grp?`<span class="mini-dot"></span><span>${escapeHtml(grp.name)}</span>`:''}<span class="mini-dot"></span><span>${fmtXp(h.xpReward||5)} XP</span>${h.paused?'<span class="chip gray">Paused</span>':''}</div></div>`;
       row.querySelector('.habit-name').textContent=h.name;
       row.querySelector('[data-up]').onclick=()=>{if(idx>0){const o=habits[idx-1]; const t=h.sortOrder??idx; h.sortOrder=o.sortOrder??idx-1; o.sortOrder=t; save();}};
       row.querySelector('[data-down]').onclick=()=>{if(idx<habits.length-1){const o=habits[idx+1]; const t=h.sortOrder??idx; h.sortOrder=o.sortOrder??idx+1; o.sortOrder=t; save();}};
@@ -428,8 +482,15 @@
 
   function openHabitModal(habit=null){
     const isEdit=!!habit;
-    const h=habit||{name:'',emoji:'📖',color:COLOURS[0],target:1,frequency:{mode:'daily',days:[1,2,3,4,5]},reminder:{enabled:false,time:state.settings.globalReminderTime||'20:30'}};
-    openModal(isEdit?'Edit Habit':'Add Habit',`<div class="form-grid"><div class="field"><label>Habit Name</label><input id="habitName" value="${escapeAttr(h.name)}" placeholder="e.g. Bible Time"></div><div class="field"><label>Routine group</label><select id="habitGroup"><option value="">No group</option>${sortedGroups().map(g=>`<option value="${g.id}" ${h.groupId===g.id?'selected':''}>${escapeHtml(g.name)}</option>`).join('')}</select></div><div class="field"><label>Icon</label><div class="emoji-row">${EMOJIS.map(e=>`<button class="emoji-swatch ${h.emoji===e?'active':''}" data-emoji="${e}">${e}</button>`).join('')}</div><input id="habitEmoji" value="${escapeAttr(h.emoji||'📖')}" maxlength="4" placeholder="📖" style="margin-top:8px"></div><div class="field"><label>Colour</label><div class="color-row">${COLOURS.map(c=>`<button class="color-swatch ${h.color===c?'active':''}" data-color="${c}" style="background:${c}"></button>`).join('')}</div></div><div class="field"><label>Target Count</label><select id="habitTarget">${Array.from({length:10},(_,i)=>i+1).map(n=>`<option value="${n}" ${Number(h.target||1)===n?'selected':''}>${n} time${n>1?'s':''}</option>`).join('')}</select></div><div class="field"><label>Frequency</label><select id="freqMode"><option value="daily">Daily</option><option value="monthly">Monthly</option><option value="custom">Custom</option></select></div><div class="dynamic-fields" id="freqFields"></div><div class="dynamic-fields"><div class="switch-row"><div><strong>Habit Reminder</strong><div class="small-note" id="habitReminderHint"></div></div><button class="switch" id="habitReminderToggle"></button></div><div class="field" style="margin-top:10px"><label>Reminder Time</label><input type="time" id="habitReminderTime" value="${h.reminder?.time||'20:30'}"></div></div><div class="modal-actions"><button class="btn-secondary" data-close>Cancel</button><button class="btn-primary" id="saveHabitBtn">Save</button></div></div>`);
+    const h=habit||{name:'',emoji:'📖',color:COLOURS[0],target:1,xpReward:5,frequency:{mode:'daily',days:[1,2,3,4,5]},reminder:{enabled:false,time:state.settings.globalReminderTime||'20:30',message:''}};
+    const xpPer=habitXpPerTap(h);
+    openModal(isEdit?'Edit Habit':'Add Habit',`<div class="form-grid"><div class="field"><label>Habit Name</label><input id="habitName" value="${escapeAttr(h.name)}" placeholder="e.g. Bible Time"></div><div class="field"><label>Group</label><select id="habitGroup"><option value="">Ungrouped</option>${sortedGroups().map(g=>`<option value="${g.id}" ${h.groupId===g.id?'selected':''}>${escapeHtml(g.name)}</option>`).join('')}</select></div><div class="field"><label>Icon</label><div class="emoji-row">${EMOJIS.map(e=>`<button class="emoji-swatch ${h.emoji===e?'active':''}" data-emoji="${e}">${e}</button>`).join('')}</div><input id="habitEmoji" value="${escapeAttr(h.emoji||'📖')}" maxlength="4" placeholder="📖" style="margin-top:8px"></div><div class="field"><label>Colour</label><div class="color-row">${COLOURS.map(c=>`<button class="color-swatch ${h.color===c?'active':''}" data-color="${c}" style="background:${c}"></button>`).join('')}</div></div><div class="field"><label>Target Count</label><select id="habitTarget">${Array.from({length:10},(_,i)=>i+1).map(n=>`<option value="${n}" ${Number(h.target||1)===n?'selected':''}>${n} time${n>1?'s':''}</option>`).join('')}</select></div><div class="field"><label>XP per period</label><input id="habitXpReward" type="number" min="1" max="100" step="1" value="${Math.round(Number(h.xpReward)||5)}"><div class="hint" id="habitXpHint">${xpPer} XP per completion at current target</div></div><div class="field"><label>Frequency</label><select id="freqMode"><option value="daily">Daily</option><option value="monthly">Monthly</option><option value="custom">Custom</option></select></div><div class="dynamic-fields" id="freqFields"></div><div class="dynamic-fields"><div class="switch-row"><div><strong>Habit Reminder</strong><div class="small-note" id="habitReminderHint"></div></div><button class="switch" id="habitReminderToggle"></button></div><div class="field" style="margin-top:10px"><label>Reminder Time</label><input type="time" id="habitReminderTime" value="${h.reminder?.time||'20:30'}"></div><div class="field"><label>Notification message</label><input id="habitReminderMsg" maxlength="${REMINDER_MSG_LIMIT}" value="${escapeAttr(h.reminder?.message||state.settings.defaultReminderMessage||'Time for {habit}')}" placeholder="Time for {habit}"><div class="hint"><span id="habitMsgCount">0</span>/${REMINDER_MSG_LIMIT} · Use {habit} for the habit name</div></div></div><div class="modal-actions"><button class="btn-secondary" data-close>Cancel</button><button class="btn-primary" id="saveHabitBtn">Save</button></div></div>`);
+    function updateXpHint(){const t=Math.max(1,Number($('#habitTarget')?.value||1)); const total=Math.max(1,Math.round(Number($('#habitXpReward')?.value||5))); const hint=$('#habitXpHint'); if(hint) hint.textContent=`${Math.max(1,Math.round(total/t))} XP per completion at current target`;}
+    $('#habitTarget')?.addEventListener('change',updateXpHint);
+    $('#habitXpReward')?.addEventListener('input',updateXpHint);
+    const msgInput=$('#habitReminderMsg'), msgCount=$('#habitMsgCount');
+    function syncMsgCount(){if(msgCount&&msgInput) msgCount.textContent=String((msgInput.value||'').length);}
+    msgInput?.addEventListener('input',syncMsgCount); syncMsgCount();
     const f=h.frequency||{mode:'daily',days:[1,2,3,4,5]}; $('#freqMode').value=f.mode||'daily'; let selectedColor=h.color;
     $$('.color-swatch').forEach(b=>b.onclick=()=>{$$('.color-swatch').forEach(x=>x.classList.remove('active')); b.classList.add('active'); selectedColor=b.dataset.color});
     $$('.emoji-swatch').forEach(b=>b.onclick=()=>{$$('.emoji-swatch').forEach(x=>x.classList.remove('active')); b.classList.add('active'); $('#habitEmoji').value=b.dataset.emoji});
@@ -486,7 +547,7 @@
         if(schedule.type==='date') schedule.day=Number($('#scheduleDay')?.value||1); else if(schedule.type==='weekday') {schedule.ordinal=$('#scheduleOrdinal')?.value||1; schedule.weekday=Number($('#scheduleWeekday')?.value||1);}
         freq.schedule=schedule;
       }
-      const item={id:h.id||uid(),name:$('#habitName').value.trim()||'Untitled Habit',emoji:$('#habitEmoji').value,color:selectedColor,target:Number($('#habitTarget').value),frequency:freq,groupId:$('#habitGroup')?.value||null,sortOrder:h.sortOrder??state.habits.length,paused:!!h.paused,archived:false,reminder:{enabled:t.classList.contains('on')&&reminderEnabled,time:$('#habitReminderTime').value}};
+      const item={id:h.id||uid(),name:$('#habitName').value.trim()||'Untitled Habit',emoji:$('#habitEmoji').value,color:selectedColor,target:Number($('#habitTarget').value),xpReward:Math.max(1,Math.round(Number($('#habitXpReward').value)||5)),frequency:freq,groupId:$('#habitGroup')?.value||null,sortOrder:h.sortOrder??state.habits.length,paused:!!h.paused,archived:false,reminder:{enabled:t.classList.contains('on')&&reminderEnabled,time:$('#habitReminderTime').value,message:($('#habitReminderMsg')?.value||state.settings.defaultReminderMessage||'Time for {habit}').slice(0,REMINDER_MSG_LIMIT)}};
       if(isEdit){state.habits=state.habits.map(x=>x.id===h.id?item:x)}else state.habits.push(item); await save(); closeModal(); toast('Habit saved')
     };
   }
@@ -539,7 +600,7 @@
     const delta=avg-prevAvg;
     const journals=Object.keys(state.journals).filter(k=>k>=from&&k<=to);
     const best=activeHabits().map(h=>{let c=0; for(let d=new Date(start); d<=end; d.setDate(d.getDate()+1)){const k=dateKey(d); if(todayHabitCount(h,d)>=periodTarget(h)||(h.frequency.mode!=='daily'&&periodCount(h,d)>0)) c++;} return {h,c};}).sort((a,b)=>b.c-a.c)[0];
-    body.innerHTML=`<div class="insight-row"><div class="insight-ico">📅</div><div class="insight-text"><strong>This week: ${avg}% avg</strong>${delta>0?`Up ${delta} pts vs last week`:delta<0?`Down ${Math.abs(delta)} pts vs last week`:'Same as last week'}</div></div><div class="insight-row"><div class="insight-ico">${best?.h?.emoji||'⭐'}</div><div class="insight-text"><strong>Most consistent: ${escapeHtml(best?.h?.name||'—')}</strong>${best?best.c+' active days':'—'}</div></div><div class="insight-row"><div class="insight-ico">📓</div><div class="insight-text"><strong>${journals.length} journal entries</strong>Tap Progress for deeper insights.</div></div>`;
+    body.innerHTML=`<div class="insight-row"><div class="insight-ico">📅</div><div class="insight-text"><strong>This week: ${avg}% avg</strong>${delta>0?`Up ${delta} pts vs last week`:delta<0?`Down ${Math.abs(delta)} pts vs last week`:'Same as last week'}</div></div><div class="insight-row"><div class="insight-ico">${best?.h?.emoji||'⭐'}</div><div class="insight-text"><strong>Most consistent: ${escapeHtml(best?.h?.name||'—')}</strong>${best?best.c+' active days':'—'}</div></div><div class="insight-row"><div class="insight-ico">📓</div><div class="insight-text"><strong>${journals.length} journal entries</strong>Open Rewards for deeper insights.</div></div>`;
   }
   function renderCorrelationInsights(){
     const box=$('#correlationInsights'); if(!box)return;
@@ -567,7 +628,18 @@
   function celebrate(msg){if(window.matchMedia('(prefers-reduced-motion: reduce)').matches){toast(msg);return;} const layer=$('#celebrateLayer'); if(!layer)return; layer.innerHTML=''; const banner=document.createElement('div'); banner.className='celebrate-banner'; banner.textContent=msg; layer.appendChild(banner); for(let i=0;i<24;i++){const p=document.createElement('div'); p.className='confetti'; p.style.left=Math.random()*100+'%'; p.style.background=['#4f46e5','#059669','#f59e0b','#ea580c','#7c3aed'][i%5]; p.style.animationDelay=(Math.random()*.4)+'s'; layer.appendChild(p);} setTimeout(()=>{layer.innerHTML='';},1600); haptic();}
   function checkCelebrations(){const li=levelInfo(); if(li.cur.level>lastLevel){lastLevel=li.cur.level; celebrate(`Level up! ${li.cur.icon} ${li.cur.name}`);} else lastLevel=li.cur.level;}
   function renderOnboarding(){if(state.settings.onboardingComplete)return; onboardStep=0; showOnboardStep();}
-  function showOnboardStep(){const bd=$('#onboardBackdrop'), body=$('#onboardBody'); if(!bd)return; const step=ONBOARD_STEPS[onboardStep]; $('#onboardStepLabel').textContent=`Step ${onboardStep+1} of ${ONBOARD_STEPS.length}`; $('#onboardBarFill').style.width=((onboardStep+1)/ONBOARD_STEPS.length*100)+'%'; body.innerHTML=`<div class="onboard-body"><h3>${step.title}</h3><p>${step.body}</p>${step.nav?'<div class="onboard-nav-preview"><span>🏠 Home</span><span>✅ Habits</span><span>＋</span><span>📊 Report</span><span>⚡ Progress</span></div>':''}</div>`; $('#onboardNext').textContent=onboardStep===ONBOARD_STEPS.length-1?'Get started':'Next'; bd.classList.add('show'); bd.setAttribute('aria-hidden','false');}
+  function showOnboardStep(){
+    const bd=$('#onboardBackdrop'), body=$('#onboardBody'); if(!bd)return;
+    const step=ONBOARD_STEPS[onboardStep];
+    $('#onboardStepLabel').textContent=`Step ${onboardStep+1} of ${ONBOARD_STEPS.length}`;
+    $('#onboardBarFill').style.width=((onboardStep+1)/ONBOARD_STEPS.length*100)+'%';
+    body.innerHTML=`<div class="onboard-body"><h3>${step.title}</h3><p>${step.body}</p></div>`;
+    $('#onboardNext').textContent=step.final?'Get started':(step.view?'Open & continue':'Continue');
+    $('#onboardSkipStep').textContent='Skip step';
+    if(step.view){showView(step.view); setTimeout(()=>{if(step.scroll){const el=document.querySelector(step.scroll); el?.scrollIntoView({behavior:'smooth',block:'start'});} if(step.action) step.action();},120);}
+    bd.classList.add('show'); bd.setAttribute('aria-hidden','false');
+  }
+  function skipOnboardStep(){if(onboardStep<ONBOARD_STEPS.length-1){onboardStep++; showOnboardStep();} else finishOnboarding();}
   function finishOnboarding(){state.settings.onboardingComplete=true; localStorage.setItem(STORAGE,JSON.stringify(state)); $('#onboardBackdrop')?.classList.remove('show'); $('#onboardBackdrop')?.setAttribute('aria-hidden','true');}
   function giftProgress(rule){
     const target=Number(rule.days||30);
@@ -581,17 +653,20 @@
     const li=levelInfo(); const icon=state.settings.profileIcon||''; const avatarEls=['#topProfileAvatar','#levelProfileAvatar','#settingsProfileAvatar']; avatarEls.forEach(sel=>{const el=$(sel); if(!el)return; if(icon){el.style.backgroundImage=`url(${icon})`; el.textContent='';}else{el.style.backgroundImage=''; el.textContent=li.cur.icon||'🌱';}});
     $('#topLevel').textContent='Lv '+li.cur.level; $('#topIdentity').textContent=li.cur.name; $('#topXp').textContent=fmtXp(li.xp)+' XP'; $('#topLevelFill').style.width=li.pct+'%'; const badge=$('#topGiftBadge'); if(badge){const ag=activeGiftRule(); badge.textContent=ag?giftCount(ag):0;}
   }
-  function renderProgress(){
+  function renderLevel(){
     ensureRewardShape(); const li=levelInfo(); renderTopProfile();
     $('#levelPageValue').textContent='Lv '+li.cur.level; $('#levelPageIdentity').textContent=(li.cur.icon||'🌱')+' '+li.cur.name; $('#levelPageFill').style.width=li.pct+'%'; $('#levelPageXp').textContent=`${fmtXp(li.xp)} XP · next: ${li.next.level===li.cur.level?'max tier':fmtXp(li.next.xp-li.xp)+' XP left'}`;
     $('#identityPath').innerHTML=identities.map(x=>`<div class="tier-card ${x.level===li.cur.level?'current':''}"><div class="tier-icon">${x.icon}</div><div><div class="tier-name">Lv ${x.level} · ${x.name}</div><div class="tier-sub">${x.xp} XP · ${x.desc}</div></div><span class="chip ${li.xp>=x.xp?'band-good':'band-none'}">${li.xp>=x.xp?'Unlocked':'Locked'}</span></div>`).join('');
     const xpItems=[]; const seen=new Set();
     state.records.filter(r=>afterStart(r.date)).forEach(r=>{const h=state.habits.find(x=>x.id===r.habitId)||{}; if(!h.id)return; const key=habitXpKey(h,parseDate(r.date)); if(seen.has(key))return; seen.add(key); xpItems.push({date:r.date,at:r.at,desc:`${h.emoji||'✓'} ${h.name||'Habit'} completed`,xp:habitPeriodXp(h,parseDate(r.date))});});
     Object.keys(state.journals).filter(k=>afterStart(k)&&!isVacationDay(k)).forEach(k=>xpItems.push({date:k,at:state.journals[k]?.updatedAt||k,desc:'📓 Journal completed',xp:5}));
-    ledger().forEach(l=>{if(l.xp) xpItems.push({date:l.date,at:l.date,desc:l.desc,xp:l.xp});}); xpItems.sort((a,b)=>String(b.at).localeCompare(String(a.at))); renderPreview($('#xpHistory'),xpItems,xpNode,'XP History');
+    ledger().forEach(l=>{if(l.xp) xpItems.push({date:l.date,at:l.date,desc:l.desc,xp:l.xp});}); xpItems.sort((a,b)=>String(b.at).localeCompare(String(a.at)));
+    renderPreview($('#xpHistory'),xpItems,xpNode,'XP History');
+  }
+  function renderRewards(){
+    ensureRewardShape();
     renderCorrelationInsights();
     renderGiftRedeem();
-    const jPrev=$('#journalHistoryPreview'); if(jPrev){const items=Object.keys(state.journals).sort((a,b)=>b.localeCompare(a)).slice(0,3).map(k=>({date:k})); renderPreview(jPrev,items,x=>journalNode(x.date),'Journal');}
   }
   function renderGiftRedeem(){
     ensureRewardShape(); if(!$('#creditValue'))return; const rewards=state.settings.rewards; const rules=rewards.giftRules||[]; const bal=creditTotal();
@@ -614,6 +689,52 @@
   }
 
   /* ---------- SETTINGS ---------- */
+  function renderSyncActions(){
+    const grid=$('#syncActionsGrid'); if(!grid)return;
+    const connected=!!fileHandle;
+    grid.innerHTML='';
+    if(connected){
+      grid.innerHTML='<button class="btn-secondary" id="disconnectFileBtn">Disconnect</button><button class="btn-secondary" id="exportBtn">Export JSON</button>';
+      $('#disconnectFileBtn').onclick=async()=>{fileHandle=null; state.settings.fileConnected=false; state.settings.autoSync=false; await save(true); updateStatus(); renderSettings(); toast('Disconnected');};
+      $('#exportBtn').onclick=exportJson;
+    }else{
+      grid.innerHTML='<button class="btn-secondary" id="createFileBtn">Create New File</button><label class="btn-secondary" style="text-align:center;cursor:pointer;display:grid;place-items:center" id="importLabel">Import JSON<input type="file" id="importInput" accept="application/json" hidden></label>';
+      $('#createFileBtn').onclick=createFile;
+      $('#importInput').onchange=e=>e.target.files[0]&&importJson(e.target.files[0]);
+    }
+  }
+  function renderAppIconSettings(){
+    const grid=$('#appIconGrid'); if(!grid)return;
+    grid.innerHTML='';
+    APP_ICON_PRESETS.forEach(p=>{
+      const btn=document.createElement('button'); btn.type='button'; btn.className='app-icon-opt'+(state.settings.appIcon===p.id?' active':'');
+      if(p.src) btn.innerHTML=`<img src="${p.src}" alt=""><span>${p.label}</span>`;
+      else btn.innerHTML=`<div class="app-icon-emoji" style="background:${p.bg};display:grid;place-items:center;font-size:24px">${p.emoji}</div><span>${p.label}</span>`;
+      btn.onclick=async()=>{state.settings.appIcon=p.id; state.settings.appIconCustom=''; await save(); applyAppIcon(); renderAppIconSettings(); toast('App icon updated');};
+      grid.appendChild(btn);
+    });
+    const custom=document.createElement('button'); custom.type='button'; custom.className='app-icon-opt'+(state.settings.appIcon==='custom'?' active':'');
+    custom.innerHTML=state.settings.appIconCustom?`<img src="${state.settings.appIconCustom}" alt=""><span>Custom</span>`:`<div class="app-icon-emoji" style="background:var(--line);display:grid;place-items:center;font-size:18px">+</div><span>Custom</span>`;
+    custom.onclick=()=>$('#appIconInput')?.click();
+    grid.appendChild(custom);
+  }
+  function applyAppIcon(){
+    const fav=$('#appFavicon'), fav192=$('#appFavicon192'), apple=$('#appAppleIcon');
+    let href='assets/icon.svg';
+    if(state.settings.appIcon==='custom' && state.settings.appIconCustom) href=state.settings.appIconCustom;
+    else {
+      const preset=APP_ICON_PRESETS.find(p=>p.id===state.settings.appIcon)||APP_ICON_PRESETS[0];
+      if(preset.src) href=preset.src;
+      else if(preset.emoji){
+        const c=document.createElement('canvas'); c.width=192; c.height=192; const ctx=c.getContext('2d');
+        ctx.fillStyle=preset.bg; ctx.fillRect(0,0,192,192); ctx.font='96px serif'; ctx.textAlign='center'; ctx.textBaseline='middle'; ctx.fillText(preset.emoji,96,104);
+        href=c.toDataURL('image/png');
+      }
+    }
+    if(fav) fav.href=href;
+    if(fav192) fav192.href=href;
+    if(apple) apple.href=href;
+  }
   function renderVacationSettings(){
     const box=$('#vacationList'); if(!box)return;
     box.innerHTML='';
@@ -647,19 +768,22 @@
     $('#rewardTabs').onclick=e=>{if(e.target.tagName!=='BUTTON')return; rewardActiveTab=e.target.dataset.tab; $$('#rewardTabs button').forEach(b=>b.classList.remove('active')); e.target.classList.add('active'); drawRewardPanel(rewardActiveTab);};
     drawRewardPanel(rewardActiveTab);
 
-    renderPenaltySettings(); renderVacationSettings();
+    renderPenaltySettings(); renderVacationSettings(); renderSyncActions(); renderAppIconSettings();
 
     $('#trackerStartDate').value=state.settings.startDate||todayKey(); $('#startDateDisplay').textContent=state.settings.startDate||todayKey(); $('#trackerStartDate').onchange=async()=>{state.settings.startDate=$('#trackerStartDate').value||todayKey(); await save(); toast('Start date updated')};
     const un=$('#userNameInput'); if(un){un.value=state.settings.userName||''; un.onchange=async()=>{state.settings.userName=un.value.trim(); await save();};}
     const ts=$('#themeSelect'); if(ts){ts.value=state.settings.theme||'system'; ts.onchange=async()=>{state.settings.theme=ts.value; applyTheme(); await save(); toast('Theme updated');};}
-    renderTopProfile(); const upload=$('#profileIconInput'); if(upload){upload.onchange=e=>{const file=e.target.files&&e.target.files[0]; if(!file)return; const reader=new FileReader(); reader.onload=async()=>{state.settings.profileIcon=reader.result; await save(); toast('Profile icon updated')}; reader.readAsDataURL(file);};}
-    $('#backupStatus').textContent=fileHandle?'Backup file connected. Edits sync to your JSON file (e.g. in Google Drive) when Auto Sync is on.':(state.settings.fileConnected?'Reconnect your backup file if prompted.':'No backup file connected.');
+    renderTopProfile();
+    const upload=$('#profileIconInput'); if(upload){upload.onchange=e=>{const file=e.target.files&&e.target.files[0]; if(!file)return; const reader=new FileReader(); reader.onload=async()=>{state.settings.profileIcon=reader.result; await save(); toast('Profile icon updated')}; reader.readAsDataURL(file);};}
+    const appUpload=$('#appIconInput'); if(appUpload){appUpload.onchange=e=>{const file=e.target.files&&e.target.files[0]; if(!file)return; const reader=new FileReader(); reader.onload=async()=>{state.settings.appIcon='custom'; state.settings.appIconCustom=reader.result; await save(); applyAppIcon(); renderAppIconSettings(); toast('Custom app icon saved')}; reader.readAsDataURL(file);};}
+    $('#backupStatus').textContent=fileHandle?'Backup file connected. Edits sync to your JSON file when Auto Sync is on.':(state.settings.fileConnected?'Previous backup found — create or import a file to reconnect.':'No backup file connected. Create a new file or import an existing backup.');
     if(!fileHandle) state.settings.autoSync=false;
     $('#autoSyncSwitch').classList.toggle('on',state.settings.autoSync);
     $('#autoSyncSwitch').disabled=!fileHandle;
     $('#reminderSwitch').classList.toggle('on',state.settings.reminders);
-    $('#reminderSettings').innerHTML=`<div class="field"><label>Default Reminder Time</label><input type="time" id="globalReminderTime" value="${state.settings.globalReminderTime||'20:30'}"></div>`;
+    $('#reminderSettings').innerHTML=`<div class="field"><label>Default Reminder Time</label><input type="time" id="globalReminderTime" value="${state.settings.globalReminderTime||'20:30'}"></div><div class="field"><label>Default notification message</label><input id="defaultReminderMessage" maxlength="${REMINDER_MSG_LIMIT}" value="${escapeAttr(state.settings.defaultReminderMessage||'Time for {habit}')}"><div class="hint">${REMINDER_MSG_LIMIT} characters max · Use {habit} for the habit name</div></div>`;
     $('#globalReminderTime').onchange=async()=>{state.settings.globalReminderTime=$('#globalReminderTime').value; await save(); setupReminderLoop();};
+    $('#defaultReminderMessage').onchange=async()=>{state.settings.defaultReminderMessage=($('#defaultReminderMessage').value||'Time for {habit}').slice(0,REMINDER_MSG_LIMIT); await save();};
   }
   function renderPenaltySettings(){
     ensureRewardShape(); const r=state.settings.rewards; const box=$('#penaltySettings'); if(!box)return;
@@ -670,14 +794,27 @@
 
   /* ---------- FILE SYNC ---------- */
   async function connectFile(){if(!window.showOpenFilePicker){toast('File connection needs Chrome/Edge on desktop. Use Export/Import instead.');return;} try{[fileHandle]=await window.showOpenFilePicker({types:[{description:'JSON Backup',accept:{'application/json':['.json']}}]}); const file=await fileHandle.getFile(); const txt=await file.text(); if(txt.trim()){state=JSON.parse(txt); normalizeState();} state.settings.fileConnected=true; await save(true); updateStatus(); renderAll(); toast('File connected');}catch(e){}}
-  async function createFile(){if(!window.showSaveFilePicker){toast('Create file needs Chrome/Edge on desktop. Use Export instead.');return;} try{fileHandle=await window.showSaveFilePicker({suggestedName:'habit-tracker-backup.json',types:[{description:'JSON Backup',accept:{'application/json':['.json']}}]}); state.settings.fileConnected=true; state.settings.autoSync=true; await save(); toast('Backup file created');}catch(e){}}
+  async function createFile(){if(!window.showSaveFilePicker){toast('Create file needs Chrome/Edge on desktop. Use Export instead.');return;} try{fileHandle=await window.showSaveFilePicker({suggestedName:'habit-tracker-backup.json',types:[{description:'JSON Backup',accept:{'application/json':['.json']}}]}); state.settings.fileConnected=true; state.settings.autoSync=true; await save(); renderSettings(); toast('Backup file created');}catch(e){}}
+  function reminderBody(habit){const tpl=(habit.reminder?.message||state.settings.defaultReminderMessage||'Time for {habit}').slice(0,REMINDER_MSG_LIMIT); return tpl.replace(/\{habit\}/g,habit.name||'your habit');}
+  async function toggleReminders(){
+    const turningOn=!state.settings.reminders;
+    if(turningOn && 'Notification' in window && Notification.permission==='default') await Notification.requestPermission();
+    state.settings.reminders=turningOn;
+    if(turningOn){
+      const eligible=activeHabits().filter(h=>!h.archived);
+      if(eligible.length && confirm('Enable reminders for all habits using each habit\'s schedule (or the default time where not set)?')){
+        eligible.forEach(h=>{h.reminder=h.reminder||{}; h.reminder.enabled=true; if(!h.reminder.time) h.reminder.time=state.settings.globalReminderTime||'20:30'; if(!h.reminder.message) h.reminder.message=state.settings.defaultReminderMessage||'Time for {habit}';});
+      }
+    }
+    await save(); setupReminderLoop();
+  }
+  function setupReminderLoop(){if(reminderTimer)clearInterval(reminderTimer); if(!state.settings.reminders)return; reminderTimer=setInterval(()=>{const now=hkNow(); const hm=String(now.getHours()).padStart(2,"0")+":"+String(now.getMinutes()).padStart(2,"0"); state.habits.forEach(h=>{if(!h.reminder?.enabled||h.reminder.time!==hm||!isScheduledToday(h,now))return; const last=`${h.id}-${todayKey()}-${hm}`; if(sessionStorage.getItem(last))return; sessionStorage.setItem(last,'1'); const body=reminderBody(h); if('Notification' in window && Notification.permission==='granted') new Notification('Momentum',{body}); else toast(body);});},30000)}
+
   function exportJson(){state.settings.lastExportAt=todayKey(); localStorage.setItem(STORAGE,JSON.stringify(state)); const blob=new Blob([JSON.stringify(state,null,2)],{type:'application/json'}); const a=document.createElement('a'); a.href=URL.createObjectURL(blob); a.download='habit-tracker-backup.json'; a.click(); URL.revokeObjectURL(a.href); updateStatus();}
   function importJson(file){const r=new FileReader(); r.onload=async()=>{try{state=JSON.parse(r.result); normalizeState(); await save(true); renderAll(); toast('Imported')}catch(e){toast('Invalid JSON')}}; r.readAsText(file)}
-  async function toggleReminders(){state.settings.reminders=!state.settings.reminders; if(state.settings.reminders && 'Notification' in window && Notification.permission==='default'){await Notification.requestPermission();} await save(); setupReminderLoop();}
-  function setupReminderLoop(){if(reminderTimer)clearInterval(reminderTimer); if(!state.settings.reminders)return; reminderTimer=setInterval(()=>{const now=hkNow(); const hm=String(now.getHours()).padStart(2,"0")+":"+String(now.getMinutes()).padStart(2,"0"); state.habits.forEach(h=>{if(!h.reminder?.enabled||h.reminder.time!==hm||!isScheduledToday(h,now))return; const last=`${h.id}-${todayKey()}-${hm}`; if(sessionStorage.getItem(last))return; sessionStorage.setItem(last,'1'); if('Notification' in window && Notification.permission==='granted') new Notification('Habit Tracker',{body:`Reminder: ${h.name}`}); else toast(`Reminder: ${h.name}`);});},30000)}
 
   /* ---------- SHELL ---------- */
-  function renderAll(){updateStatus(); renderHome(); renderHabits(); renderReport(); renderJournals(); renderProgress(); renderSettings();}
+  function renderAll(){updateStatus(); applyAppIcon(); renderHome(); renderHabits(); renderReport(); renderRewards(); renderLevel(); renderSettings();}
   function showXpPop(t){const p=document.createElement('div');p.className='xp-pop';p.textContent=t;document.body.appendChild(p);setTimeout(()=>p.remove(),1200)}
   let modalDragY=0;
   function openModal(title,html){$('#modalTitle').textContent=title; $('#modalBody').innerHTML=html; $('#modalBackdrop').classList.add('show'); $$('[data-close]').forEach(b=>b.onclick=closeModal); const sheet=$('#modalSheet'), handle=$('#sheetHandle'); if(handle&&sheet){let sy=0; handle.ontouchstart=e=>{sy=e.touches[0].clientY;}; handle.ontouchend=e=>{if(e.changedTouches[0].clientY-sy>80) closeModal();};}}
@@ -685,26 +822,25 @@
   function escapeHtml(s=''){return String(s).replace(/[&<>"]/g,m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[m]))}
   function escapeAttr(s=''){return escapeHtml(s).replace(/'/g,'&#39;')}
 
-  function showView(view){$$('.nav-item').forEach(x=>x.classList.toggle('active',x.dataset.view===view)); $$('.view').forEach(v=>v.classList.remove('active')); const el=$('#'+view); if(el)el.classList.add('active'); const host=$('.view-host'); if(host)host.scrollTop=0; if(view==='reportView')renderReport(); if(view==='progressView')renderProgress(); if(view==='settingsView')renderSettings();}
+  function showView(view){$$('.nav-item').forEach(x=>x.classList.toggle('active',x.dataset.view===view)); $$('.view').forEach(v=>v.classList.remove('active')); const el=$('#'+view); if(el)el.classList.add('active'); const host=$('.view-host'); if(host)host.scrollTop=0; if(view==='reportView')renderReport(); if(view==='rewardsView')renderRewards(); if(view==='levelView')renderLevel(); if(view==='settingsView')renderSettings();}
   $$('.nav-item').forEach(b=>b.onclick=()=>showView(b.dataset.view));
   const fab=$('#fabAdd'); if(fab) fab.onclick=()=>openHabitModal();
-  $('#profileQuick').onclick=()=>showView('progressView'); $('#topSettingsBtn').onclick=()=>showView('settingsView');
+  $('#profileQuick').onclick=()=>showView('levelView'); $('#topSettingsBtn').onclick=()=>showView('settingsView');
   $$('[data-open-habit]').forEach(b=>b.onclick=()=>openHabitModal()); $('#modalClose').onclick=closeModal; $('#modalBackdrop').onclick=e=>{if(e.target.id==='modalBackdrop')closeModal()};
-  $('#openJournalBtn')?.addEventListener('click',()=>{$$('.nav-item').forEach(x=>x.classList.remove('active')); $$('.view').forEach(v=>v.classList.remove('active')); const jv=$('#journalView'); if(jv){jv.hidden=false; jv.removeAttribute('aria-hidden'); jv.classList.add('active'); renderJournals(); $('.view-host').scrollTop=0;}});
-  $('#expandLadderBtn')?.addEventListener('click',()=>{$('#identityPath')?.scrollIntoView({behavior:'smooth'});});
-  $('#addGroupBtn')?.addEventListener('click',async()=>{state.groups.push({id:uid(),name:'Morning block',emoji:'🌅',color:'#ea580c',sortOrder:state.groups.length}); await save(); toast('Routine added');});
+  $('#addGroupBtn')?.addEventListener('click',async()=>{state.groups.push({id:uid(),name:'Morning block',emoji:'🌅',color:'#ea580c',sortOrder:state.groups.length}); await save(); toast('Group added');});
   $('#addVacationBtn')?.addEventListener('click',async()=>{const t=todayKey(); const e=new Date(hkNow()); e.setDate(e.getDate()+6); state.settings.vacations.push({id:uid(),from:t,to:dateKey(e),label:'Vacation'}); await save(); toast('Vacation period added');});
   $('#statusToggle')?.addEventListener('click',()=>{state.settings.statusRowOpen=!state.settings.statusRowOpen; localStorage.setItem(STORAGE,JSON.stringify(state)); updateStatus();});
   $('#onboardNext')?.addEventListener('click',()=>{if(onboardStep<ONBOARD_STEPS.length-1){onboardStep++; showOnboardStep();} else finishOnboarding();});
-  $('#onboardSkip')?.addEventListener('click',finishOnboarding);
-  $('#replayOnboardingBtn')?.addEventListener('click',()=>{state.settings.onboardingComplete=false; renderOnboarding();});
+  $('#onboardSkipStep')?.addEventListener('click',skipOnboardStep);
+  $('#replayOnboardingBtn')?.addEventListener('click',()=>{state.settings.onboardingComplete=false; onboardStep=0; renderOnboarding();});
   $('#resetTodayBtn').onclick=resetTodayRecords;
   const wp=$('#weekPrev'); if(wp)wp.onclick=()=>{weekOffset--; renderWeekStrip();}; const wn=$('#weekNext'); if(wn)wn.onclick=()=>{weekOffset++; renderWeekStrip();}; const wt=$('#weekToday'); if(wt)wt.onclick=()=>{weekOffset=0; renderWeekStrip();};
   $('#rangeTabs').onclick=e=>{if(e.target.tagName!=='BUTTON')return; trendDays=Number(e.target.dataset.days); $$('#rangeTabs button').forEach(b=>b.classList.remove('active')); e.target.classList.add('active'); drawTrend();};
   {const tp=$('#trendPrev'); if(tp)tp.onclick=()=>{trendCursor.setMonth(trendCursor.getMonth()-1); drawTrend();}; const tn=$('#trendNext'); if(tn)tn.onclick=()=>{const now=hkNow(); const c=new Date(trendCursor); c.setMonth(c.getMonth()+1); if(c.getFullYear()>now.getFullYear()||(c.getFullYear()===now.getFullYear()&&c.getMonth()>now.getMonth())){toast('Already at the latest month');return;} trendCursor=c; drawTrend();};}
   $('#reportMode').onclick=e=>{if(e.target.tagName!=='BUTTON')return; reportMode=e.target.dataset.mode; $$('#reportMode button').forEach(b=>b.classList.remove('active')); e.target.classList.add('active'); renderCalendar();};
   $('#reportPrev').onclick=()=>{reportCursor.setMonth(reportCursor.getMonth()-(reportMode==='month'?1:3)); renderCalendar();}; $('#reportNext').onclick=()=>{reportCursor.setMonth(reportCursor.getMonth()+(reportMode==='month'?1:3)); renderCalendar();};
-  $('#connectFileBtn').onclick=connectFile; $('#createFileBtn').onclick=createFile; $('#disconnectFileBtn').onclick=async()=>{fileHandle=null; state.settings.fileConnected=false; state.settings.autoSync=false; await save(true); updateStatus(); renderSettings(); toast('Disconnected')}; $('#exportBtn').onclick=exportJson; $('#importInput').onchange=e=>e.target.files[0]&&importJson(e.target.files[0]); $('#autoSyncSwitch').onclick=async()=>{if(!fileHandle){state.settings.autoSync=false; toast('Connect a backup file first'); renderSettings(); return;} state.settings.autoSync=!state.settings.autoSync; await save();};   $('#reminderSwitch').onclick=toggleReminders;
+  $('#autoSyncSwitch').onclick=async()=>{if(!fileHandle){state.settings.autoSync=false; toast('Connect a backup file first'); renderSettings(); return;} state.settings.autoSync=!state.settings.autoSync; await save();};
+  $('#reminderSwitch').onclick=toggleReminders;
   $('#resetAllBtn').onclick=()=>{if($('#confirmDeleteInput').value!=='Confirm'){toast('Type Confirm first');return;} if(!confirm('Erase all Habit Tracker data? This cannot be undone.'))return; state=defaults(); localStorage.setItem(STORAGE,JSON.stringify(state)); fileHandle=null; renderAll(); toast('Data erased');};
   document.body.addEventListener('click',e=>{const h=e.target.closest('[data-help]'); if(!h)return; const key=h.dataset.help; const content={rewardRules:`<div class="sheet-text"><h4>Reward rules</h4><p>Credit at completion tiers · Gift streak unlocks · Penalties on repeated 0% days (paused during vacation).</p></div>`,fileSync:`<div class="sheet-text"><h4>Backup & sync</h4><p>Connect + Auto Sync + JSON in Google Drive is safe and private — no account. Data stays in your browser first; the file is your backup.</p><ol><li>Create or Connect a JSON file in a synced folder.</li><li>Turn on Auto Sync on desktop Chrome/Edge.</li><li>On phone, use Export / Import JSON.</li></ol></div>`,reminders:`<div class="sheet-text"><h4>Reminders</h4><p>Best when installed to home screen. Enable per-habit reminders in habit setup.</p></div>`,homeScreen:`<div class="sheet-text"><h4>Add to home screen</h4><p><strong>iPhone:</strong> Safari → Share → Add to Home Screen.</p><p><strong>Android:</strong> Chrome → Install app / Add to Home screen.</p></div>`}; openModal('Help',content[key]||'');});
   window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change',()=>{if(state.settings.theme==='system') applyTheme();});

@@ -6,9 +6,9 @@
   <meta name="theme-color" content="#4f46e5" />
   <meta name="description" content="Momentum — habit tracker with journal, streaks, rewards, level identities and local file sync." />
   <title>Momentum · Habit Tracker</title>
-  <link rel="icon" href="assets/icon.svg" />
-  <link rel="icon" type="image/png" sizes="192x192" href="assets/icon-192.png" />
-  <link rel="apple-touch-icon" href="assets/icon-180.png" />
+  <link rel="icon" id="appFavicon" href="assets/icon.svg" />
+  <link rel="icon" type="image/png" sizes="192x192" id="appFavicon192" href="assets/icon-192.png" />
+  <link rel="apple-touch-icon" id="appAppleIcon" href="assets/icon-180.png" />
   <link rel="manifest" href="manifest.webmanifest" />
   <meta name="mobile-web-app-capable" content="yes" />
   <meta name="apple-mobile-web-app-capable" content="yes" />
@@ -18,7 +18,7 @@
 <body>
   <div class="app-shell">
     <header class="topbar" id="topbar">
-      <button class="profile-pill" id="profileQuick" type="button" aria-label="Open progress">
+      <button class="profile-pill" id="profileQuick" type="button" aria-label="Open level and XP">
         <div class="profile-avatar" id="topProfileAvatar">🌱</div>
         <div class="profile-meta">
           <div class="profile-title"><span id="topLevel">Lv 1</span> · <span id="topIdentity">Seed Planter</span></div>
@@ -26,7 +26,9 @@
         </div>
       </button>
       <div class="top-actions">
-        <button class="top-icon" id="topSettingsBtn" type="button" aria-label="Settings">⚙️</button>
+        <button class="top-icon" id="topSettingsBtn" type="button" aria-label="Settings">
+          <svg class="nav-svg" viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M19.14 12.94c.04-.31.06-.63.06-.94s-.02-.63-.06-.94l2.03-1.58a.49.49 0 0 0 .12-.61l-1.92-3.32a.49.49 0 0 0-.59-.22l-2.39.96a7.04 7.04 0 0 0-1.63-.94l-.36-2.54a.49.49 0 0 0-.48-.42h-3.84a.49.49 0 0 0-.48.42l-.36 2.54a7.04 7.04 0 0 0-1.63.94l-2.39-.96a.49.49 0 0 0-.59.22L2.74 8.87a.49.49 0 0 0 .12.61l2.03 1.58c-.04.31-.06.63-.06.94s.02.63.06.94l-2.03 1.58a.49.49 0 0 0-.12.61l1.92 3.32a.49.49 0 0 0 .59.22l2.39-.96c.5.38 1.05.7 1.63.94l.36 2.54a.49.49 0 0 0 .48.42h3.84a.49.49 0 0 0 .48-.42l.36-2.54c.58-.24 1.13-.56 1.63-.94l2.39.96a.49.49 0 0 0 .59-.22l1.92-3.32a.49.49 0 0 0-.12-.61l-2.03-1.58zM12 15.6A3.6 3.6 0 1 1 12 8.4a3.6 3.6 0 0 1 0 7.2z"/></svg>
+        </button>
       </div>
     </header>
 
@@ -95,19 +97,22 @@
           <div class="collapsible-body" style="margin-top:12px"><div id="flexHabitGroups"></div></div>
         </div>
 
-        <div class="card"><div class="card-head"><h3>Today's Journal</h3><span class="chip blue">Mood + Energy</span></div><div class="form-grid journal-area" id="homeJournalForm"></div></div>
+        <div class="card">
+          <div class="card-head"><h3>Journal</h3><button class="btn-inline pink" id="homeJournalViewAll" type="button">View all</button></div>
+          <div class="journal-history" id="homeJournalPreview"></div>
+        </div>
 
         <div class="quote-card" id="dailyQuote"></div>
       </section>
 
       <section class="view" id="habitsView">
-        <div class="section-title"><h2>Habits</h2><span>Routines, order and records</span></div>
+        <div class="section-title"><h2>Habits</h2><span>Groups, order and records</span></div>
         <div class="card">
-          <div class="card-head"><h3>Routines</h3><button class="btn-inline pink" id="addGroupBtn" type="button">+ Group</button></div>
+          <div class="card-head"><h3>Groups</h3><button class="btn-inline pink" id="addGroupBtn" type="button">+ Group</button></div>
           <div id="groupManager"></div>
         </div>
         <div class="card"><div class="card-head"><h3>Habit Setup</h3><span class="chip" id="habitCountChip">0 habits</span></div><div class="habit-list" id="allHabitList"></div><button class="btn-primary" style="margin-top:12px" data-open-habit>+ Add Habit</button></div>
-        <div class="card"><div class="card-head"><h3>Recent Habit Records</h3><span class="chip green">Editable</span></div><div class="activity-log" id="recentActivityLog"></div><button class="btn-secondary" id="viewFullLogBtn" style="margin-top:12px">View Full Log</button></div>
+        <div class="card"><div class="card-head"><h3>Recent Habit Records</h3><span class="chip green">Editable</span></div><div class="activity-log" id="recentActivityLog"></div></div>
       </section>
 
       <section class="view" id="reportView">
@@ -127,9 +132,20 @@
         </div>
       </section>
 
-      <section class="view" id="progressView">
-        <div class="section-title"><h2>Progress</h2><span>Level, rewards and insights</span></div>
-        <div class="level-card" id="progressLevelCard">
+      <section class="view" id="rewardsView">
+        <div class="section-title"><h2>Rewards</h2><span>Credits, gifts and insights</span></div>
+        <div class="cards">
+          <div class="stat-card" style="--c:var(--orange)"><div class="stat-label">Credits</div><div class="stat-value" id="creditValue">HK$0</div><div class="stat-sub">Available</div></div>
+          <div class="stat-card" style="--c:var(--brand)"><div class="stat-label">Gifts</div><div class="stat-value" id="giftUnlockValue">0</div><div class="stat-sub" id="giftUnlockSub">available</div></div>
+        </div>
+        <div class="card"><div class="card-head"><h3>Insights</h3><span class="chip purple">Journal × Habits</span></div><div id="correlationInsights"></div></div>
+        <div class="card"><div class="card-head"><h3>Redeem Rewards</h3><span class="chip orange">Credits &amp; gifts</span></div><div class="reward-grid" id="redeemGrid"></div></div>
+        <div class="card"><div class="card-head"><h3>Reward Ledger</h3><span class="chip green">Auto updated</span></div><div class="ledger-list" id="ledgerList"></div></div>
+      </section>
+
+      <section class="view" id="levelView">
+        <div class="section-title"><h2>Level &amp; XP</h2><span>Identity ladder and history</span></div>
+        <div class="level-card" id="levelPageCard">
           <div class="level-avatar" id="levelProfileAvatar">🌱</div>
           <div style="min-width:0;flex:1">
             <div class="level-eyebrow">Building identity</div>
@@ -139,21 +155,8 @@
             <div class="level-xp" id="levelPageXp">0 XP</div>
           </div>
         </div>
-        <div class="cards">
-          <div class="stat-card" style="--c:var(--orange)"><div class="stat-label">Credits</div><div class="stat-value" id="creditValue">HK$0</div><div class="stat-sub">Available</div></div>
-          <div class="stat-card" style="--c:var(--brand)"><div class="stat-label">Gifts</div><div class="stat-value" id="giftUnlockValue">0</div><div class="stat-sub" id="giftUnlockSub">available</div></div>
-        </div>
-        <div class="card"><div class="card-head"><h3>Correlation Insights</h3><span class="chip purple">Journal × Habits</span></div><div id="correlationInsights"></div></div>
-        <div class="card"><div class="card-head"><h3>Identity Ladder</h3><button class="btn-inline pink" id="expandLadderBtn" type="button">Expand</button></div><div class="identity-ladder" id="identityPath"></div></div>
+        <div class="card"><div class="card-head"><h3>Identity Ladder</h3></div><div class="identity-ladder" id="identityPath"></div></div>
         <div class="card"><div class="card-head"><h3>XP History</h3><span class="chip green">Recent</span></div><div class="xp-history" id="xpHistory"></div></div>
-        <div class="card"><div class="card-head"><h3>Redeem Rewards</h3><span class="chip orange">Credits &amp; gifts</span></div><div class="reward-grid" id="redeemGrid"></div></div>
-        <div class="card"><div class="card-head"><h3>Reward Ledger</h3><span class="chip green">Auto updated</span></div><div class="ledger-list" id="ledgerList"></div></div>
-        <div class="card"><div class="card-head"><h3>Journal</h3><button class="btn-inline pink" id="openJournalBtn" type="button">Open history</button></div><div class="journal-history" id="journalHistoryPreview"></div></div>
-      </section>
-
-      <section class="view" id="journalView" hidden aria-hidden="true">
-        <div class="section-title"><h2>Journal</h2><span>Review and edit past entries</span></div>
-        <div class="card"><div class="card-head"><h3>Journal History</h3><span class="chip blue">Editable</span></div><div class="journal-history" id="journalHistory"></div></div>
       </section>
 
       <section class="view" id="settingsView">
@@ -163,17 +166,12 @@
         </div>
         <div class="card"><div class="card-head"><h3>Display Name</h3><span class="chip">Greeting</span></div><div class="field"><label>Your name (optional)</label><input id="userNameInput" placeholder="e.g. Chris"></div></div>
         <div class="card"><div class="card-head"><h3>Profile Icon</h3><span class="chip">Personal</span></div><div class="upload-profile-box"><div class="profile-avatar" id="settingsProfileAvatar">🌱</div><div class="upload-profile-copy"><strong>Choose your avatar</strong><span>Upload a photo — it is fitted into a circle.</span><label class="upload-file-btn">Upload Photo<input type="file" id="profileIconInput" accept="image/*" hidden></label></div></div></div>
+        <div class="card"><div class="card-head"><h3>App Icon</h3><span class="chip">Home screen</span></div><div class="small-note" style="margin-bottom:10px">Choose how Momentum appears on your home screen. This is separate from your profile avatar.</div><div class="app-icon-grid" id="appIconGrid"></div><label class="upload-file-btn" style="margin-top:10px;display:inline-grid">Upload Custom Icon<input type="file" id="appIconInput" accept="image/*" hidden></label></div>
         <div class="card"><div class="card-head"><h3>Vacation / Pause</h3><span class="chip gray">No XP or rewards</span></div><div class="small-note">Records are kept, but XP, credits, gifts and penalties are paused for selected dates.</div><div id="vacationList" style="margin-top:12px"></div><button class="btn-secondary" id="addVacationBtn" style="margin-top:10px">+ Add vacation period</button></div>
         <div class="card"><div class="card-head"><h3>Tracker Start Date</h3><span class="date-pill" id="startDateDisplay">—</span></div><div class="field"><label>Start Date</label><input type="date" id="trackerStartDate"></div></div>
         <div class="card"><div class="card-head"><h3>Reward Rules</h3><button class="help-dot" data-help="rewardRules">?</button></div><div class="form-grid" id="rewardSettings"></div></div>
         <div class="card"><div class="card-head"><h3>Penalty Rules</h3><span class="chip red">0% completion</span></div><div class="form-grid" id="penaltySettings"></div></div>
-        <div class="card"><div class="card-head"><h3>Backup &amp; Sync</h3><button class="help-dot" data-help="fileSync">?</button></div><div class="backup-status" id="backupStatus">No backup file connected.</div><div class="sync-grid" style="margin-top:12px">
-          <button class="btn-secondary" id="connectFileBtn">Connect File</button>
-          <button class="btn-secondary" id="createFileBtn">Create New File</button>
-          <button class="btn-secondary" id="disconnectFileBtn">Disconnect</button>
-          <button class="btn-secondary" id="exportBtn">Export JSON</button>
-          <label class="btn-secondary" style="text-align:center;cursor:pointer">Import JSON<input type="file" id="importInput" accept="application/json" hidden></label>
-        </div><div class="switch-row" style="margin-top:14px"><div><strong>Auto Sync</strong><div class="small-note">Connect a JSON file in Google Drive (desktop) — Auto Sync writes every edit there.</div></div><button class="switch" id="autoSyncSwitch" aria-label="Auto sync toggle"></button></div></div>
+        <div class="card"><div class="card-head"><h3>Backup &amp; Sync</h3><button class="help-dot" data-help="fileSync">?</button></div><div class="backup-status" id="backupStatus">No backup file connected.</div><div class="sync-grid" id="syncActionsGrid" style="margin-top:12px"></div><div class="switch-row" style="margin-top:14px"><div><strong>Auto Sync</strong><div class="small-note">Connect a JSON file in Google Drive (desktop) — Auto Sync writes every edit there.</div></div><button class="switch" id="autoSyncSwitch" aria-label="Auto sync toggle"></button></div></div>
         <div class="card"><div class="card-head"><h3>Reminders</h3><button class="help-dot" data-help="reminders">?</button></div><div class="switch-row"><div><strong>Enable Reminders</strong></div><button class="switch" id="reminderSwitch" aria-label="Reminder toggle"></button></div><div class="form-grid" id="reminderSettings" style="margin-top:12px"></div></div>
         <div class="card"><div class="card-head"><h3>Help</h3></div><button class="btn-secondary" id="replayOnboardingBtn">Replay onboarding tour</button><button class="btn-secondary" style="margin-top:8px" data-help="homeScreen">Add to Home Screen</button></div>
         <div class="card"><div class="card-head"><h3>Danger Zone</h3><span class="chip gray">Protected</span></div><p class="small-note">To erase all data, type <strong>Confirm</strong> exactly.</p><div class="field"><input id="confirmDeleteInput" placeholder="Type Confirm"></div><button class="btn-danger" id="resetAllBtn" style="margin-top:10px">Erase All Data</button></div>
@@ -181,11 +179,23 @@
     </main>
 
     <nav class="tabbar">
-      <button class="nav-item active" data-view="homeView"><span class="nav-ico">🏠</span><span>Home</span></button>
-      <button class="nav-item" data-view="habitsView"><span class="nav-ico">✅</span><span>Habits</span></button>
+      <button class="nav-item active" data-view="homeView" aria-label="Home">
+        <svg class="nav-svg" viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M10 20v-6h4v6h5v-8h3L12 3 2 12h3v8z"/></svg>
+        <span>Home</span>
+      </button>
+      <button class="nav-item" data-view="habitsView" aria-label="Habits">
+        <svg class="nav-svg" viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M9 16.17 4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41z"/></svg>
+        <span>Habits</span>
+      </button>
       <button class="fab-add" id="fabAdd" aria-label="Add habit"><span class="fab-plus">+</span></button>
-      <button class="nav-item" data-view="reportView"><span class="nav-ico">📊</span><span>Report</span></button>
-      <button class="nav-item" data-view="progressView"><span class="nav-ico">⚡</span><span>Progress</span></button>
+      <button class="nav-item" data-view="reportView" aria-label="Report">
+        <svg class="nav-svg" viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M3.5 18.5 9 13l3 3 7.5-7.5 1.5 1.5L12 19l-3-3-4.5 4.5z"/></svg>
+        <span>Report</span>
+      </button>
+      <button class="nav-item" data-view="rewardsView" aria-label="Rewards">
+        <svg class="nav-svg" viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M20 6h-2.18A3 3 0 0 0 17 4H7a3 3 0 0 0-.82 2H4c-1.1 0-2 .9-2 2v2c0 2.21 1.79 4 4 4h.5c.28 1.21 1.4 2.1 2.67 2.1h7.66c1.27 0 2.39-.89 2.67-2.1H20c2.21 0 4-1.79 4-4V8c0-1.1-.9-2-2-2zm-8 0a1 1 0 0 1 1-1h2a1 1 0 0 1 1 1v1h-4V6zm8 4c0 .55-.45 1-1 1h-1.17c-.41-1.17-1.52-2-2.83-2H11c-1.31 0-2.42.83-2.83 2H7c-.55 0-1-.45-1-1V8h14v2zM7 20h10v2H7z"/></svg>
+        <span>Rewards</span>
+      </button>
     </nav>
   </div>
 
@@ -197,7 +207,7 @@
     <div class="onboard-card">
       <div class="onboard-progress"><span id="onboardStepLabel">Step 1 of 6</span><div class="onboard-bar"><span id="onboardBarFill"></span></div></div>
       <div id="onboardBody"></div>
-      <div class="onboard-actions"><button class="btn-secondary" id="onboardSkip" type="button">Skip</button><button class="btn-primary" id="onboardNext" type="button">Next</button></div>
+      <div class="onboard-actions"><button class="btn-secondary" id="onboardSkipStep" type="button">Skip step</button><button class="btn-primary" id="onboardNext" type="button">Next</button></div>
     </div>
   </div>
 
