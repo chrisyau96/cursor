@@ -66,7 +66,7 @@
     }
     return {
       habits, records, journals, redemptions:[],
-      settings:{autoSync:false,fileConnected:false,reminders:false,globalReminderTime:'20:30',startDate:dateKey(startD),profileIcon:'',
+      settings:{autoSync:false,fileConnected:false,reminders:false,theme:'light',globalReminderTime:'20:30',startDate:dateKey(startD),profileIcon:'',
         rewards:{creditRules:[{id:uid(),pct:50,amount:2},{id:uid(),pct:100,amount:10}], giftRules:[{id:uid(),gift:'Buffet',icon:'🍽️',pct:80,days:30}], penaltyCredit:5,penaltyXp:20,penaltyZeroDays:2}
       }
     };
@@ -76,12 +76,14 @@
     state.settings=state.settings||{};
     if(!state.settings.startDate) state.settings.startDate=todayKey();
     if(state.settings.profileIcon===undefined) state.settings.profileIcon='';
+    if(!state.settings.theme) state.settings.theme='light';
     state.habits=state.habits||[]; state.records=state.records||[]; state.journals=state.journals||{}; state.redemptions=state.redemptions||[];
     state.habits.forEach(h=>{h.target=Number(h.target||1); h.frequency=h.frequency||{mode:'daily',days:[0,1,2,3,4,5,6]}; if(!h.frequency.schedule&&h.frequency.mode!=='daily') h.frequency.schedule={type:'any'};});
     ensureRewardShape(); localStorage.setItem(STORAGE,JSON.stringify(state));
   }
   async function save(skipSync=false){localStorage.setItem(STORAGE,JSON.stringify(state)); if(!skipSync) await autoSync(); renderAll();}
   function toast(msg){const t=$('#toast'); t.textContent=msg; t.classList.add('show'); setTimeout(()=>t.classList.remove('show'),1600)}
+  function applyTheme(){document.documentElement.setAttribute('data-theme',state.settings.theme==='dark'?'dark':'light');}
   async function autoSync(){ updateStatus(); if(!state.settings.autoSync||!fileHandle) return; try{const w=await fileHandle.createWritable(); await w.write(JSON.stringify(state,null,2)); await w.close(); state.settings.fileConnected=true; localStorage.setItem(STORAGE,JSON.stringify(state)); updateStatus();}catch(e){toast('Backup sync needs reconnection'); state.settings.fileConnected=false; updateStatus();}}
 
   function monthKey(date){return `${date.getFullYear()}-${String(date.getMonth()+1).padStart(2,'0')}`;}
@@ -177,6 +179,7 @@
     r.creditRules.forEach(c=>{if(!c.id)c.id=uid(); c.pct=Number(c.pct||100); c.amount=Number(c.amount||0);});
     if(!Array.isArray(r.giftRules)) r.giftRules=[{id:uid(),gift:r.streakGift||'Buffet',icon:'🍽️',pct:r.streakPct||80,days:r.streakDays||30}];
     r.giftRules.forEach(g=>{if(!g.id)g.id=uid(); if(!g.icon)g.icon=(g.gift==='Buffet'?'🍽️':'🎁');});
+    if(!r.activeGiftId || !r.giftRules.some(g=>g.id===r.activeGiftId)) r.activeGiftId=r.giftRules[0]?.id||null;
     if(r.penaltyCredit===undefined) r.penaltyCredit=5; if(r.penaltyXp===undefined) r.penaltyXp=20; if(r.penaltyZeroDays===undefined) r.penaltyZeroDays=2;
   }
   function autoLedger(){
@@ -191,9 +194,11 @@
         entries.push({id:'auto-penalty-'+dateKey(d),date:dateKey(d),type:'penalty',desc:`${zero} consecutive 0% days`,credit:-Math.abs(Number(rewards.penaltyCredit||0)),xp:-Math.abs(Number(rewards.penaltyXp||0))});
       }
     }
-    (rewards.giftRules||[]).forEach(rule=>{dates.forEach(d=>{const streak=streakAt(parseDate(d),Number(rule.pct||80)); if(streak>0 && streak%Number(rule.days||30)===0){entries.push({id:`auto-gift-${rule.id}-${d}`,date:d,type:'gift',amount:1,gift:rule.gift||'Gift',giftIcon:rule.icon||'🎁',giftRuleId:rule.id,desc:`${rule.days} days at ${rule.pct}%+ · ${rule.gift||'Gift'}`,credit:0,xp:120});}})});
+    const activeRule=(rewards.giftRules||[]).find(g=>g.id===rewards.activeGiftId);
+    if(activeRule){const rule=activeRule; dates.forEach(d=>{const streak=streakAt(parseDate(d),Number(rule.pct||80)); if(streak>0 && streak%Number(rule.days||30)===0){entries.push({id:`auto-gift-${rule.id}-${d}`,date:d,type:'gift',amount:1,gift:rule.gift||'Gift',giftIcon:rule.icon||'🎁',giftRuleId:rule.id,desc:`${rule.days} days at ${rule.pct}%+ · ${rule.gift||'Gift'}`,credit:0,xp:120});}})}
     return entries;
   }
+  function activeGiftRule(){ensureRewardShape(); const r=state.settings.rewards; return (r.giftRules||[]).find(g=>g.id===r.activeGiftId)||null;}
   function zeroStreakAt(date){let s=0; const d=new Date(date); for(let i=0;i<366;i++){const p=dayPct(d); if(p===0){s++; d.setDate(d.getDate()-1)} else break;} return s;}
   function ledger(){return autoLedger().concat(state.redemptions||[]).sort((a,b)=>b.date.localeCompare(a.date));}
   function xpTotal(){return Math.max(0,state.records.filter(r=>afterStart(r.date)).reduce((s,r)=>s+recordXp(r),0)+ledger().reduce((s,l)=>s+(l.xp||0),0));}
@@ -235,7 +240,7 @@
   }
   function todayHabitRow(h,now=hkNow(),after=null){
     const k=dateKey(now); const c=completionOfHabit(h,now); const row=document.createElement('div'); row.className='habit-row '+(c.done?'done':'');
-    row.innerHTML=`<div class="habit-icon" style="background:${h.color}22;color:${h.color}">${h.emoji}</div><div class="habit-main"><div class="habit-name"></div><div class="habit-meta"><span>${c.count}/${c.target}</span><span class="mini-dot"></span><span>${frequencyLabel(h)}</span>${c.count?'<span class="mini-dot"></span><span class="entry-stamp">recorded</span>':''}</div><div class="progress-mini"><span style="width:${c.pct}%;background:${h.color}"></span></div></div><button class="check-btn ${c.done?'done':''}" ${c.done?'disabled':''}>${c.done?'✓':'+1'}</button>${c.count?'<button class="icon-btn red" data-reset title="Reset">↺</button>':''}`;
+    row.innerHTML=`<div class="habit-icon" style="background:${h.color}22;color:${h.color}">${h.emoji}</div><div class="habit-main"><div class="habit-name"></div><div class="habit-meta"><span>${c.count}/${c.target}</span><span class="mini-dot"></span><span>${frequencyLabel(h)}</span></div><div class="progress-mini"><span style="width:${c.pct}%;background:${h.color}"></span></div></div><button class="check-btn ${c.done?'done':''}" ${c.done?'disabled':''}>${c.done?'✓':'+1'}</button>${c.count?'<button class="icon-btn red" data-reset title="Reset">↺</button>':''}`;
     row.querySelector('.habit-name').textContent=h.name;
     if(!c.done) row.onclick=async(e)=>{if(e.target.closest('button[data-reset]'))return; await addRecord(h.id,'',k); after&&after();};
     const reset=row.querySelector('[data-reset]'); if(reset) reset.onclick=async(e)=>{e.stopPropagation(); await resetHabitForDate(h.id,k); after&&after();};
@@ -249,8 +254,8 @@
     $('#flexHabitToggle').onclick=()=>card.classList.toggle('collapsed');
   }
   function nextGiftInfo(){
-    ensureRewardShape(); const rules=state.settings.rewards.giftRules||[]; if(!rules.length) return {icon:'🎁',label:'No gift rule yet',pct:0};
-    let best=null; rules.forEach(g=>{const gp=giftProgress(g); const item={icon:g.icon||'🎁',label:`${g.gift||'Gift'} · ${gp.current}/${gp.target} days`,pct:gp.pct,remaining:gp.target-gp.current}; if(!best || item.remaining<best.remaining) best=item;}); return best||{icon:'🎁',label:'No gift rule yet',pct:0};
+    const g=activeGiftRule(); if(!g) return {icon:'🎁',label:'No gift goal set',pct:0};
+    const gp=giftProgress(g); return {icon:g.icon||'🎁',label:`${g.gift||'Gift'} · ${gp.current}/${gp.target} days`,pct:gp.pct};
   }
   async function addRecord(habitId,note='',date=todayKey()){const habit=state.habits.find(h=>h.id===habitId); if(!habit)return; const dt=parseDate(date); const c=completionOfHabit(habit,dt); if(c.count>=c.target){toast('Target already completed'); return;} const r={id:uid(),habitId,date,at:new Date().toISOString(),note}; state.records.push(r); await save(); showXpPop('+'+fmtXp(recordXp(r))+' XP'); toast('Recorded');}
   async function removeRecord(id){state.records=state.records.filter(r=>r.id!==id); await save(); toast('Record removed')}
@@ -367,11 +372,13 @@
     const labels=[]; const pctVals=[]; const energy=[]; const end=trendEndDate();
     for(let i=trendDays-1;i>=0;i--){const d=new Date(end);d.setDate(d.getDate()-i);const k=dateKey(d); labels.push(`${d.getMonth()+1}/${d.getDate()}`); pctVals.push(dayPct(d)); energy.push(state.journals[k]?.energy??null);}
     $('#trendNote').textContent='Bars show daily habit completion. The line shows your journal energy. Use ‹ › to review other months.';
+    const cs=getComputedStyle(document.documentElement); const gridCol=(cs.getPropertyValue('--line')||'#eeeeF6').trim(); const axisCol=(cs.getPropertyValue('--faint')||'#7c8199').trim(); const lineCol=(cs.getPropertyValue('--brand')||'#4f46e5').trim();
     const left=34,right=12,top=18,bottom=42,plotW=W-left-right,plotH=H-top-bottom,bw=plotW/trendDays;
-    ctx.strokeStyle='#eeeeF6'; ctx.lineWidth=1; ctx.fillStyle='#7c8199'; ctx.font='10px Inter,Arial'; for(let i=0;i<=4;i++){const y=top+plotH*i/4; ctx.beginPath();ctx.moveTo(left,y);ctx.lineTo(W-right,y);ctx.stroke(); ctx.fillText((100-i*25)+'%',4,y+3);}
-    pctVals.forEach((v,i)=>{ if(v===null||v===undefined) return; const x=left+i*bw+bw*.24; const bh=plotH*(v/100); ctx.fillStyle=v>=100?'rgba(22,163,74,.9)':v>=80?'rgba(134,239,172,.95)':v>=50?'rgba(253,230,138,.95)':v>0?'rgba(254,202,202,.95)':'rgba(248,113,113,.85)'; roundRect(ctx,x,top+plotH-bh,Math.max(5,bw*.52),Math.max(2,bh),6,true);});
-    ctx.strokeStyle='#4f46e5';ctx.lineWidth=3;ctx.beginPath(); let started=false; energy.forEach((e,i)=>{if(e==null)return; const x=left+i*bw+bw/2, y=top+plotH-plotH*(e/10); if(!started){ctx.moveTo(x,y);started=true}else ctx.lineTo(x,y)}); if(started) ctx.stroke(); energy.forEach((e,i)=>{if(e==null)return; const x=left+i*bw+bw/2, y=top+plotH-plotH*(e/10); ctx.fillStyle='#4f46e5'; ctx.beginPath(); ctx.arc(x,y,3,0,Math.PI*2); ctx.fill();});
-    const labelStep=trendDays<=7?1:trendDays<=14?3:6; ctx.fillStyle='#7c8199';ctx.font='10px Inter,Arial'; ctx.textAlign='center'; labels.forEach((l,i)=>{if(i%labelStep!==0&&i!==labels.length-1)return; const x=left+i*bw+bw/2; ctx.fillText(l,x,H-16);}); ctx.textAlign='left';}
+    ctx.strokeStyle=gridCol; ctx.lineWidth=1; ctx.fillStyle=axisCol; ctx.font='10px Inter,Arial'; for(let i=0;i<=4;i++){const y=top+plotH*i/4; ctx.beginPath();ctx.moveTo(left,y);ctx.lineTo(W-right,y);ctx.stroke(); ctx.fillText((100-i*25)+'%',4,y+3);}
+    const barW=Math.max(2,Math.min(bw*0.62,26)); const radius=Math.min(6,barW/2);
+    pctVals.forEach((v,i)=>{ if(v===null||v===undefined) return; const x=left+i*bw+(bw-barW)/2; const bh=plotH*(v/100); ctx.fillStyle=v>=100?'rgba(22,163,74,.9)':v>=80?'rgba(134,239,172,.95)':v>=50?'rgba(253,230,138,.95)':v>0?'rgba(254,202,202,.95)':'rgba(248,113,113,.85)'; roundRect(ctx,x,top+plotH-bh,barW,Math.max(2,bh),radius,true);});
+    ctx.strokeStyle=lineCol;ctx.lineWidth=3;ctx.beginPath(); let started=false; energy.forEach((e,i)=>{if(e==null)return; const x=left+i*bw+bw/2, y=top+plotH-plotH*(e/10); if(!started){ctx.moveTo(x,y);started=true}else ctx.lineTo(x,y)}); if(started) ctx.stroke(); energy.forEach((e,i)=>{if(e==null)return; const x=left+i*bw+bw/2, y=top+plotH-plotH*(e/10); ctx.fillStyle=lineCol; ctx.beginPath(); ctx.arc(x,y,3,0,Math.PI*2); ctx.fill();});
+    const labelStep=trendDays<=7?1:trendDays<=14?3:6; ctx.fillStyle=axisCol;ctx.font='10px Inter,Arial'; ctx.textAlign='center'; labels.forEach((l,i)=>{if(i%labelStep!==0&&i!==labels.length-1)return; const x=left+i*bw+bw/2; ctx.fillText(l,x,H-16);}); ctx.textAlign='left';}
   function roundRect(ctx,x,y,w,h,r,fill){ctx.beginPath();ctx.moveTo(x+r,y);ctx.arcTo(x+w,y,x+w,y+h,r);ctx.arcTo(x+w,y+h,x,y+h,r);ctx.arcTo(x,y+h,x,y,r);ctx.arcTo(x,y,x+w,y,r); if(fill)ctx.fill();}
   function renderCalendar(){const title=$('#reportTitle'); const m=$('#monthReport'), q=$('#quarterReport'); if(!title)return; m.style.display=reportMode==='month'?'block':'none'; q.style.display=reportMode==='quarter'?'grid':'none'; if(reportMode==='month'){title.textContent=reportCursor.toLocaleDateString([], {month:'long',year:'numeric'}); renderMonth(reportCursor,$('#calendarGrid'),$('#calendarWeekdays'));} else {const y=reportCursor.getFullYear(), qi=Math.floor(reportCursor.getMonth()/3); title.textContent=`Q${qi+1} ${y}`; q.innerHTML=''; [0,1,2].forEach(i=>{const d=new Date(y,qi*3+i,1); const wrap=document.createElement('div'); wrap.className='month-mini'; wrap.innerHTML=`<h4>${d.toLocaleDateString([], {month:'long'})}</h4><div class="calendar-weekdays"></div><div class="calendar-grid"></div>`; q.appendChild(wrap); renderMonth(d,wrap.querySelector('.calendar-grid'),wrap.querySelector('.calendar-weekdays'),true);});}}
   function renderMonth(date,grid,weekdays,mini=false){weekdays.innerHTML=DOW.map(x=>`<div>${x[0]}</div>`).join(''); grid.innerHTML=''; const y=date.getFullYear(),m=date.getMonth(), first=new Date(y,m,1), days=new Date(y,m+1,0).getDate(); const today=todayKey(); for(let i=0;i<first.getDay();i++){const e=document.createElement('div');e.className='day-cell empty';grid.appendChild(e)} for(let d=1;d<=days;d++){const dt=new Date(y,m,d),k=dateKey(dt),p=dayPct(dt),j=state.journals[k]; const cell=document.createElement('div'); let cls='day-cell'; if(k>today){cls+=' future'} else if(p!==null){cls+=' '+pctClass(p);} if(k===today)cls+=' today'; cell.className=cls; cell.innerHTML=`<span>${d}</span>${j?.mood?`<span class="mood-mark">${j.mood}</span>`:''}${j?.energy!==undefined?`<span class="energy-mark">${j.energy}</span>`:''}`; cell.onclick=()=>openDayDetail(k); grid.appendChild(cell);} }
@@ -399,7 +406,7 @@
   }
   function renderTopProfile(){
     const li=levelInfo(); const icon=state.settings.profileIcon||''; const avatarEls=['#topProfileAvatar','#levelProfileAvatar','#settingsProfileAvatar']; avatarEls.forEach(sel=>{const el=$(sel); if(!el)return; if(icon){el.style.backgroundImage=`url(${icon})`; el.textContent='';}else{el.style.backgroundImage=''; el.textContent=li.cur.icon||'🌱';}});
-    $('#topLevel').textContent='Lv '+li.cur.level; $('#topIdentity').textContent=li.cur.name; $('#topXp').textContent=fmtXp(li.xp)+' XP'; $('#topLevelFill').style.width=li.pct+'%'; const badge=$('#topGiftBadge'); if(badge) badge.textContent=(state.settings.rewards.giftRules||[]).reduce((s,g)=>s+giftCount(g),0);
+    $('#topLevel').textContent='Lv '+li.cur.level; $('#topIdentity').textContent=li.cur.name; $('#topXp').textContent=fmtXp(li.xp)+' XP'; $('#topLevelFill').style.width=li.pct+'%'; const badge=$('#topGiftBadge'); if(badge){const ag=activeGiftRule(); badge.textContent=ag?giftCount(ag):0;}
   }
   function renderLevel(){
     ensureRewardShape(); const li=levelInfo(); renderTopProfile();
@@ -410,13 +417,21 @@
     renderGift();
   }
   function renderGift(){
-    ensureRewardShape(); if(!$('#creditValue'))return; $('#creditValue').textContent='HK$'+creditTotal(); $('#streak80Value').textContent=streakAt(hkNow(),80);
-    const totalGifts=(state.settings.rewards.giftRules||[]).reduce((s,g)=>s+giftCount(g),0); $('#giftUnlockValue').textContent=totalGifts; $('#giftUnlockSub').textContent='available gifts';
-    const rules=state.settings.rewards.giftRules||[]; const bal=creditTotal();
-    $('#redeemGrid').innerHTML=`<div class="gift-card credit-spend" style="grid-column:1/-1"><div class="card-head"><h3>Credit Spend</h3><span class="chip orange">HK$${bal} available</span></div><div class="redeem-form"><div class="field"><label>Redeemed For</label><input id="creditSpendText" placeholder="e.g. headphone, game, coffee"></div><div class="field"><label>Credit Amount</label><input id="creditSpendAmount" type="number" min="0" max="${bal}" step="1" value="${Math.min(10,bal)}"><input id="creditSpendSlider" type="range" min="0" max="${bal}" step="1" value="${Math.min(10,bal)}"><div class="inline-hint">Use the number box or slider. The maximum follows your current balance.</div></div><button class="btn-primary" id="spendCreditBtn" ${bal<=0?'disabled':''}>Redeem Credit</button></div></div>` + rules.map(g=>{const available=giftCount(g); const gp=giftProgress(g); return `<div class="gift-card"><div class="gift-icon">${g.icon||'🎁'}</div><div class="gift-title">${escapeHtml(g.gift||'Gift')}</div><div class="gift-sub">Balance: ${available} · Rule: ${g.days} days at ${g.pct}%+</div><div class="progress-mini" style="margin-top:10px"><span style="width:${gp.pct}%"></span></div><div class="gift-sub">Next gift progress: ${gp.current}/${gp.target} days</div><button class="btn-inline pink" style="margin-top:10px" data-redeem-gift="${g.id}" ${available<=0?'disabled':''}>Redeem Gift</button></div>`}).join('') + `<button class="btn-secondary" style="grid-column:1/-1" id="editGiftRulesBtn">Edit reward rules</button>`;
+    ensureRewardShape(); if(!$('#creditValue'))return; const rewards=state.settings.rewards; const rules=rewards.giftRules||[]; const bal=creditTotal();
+    $('#creditValue').textContent='HK$'+bal;
+    const active=activeGiftRule(); const activeAvail=active?giftCount(active):0;
+    $('#giftUnlockValue').textContent=activeAvail; $('#giftUnlockSub').textContent=active?('of '+(active.gift||'Gift')):'no gift goal';
+
+    const goalOptions=rules.map(g=>`<option value="${g.id}" ${g.id===rewards.activeGiftId?'selected':''}>${g.icon||'🎁'} ${escapeHtml(g.gift||'Gift')} · ${g.days}d @ ${g.pct}%+</option>`).join('');
+    const gp=active?giftProgress(active):{current:0,target:0,pct:0};
+    const giftCardHtml = active ? `<div class="gift-card gift-goal" style="grid-column:1/-1"><div class="card-head"><h3>Current Gift Goal</h3><span class="chip">Balance ${activeAvail}</span></div><div class="field"><label>Pursuing</label><select id="activeGiftSelect">${goalOptions}</select></div><div class="goal-hero"><div class="gift-icon">${active.icon||'🎁'}</div><div style="flex:1;min-width:0"><div class="gift-title">${escapeHtml(active.gift||'Gift')}</div><div class="gift-sub">${active.days} days at ${active.pct}%+</div><div class="progress-mini" style="margin-top:8px"><span style="width:${gp.pct}%"></span></div><div class="gift-sub">${gp.current}/${gp.target} days</div></div></div><button class="btn-gold" style="margin-top:12px" id="redeemGiftBtn" ${activeAvail<=0?'disabled':''}>${activeAvail>0?'Redeem '+escapeHtml(active.gift||'Gift'):'Not unlocked yet'}</button></div>` : `<div class="gift-card" style="grid-column:1/-1"><div class="empty">No gift goal yet. Add one in Settings → Reward Rules.</div></div>`;
+
+    $('#redeemGrid').innerHTML=`<div class="gift-card credit-spend" style="grid-column:1/-1"><div class="card-head"><h3>Spend Credits</h3><span class="chip orange">HK$${bal} available</span></div><div class="redeem-form"><div class="field"><label>Redeemed For</label><input id="creditSpendText" placeholder="e.g. headphone, game, coffee"></div><div class="field"><label>Credit Amount</label><input id="creditSpendAmount" type="number" min="0" max="${bal}" step="1" value="${Math.min(10,bal)}"><input id="creditSpendSlider" type="range" min="0" max="${bal}" step="1" value="${Math.min(10,bal)}"><div class="inline-hint">Use the number box or slider, up to your balance.</div></div><button class="btn-primary" id="spendCreditBtn" ${bal<=0?'disabled':''}>Redeem Credit</button></div></div>` + giftCardHtml + `<button class="btn-secondary" style="grid-column:1/-1" id="editGiftRulesBtn">Edit reward rules</button>`;
+
     const slider=$('#creditSpendSlider'), amount=$('#creditSpendAmount'); if(slider&&amount){slider.oninput=()=>amount.value=slider.value; amount.oninput=()=>{let v=Math.max(0,Math.min(bal,Number(amount.value||0))); amount.value=v; slider.value=v;};}
-    $('#spendCreditBtn').onclick=async()=>{const amount=Number($('#creditSpendAmount').value); const what=$('#creditSpendText').value.trim(); if(!what){toast('Enter what you redeemed');return;} if(amount<=0){toast('Enter credit amount');return;} if(creditTotal()<amount){toast('Not enough credits');return;} state.redemptions.push({id:uid(),date:todayKey(),type:'redeemCredit',desc:'Credit spend · '+what,credit:-amount,xp:0,what}); await save(); toast('Credit redeemed')};
-    $$('[data-redeem-gift]').forEach(b=>b.onclick=async()=>{const g=rules.find(x=>x.id===b.dataset.redeemGift); if(!g)return; if(giftCount(g)<=0){toast('Gift not unlocked yet');return;} state.redemptions.push({id:uid(),date:todayKey(),type:'redeemGift',desc:'Redeemed '+(g.gift||'Gift'),gift:g.gift||'Gift',giftIcon:g.icon||'🎁',giftRuleId:g.id,credit:0,xp:0}); await save(); toast('Gift redeemed')});
+    $('#spendCreditBtn').onclick=async()=>{const amt=Number($('#creditSpendAmount').value); const what=$('#creditSpendText').value.trim(); if(!what){toast('Enter what you redeemed');return;} if(amt<=0){toast('Enter credit amount');return;} if(creditTotal()<amt){toast('Not enough credits');return;} state.redemptions.push({id:uid(),date:todayKey(),type:'redeemCredit',desc:'Credit spend · '+what,credit:-amt,xp:0,what}); await save(); toast('Credit redeemed')};
+    const sel=$('#activeGiftSelect'); if(sel) sel.onchange=async()=>{rewards.activeGiftId=sel.value; await save(); toast('Gift goal updated')};
+    const rg=$('#redeemGiftBtn'); if(rg) rg.onclick=async()=>{const g=active; if(!g)return; if(giftCount(g)<=0){toast('Gift not unlocked yet');return;} state.redemptions.push({id:uid(),date:todayKey(),type:'redeemGift',desc:'Redeemed '+(g.gift||'Gift'),gift:g.gift||'Gift',giftIcon:g.icon||'🎁',giftRuleId:g.id,credit:0,xp:0}); await save(); toast('Gift redeemed')};
     $('#editGiftRulesBtn').onclick=()=>{rewardActiveTab='gift'; showView('settingsView'); setTimeout(renderSettings,0);};
     renderPreview($('#ledgerList'),ledger(),ledgerNode,'Reward Ledger');
   }
@@ -446,6 +461,7 @@
 
     $('#trackerStartDate').value=state.settings.startDate||todayKey(); $('#startDateDisplay').textContent=state.settings.startDate||todayKey(); $('#trackerStartDate').onchange=async()=>{state.settings.startDate=$('#trackerStartDate').value||todayKey(); await save(); toast('Start date updated')};
     renderTopProfile(); const upload=$('#profileIconInput'); if(upload){upload.onchange=e=>{const file=e.target.files&&e.target.files[0]; if(!file)return; const reader=new FileReader(); reader.onload=async()=>{state.settings.profileIcon=reader.result; await save(); toast('Profile icon updated')}; reader.readAsDataURL(file);};}
+    const themeSw=$('#themeSwitch'); if(themeSw) themeSw.classList.toggle('on',state.settings.theme==='dark');
     $('#backupStatus').textContent=fileHandle?'Backup file connected. Edits will sync automatically when Auto Sync is on.':(state.settings.fileConnected?'A file was connected before. Reconnect if the browser asks for access.':'No backup file connected.'); if(!fileHandle) state.settings.autoSync=false; $('#autoSyncSwitch').classList.toggle('on',state.settings.autoSync); $('#autoSyncSwitch').disabled=!fileHandle; $('#reminderSwitch').classList.toggle('on',state.settings.reminders); $('#reminderSettings').innerHTML=`<div class="field"><label>Default Reminder Time</label><input type="time" id="globalReminderTime" value="${state.settings.globalReminderTime||'20:30'}"></div><div class="small-note">Habit-level reminder setup is ${state.settings.reminders?'available':'disabled'}.</div>`; $('#globalReminderTime').onchange=async()=>{state.settings.globalReminderTime=$('#globalReminderTime').value; await save(); setupReminderLoop();};
   }
   function renderPenaltySettings(){
@@ -483,7 +499,8 @@
   $('#reportMode').onclick=e=>{if(e.target.tagName!=='BUTTON')return; reportMode=e.target.dataset.mode; $$('#reportMode button').forEach(b=>b.classList.remove('active')); e.target.classList.add('active'); renderCalendar();};
   $('#reportPrev').onclick=()=>{reportCursor.setMonth(reportCursor.getMonth()-(reportMode==='month'?1:3)); renderCalendar();}; $('#reportNext').onclick=()=>{reportCursor.setMonth(reportCursor.getMonth()+(reportMode==='month'?1:3)); renderCalendar();};
   $('#connectFileBtn').onclick=connectFile; $('#createFileBtn').onclick=createFile; $('#disconnectFileBtn').onclick=async()=>{fileHandle=null; state.settings.fileConnected=false; state.settings.autoSync=false; await save(true); updateStatus(); renderSettings(); toast('Disconnected')}; $('#exportBtn').onclick=exportJson; $('#importInput').onchange=e=>e.target.files[0]&&importJson(e.target.files[0]); $('#autoSyncSwitch').onclick=async()=>{if(!fileHandle){state.settings.autoSync=false; toast('Connect a backup file first'); renderSettings(); return;} state.settings.autoSync=!state.settings.autoSync; await save();}; $('#reminderSwitch').onclick=toggleReminders;
+  {const ts=$('#themeSwitch'); if(ts)ts.onclick=async()=>{state.settings.theme=state.settings.theme==='dark'?'light':'dark'; applyTheme(); await save(); toast(state.settings.theme==='dark'?'Dark mode on':'Light mode on');};}
   $('#resetAllBtn').onclick=()=>{if($('#confirmDeleteInput').value!=='Confirm'){toast('Type Confirm first');return;} if(confirm('Erase all Habit Tracker data?')){state=defaults(); localStorage.setItem(STORAGE,JSON.stringify(state)); fileHandle=null; renderAll(); toast('Data erased')}};
   document.body.addEventListener('click',e=>{const h=e.target.closest('[data-help]'); if(!h)return; const key=h.dataset.help; const content={rewardRules:`<div class="sheet-text"><h4>Reward rules</h4><p>Use this to turn discipline into a clear personal reward system.</p><ul><li><strong>Credit rules</strong>: reward when a day reaches configured completion percentages.</li><li><strong>Gift rules</strong>: unlock a configured gift after a chosen number of consecutive days above the selected percentage.</li><li><strong>Penalty</strong>: reduces credits and XP when zero-completion days repeat.</li></ul></div>`,fileSync:`<div class="sheet-text"><h4>Backup & sync (no account needed)</h4><p>Records are always saved in this browser first. File connection creates a JSON backup that can live in a cloud-synced folder — this is how the app syncs, with no Google login.</p><ol><li>Choose <strong>Create New File</strong> or <strong>Connect File</strong>.</li><li>Place or choose the backup file inside your <strong>Google Drive</strong>, OneDrive or iCloud desktop-synced folder.</li><li>Turn on <strong>Auto Sync</strong>.</li><li>Every edit writes to the connected file while permission remains active, and the cloud app syncs it across devices.</li></ol><p>File connection needs Chrome or Edge on desktop. On phones, use <strong>Export / Import JSON</strong> as the reliable backup path.</p></div>`,reminders:`<div class="sheet-text"><h4>Reminders</h4><p>Turn on reminders to enable habit-level reminder setup. Browser reminders work best when the page is open or installed to the home screen.</p></div>`,homeScreen:`<div class="sheet-text"><h4>Add to phone home screen</h4><h4>iPhone / Safari</h4><ol><li>Open this page in Safari.</li><li>Tap <strong>Share</strong>.</li><li>Choose <strong>Add to Home Screen</strong>.</li><li>Tap <strong>Add</strong>.</li></ol><h4>Android / Chrome</h4><ol><li>Open this page in Chrome.</li><li>Tap the <strong>⋮</strong> menu.</li><li>Choose <strong>Install app</strong> or <strong>Add to Home screen</strong>.</li></ol></div>`}; openModal(h.textContent.trim()==='?'?'Help':'Setup Steps',content[key]||'');});
-  setupReminderLoop(); renderAll();
+  applyTheme(); setupReminderLoop(); renderAll();
 })();
