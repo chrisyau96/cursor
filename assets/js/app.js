@@ -809,7 +809,7 @@
 
     $('#trackerStartDate').value=state.settings.startDate||todayKey(); $('#startDateDisplay').textContent=state.settings.startDate||todayKey(); $('#trackerStartDate').onchange=async()=>{state.settings.startDate=$('#trackerStartDate').value||todayKey(); await save(); toast('Start date updated')};
     const un=$('#userNameInput'); if(un){un.value=state.settings.userName||'';}
-    $('#saveUserNameBtn')?.addEventListener('click',async()=>{state.settings.userName=($('#userNameInput')?.value||'').trim(); await save(); toast('Name saved'); renderHome();},{once:false});
+    const saveName=$('#saveUserNameBtn'); if(saveName) saveName.onclick=async()=>{state.settings.userName=(un?.value||'').trim(); await save(); toast('Name saved'); renderHome();};
     const cms=$('#colorModeSelect'); if(cms){cms.value=state.settings.colorMode||'system'; cms.onchange=async()=>{state.settings.colorMode=cms.value; applyAppearance(); await save(); toast('Mode updated');};}
     const sts=$('#styleThemeSelect'); if(sts){sts.value=state.settings.styleTheme||'vivid'; sts.onchange=async()=>{state.settings.styleTheme=sts.value; applyAppearance(); await save(); toast('Theme updated');};}
     renderTopProfile();
