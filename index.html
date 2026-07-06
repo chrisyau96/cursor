@@ -22,11 +22,11 @@
         <h1 id="greeting">Good morning</h1>
         <span class="top-greeting-sub" id="todayEntryStamp"></span>
       </div>
-      <button class="profile-pill" id="profileQuick" type="button" aria-label="Open level and XP">
+      <button class="profile-pill" id="profileQuick" type="button" aria-label="Open level and EXP">
         <div class="profile-avatar" id="topProfileAvatar">🌱</div>
         <div class="profile-meta">
           <div class="profile-title"><span id="topLevel">Lv 1</span></div>
-          <div class="profile-sub"><div class="level-bar"><div class="level-fill" id="topLevelFill"></div></div></div>
+          <div class="profile-sub"><div class="level-bar-track"><div class="level-bar"><div class="level-fill" id="topLevelFill"></div></div><span class="level-bar-exp" id="topLevelExp"></span></div></div>
         </div>
       </button>
       <div class="top-actions">
@@ -45,7 +45,6 @@
         <div class="status-pill" id="syncStatus"><span class="status-dot"></span><span>Sync Off</span></div>
         <div class="status-pill" id="fileStatus"><span class="status-dot"></span><span>No File</span></div>
         <div class="status-pill" id="reminderStatus"><span class="status-dot"></span><span>Reminders Off</span></div>
-        <div class="status-pill" id="backupAgeStatus"><span class="status-dot"></span><span>Backup —</span></div>
       </div>
     </div>
 
@@ -91,7 +90,7 @@
         </div>
 
         <div class="card">
-          <div class="card-head"><h3>Today's Habits</h3><div class="today-achievement"><button class="btn-inline red" id="resetTodayBtn" aria-label="Reset today">Reset</button></div></div>
+          <div class="card-head"><h3>Today's Habits</h3><div class="today-achievement"><button class="btn-inline gray" id="resetTodayBtn" aria-label="Reset today">Reset</button></div></div>
           <div id="todayHabitGroups"></div>
         </div>
 
@@ -101,12 +100,8 @@
         </div>
 
         <div class="card">
-          <div class="card-head"><h3>Today's Journal</h3><span class="chip blue">Mood + Energy</span></div>
+          <div class="card-head"><h3>Today's Journal</h3><button class="btn-inline pink" id="homeJournalViewAll" type="button">View all</button></div>
           <div class="form-grid journal-area" id="homeJournalForm"></div>
-          <div class="journal-past-wrap" id="homeJournalPastWrap" style="display:none">
-            <div class="journal-past-head"><span class="small-note">Past entries</span><button class="btn-inline pink" id="homeJournalViewAll" type="button">View all</button></div>
-            <div class="journal-history" id="homeJournalPreview"></div>
-          </div>
         </div>
 
         <div class="quote-card" id="dailyQuote"></div>
@@ -119,7 +114,7 @@
           <div id="groupManager"></div>
         </div>
         <div class="card"><div class="card-head"><h3>Habit Setup</h3><span class="chip" id="habitCountChip">0 habits</span></div><div class="habit-list" id="allHabitList"></div><button class="btn-primary" style="margin-top:12px" data-open-habit>+ Add Habit</button></div>
-        <div class="card"><div class="card-head"><h3>Recent Habit Records</h3><span class="chip green">Editable</span></div><div class="activity-log" id="recentActivityLog"></div></div>
+        <div class="card"><div class="card-head"><h3>Recent Habit Records</h3></div><div class="activity-log" id="recentActivityLog"></div></div>
       </section>
 
       <section class="view" id="reportView">
@@ -128,7 +123,7 @@
           <div class="card-head"><h3>Compare Periods</h3><div class="segmented" id="comparePeriodTabs"><button data-period="week">Week</button><button data-period="month" class="active">Month</button><button data-period="quarter">Quarter</button></div></div>
           <div id="comparePeriodBox"></div>
         </div>
-        <div class="card"><div class="card-head"><h3>Insights</h3><span class="chip purple">Journal × Habits</span></div><div id="correlationInsights"></div></div>
+        <div class="card"><div class="card-head"><h3>Insights</h3></div><div id="correlationInsights"></div></div>
         <div class="card"><div class="card-head"><h3>Performance Trend</h3><div class="segmented" id="rangeTabs"><button data-days="7" class="active">7D</button><button data-days="14">14D</button><button data-days="30">30D</button></div></div><div class="report-toolbar"><button class="round-nav" id="trendPrev">‹</button><div class="report-title" id="trendTitle">This month</div><button class="round-nav" id="trendNext">›</button></div><div class="canvas-wrap"><canvas id="trendCanvas"></canvas></div><p class="small-note" id="trendNote"></p></div>
         <div class="card">
           <div class="card-head"><h3>Calendar Review</h3><div class="segmented" id="reportMode"><button data-mode="month" class="active">Month</button><button data-mode="quarter">Quarter</button></div></div>
@@ -147,23 +142,23 @@
           <div class="stat-card reward-gift-card"><div class="stat-label">Gifts</div><div class="stat-value" id="giftUnlockValue">0</div><div class="stat-sub" id="giftUnlockSub">available</div></div>
         </div>
         <div class="card"><div class="card-head"><h3>Redeem</h3></div><div class="reward-grid" id="redeemGrid"></div></div>
-        <div class="card"><div class="card-head"><h3>Reward Ledger</h3><span class="chip green">Auto updated</span></div><div class="ledger-list" id="ledgerList"></div></div>
+        <div class="card"><div class="card-head"><h3>Reward Ledger</h3></div><div class="ledger-list" id="ledgerList"></div></div>
       </section>
 
       <section class="view" id="levelView">
-        <div class="section-title"><h2>Level &amp; XP</h2><span>Identity ladder and history</span></div>
+        <div class="section-title"><h2>Level &amp; EXP</h2><span>Identity ladder and history</span></div>
         <div class="level-card" id="levelPageCard">
           <div class="level-avatar" id="levelProfileAvatar">🌱</div>
           <div style="min-width:0;flex:1">
             <div class="level-eyebrow">Building identity</div>
             <div class="level-value" id="levelPageValue">Lv 1</div>
             <div class="level-identity" id="levelPageIdentity">Seed Planter</div>
-            <div class="lvl-bar"><div class="lvl-fill" id="levelPageFill"></div></div>
-            <div class="level-xp" id="levelPageXp">0 XP</div>
+            <div class="lvl-bar"><div class="lvl-fill" id="levelPageFill"></div><span class="lvl-bar-exp" id="levelPageBarExp"></span></div>
+            <div class="level-xp" id="levelPageXp">0 EXP</div>
           </div>
         </div>
         <div class="card"><div class="card-head"><h3>Identity Ladder</h3></div><div class="identity-ladder" id="identityPath"></div></div>
-        <div class="card"><div class="card-head"><h3>XP History</h3><span class="chip green">Recent</span></div><div class="xp-history" id="xpHistory"></div></div>
+        <div class="card"><div class="card-head"><h3>EXP History</h3></div><div class="xp-history" id="xpHistory"></div></div>
       </section>
 
       <section class="view" id="settingsView">
@@ -177,13 +172,13 @@
         <div class="card"><div class="card-head"><h3>Display Name</h3><span class="chip">Greeting</span></div><div class="field"><label>Your name (optional)</label><input id="userNameInput" placeholder="e.g. Chris"></div><button class="btn-secondary" id="saveUserNameBtn" type="button" style="margin-top:8px">Save name</button></div>
         <div class="card"><div class="card-head"><h3>Profile Icon</h3><span class="chip">Personal</span></div><div class="upload-profile-box"><div class="profile-avatar" id="settingsProfileAvatar">🌱</div><div class="upload-profile-copy"><strong>Choose your avatar</strong><span>Upload a photo — it is fitted into a circle.</span><label class="upload-file-btn">Upload Photo<input type="file" id="profileIconInput" accept="image/*" hidden></label></div></div></div>
         <div class="card"><div class="card-head"><h3>App Icon</h3><span class="chip">Home screen</span></div><div class="small-note" style="margin-bottom:10px">Choose how Momentum appears on your home screen. This is separate from your profile avatar.</div><div class="app-icon-grid" id="appIconGrid"></div><label class="upload-file-btn" style="margin-top:10px;display:inline-grid">Upload Custom Icon<input type="file" id="appIconInput" accept="image/*" hidden></label></div>
-        <div class="card"><div class="card-head"><h3>Pause Periods</h3><span class="chip gray">No XP or rewards</span></div><div class="small-note">Records are kept, but XP, credits, gifts and penalties are paused for selected dates.</div><div id="vacationSummary" class="vacation-summary" style="margin-top:12px"></div><div class="vacation-actions"><button class="btn-secondary" id="addVacationBtn" type="button">+ Add pause period</button><button class="btn-inline pink" id="viewVacationLogBtn" type="button">View log</button></div></div>
+        <div class="card"><div class="card-head"><h3>Pause Periods</h3></div><div class="small-note">Records are kept, but EXP, credits, gifts and penalties are paused for selected dates.</div><div id="vacationSummary" class="vacation-summary" style="margin-top:12px"></div><div class="vacation-actions"><button class="btn-secondary" id="addVacationBtn" type="button">+ Add pause period</button><button class="btn-inline pink" id="viewVacationLogBtn" type="button">View log</button></div></div>
         <div class="card"><div class="card-head"><h3>Tracker Start Date</h3><span class="date-pill" id="startDateDisplay">—</span></div><div class="field"><label>Start Date</label><input type="date" id="trackerStartDate"></div></div>
-        <div class="card"><div class="card-head"><h3>Reward Rules</h3><button class="help-dot" data-help="rewardRules">?</button></div><div class="form-grid" id="rewardSettings"></div></div>
+        <div class="card"><div class="card-head"><h3>Reward Rules</h3></div><div class="form-grid" id="rewardSettings"></div></div>
         <div class="card"><div class="card-head"><h3>Penalty Rules</h3><span class="chip red">0% completion</span></div><div class="form-grid" id="penaltySettings"></div></div>
-        <div class="card"><div class="card-head"><h3>Backup &amp; Sync</h3><button class="help-dot" data-help="fileSync">?</button></div><div class="backup-status" id="backupStatus">No backup file connected.</div><div class="sync-grid" id="syncActionsGrid" style="margin-top:12px"></div><div class="switch-row" style="margin-top:14px"><div><strong>Auto Sync</strong><div class="small-note">Connect a JSON file in Google Drive (desktop) — Auto Sync writes every edit there.</div></div><button class="switch" id="autoSyncSwitch" aria-label="Auto sync toggle"></button></div></div>
-        <div class="card"><div class="card-head"><h3>Reminders</h3><button class="help-dot" data-help="reminders">?</button></div><div class="switch-row"><div><strong>Enable Reminders</strong></div><button class="switch" id="reminderSwitch" aria-label="Reminder toggle"></button></div><div class="form-grid" id="reminderSettings" style="margin-top:12px"></div></div>
-        <div class="card"><div class="card-head"><h3>Help</h3></div><button class="btn-secondary" id="replayOnboardingBtn">Replay onboarding tour</button><button class="btn-secondary" style="margin-top:8px" data-help="homeScreen">Add to Home Screen</button></div>
+        <div class="card"><div class="card-head"><h3>Backup &amp; Sync</h3></div><div class="backup-status" id="backupStatus">No backup file connected.</div><div class="sync-grid" id="syncActionsGrid" style="margin-top:12px"></div><div class="switch-row" style="margin-top:14px"><div><strong>Auto Sync</strong><div class="small-note">Connect a JSON file in Google Drive (desktop) — Auto Sync writes every edit there.</div></div><button class="switch" id="autoSyncSwitch" aria-label="Auto sync toggle"></button></div></div>
+        <div class="card"><div class="card-head"><h3>Reminders</h3></div><div class="switch-row"><div><strong>Enable Reminders</strong></div><button class="switch" id="reminderSwitch" aria-label="Reminder toggle"></button></div><div class="form-grid" id="reminderSettings" style="margin-top:12px"></div></div>
+        <div class="card"><div class="card-head"><h3>Help</h3></div><button class="btn-secondary" id="replayOnboardingBtn">Replay onboarding tour</button></div>
         <div class="card"><div class="card-head"><h3>Danger Zone</h3><span class="chip gray">Protected</span></div><p class="small-note">To erase all data, type <strong>Confirm</strong> exactly.</p><div class="field"><input id="confirmDeleteInput" placeholder="Type Confirm"></div><button class="btn-danger" id="resetAllBtn" style="margin-top:10px">Erase All Data</button></div>
       </section>
     </main>
