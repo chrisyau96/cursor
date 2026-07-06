@@ -65,6 +65,8 @@
       {id:uid(),name:'Weekend Deep Work',emoji:'🎯',color:'#4f46e5',target:1,frequency:{mode:'daily',days:[6,0]},reminder:{enabled:false,time:'09:30'}},
       {id:uid(),name:'Quarterly Review',emoji:'📚',color:'#9333ea',target:1,frequency:{mode:'custom',period:'quarter',times:1,schedule:{type:'weekday',monthInPeriod:1,ordinal:1,weekday:3}},reminder:{enabled:false,time:'10:00'}}
     ];
+    const morningId=uid(); habits[0].groupId=morningId; habits[0].sortOrder=0; habits[1].groupId=morningId; habits[1].sortOrder=1; habits[2].groupId=morningId; habits[2].sortOrder=2;
+    const groups=[{id:morningId,name:'Morning block',emoji:'🌅',color:'#ea580c',sortOrder:0}];
     // Seed ~40 days of history so reports, streaks and rewards are meaningful.
     const startD=new Date(hkNow()); startD.setDate(startD.getDate()-40);
     const records=[]; const journals={};
