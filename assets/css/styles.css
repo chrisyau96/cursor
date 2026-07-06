@@ -17,11 +17,10 @@
   --ink:#e7ecf5; --muted:#9aa8c0; --faint:#6b7994;
   --card:#141d31; --line:#26314a; --line-strong:#374663; --brand-soft:#1d2545;
   --soft-pink:#1d2545; --soft-purple:#241b40; --soft-blue:#12233c; --soft-green:#123024; --soft-orange:#33240f;
-  --b-good:#166534; --b-partial:#a1741a; --b-low:#7f2b2b;
+  --b-perfect:#15803d; --b-good:#166534; --b-partial:#a1741a; --b-low:#7f2b2b; --b-zero:#b91c1c;
   --shadow-sm:0 6px 16px rgba(0,0,0,.35); --shadow:0 14px 34px rgba(0,0,0,.45); --shadow-lg:0 24px 60px rgba(0,0,0,.6);
 }
 :root[data-theme="dark"] .habit-row,
-:root[data-theme="dark"] .day-cell,
 :root[data-theme="dark"] .journal-item,
 :root[data-theme="dark"] .activity,
 :root[data-theme="dark"] .ledger-item,
@@ -35,7 +34,14 @@
 :root[data-theme="dark"] .note-area textarea,
 :root[data-theme="dark"] .empty,
 :root[data-theme="dark"] .upload-profile-box{background:#0f1830}
-:root[data-theme="dark"] .day-cell.future{background:#0f1830}
+:root[data-theme="dark"] .day-cell.future{background:#0f1830;border-color:var(--line)}
+:root[data-theme="dark"] .day-cell:not(.zero):not(.low):not(.partial):not(.good):not(.perfect):not(.future){background:#1b2540;color:#8f9bb5}
+:root[data-theme="dark"] .day-cell.zero{background:var(--b-zero);color:#fff}
+:root[data-theme="dark"] .day-cell.low{background:var(--b-low);color:#fecaca}
+:root[data-theme="dark"] .day-cell.partial{background:var(--b-partial);color:#fde68a}
+:root[data-theme="dark"] .day-cell.good{background:var(--b-good);color:#bbf7d0}
+:root[data-theme="dark"] .day-cell.perfect{background:var(--b-perfect);color:#fff}
+:root[data-theme="dark"] .day-cell .energy-mark{background:rgba(0,0,0,.5);color:#e7ecf5}
 :root[data-theme="dark"] .segmented,
 :root[data-theme="dark"] .mood,
 :root[data-theme="dark"] .day-pill,
@@ -46,7 +52,6 @@
 :root[data-theme="dark"] .switch{background:#1b2540}
 :root[data-theme="dark"] .segmented button.active{background:#2a3556}
 :root[data-theme="dark"] .wnum.band-none,:root[data-theme="dark"] .wnum{background:#1b2540}
-:root[data-theme="dark"] .day-cell{color:#8f9bb5}
 *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
 html,body{margin:0;height:100%}
 body{font-family:var(--font);color:var(--ink);line-height:1.45;-webkit-font-smoothing:antialiased;
