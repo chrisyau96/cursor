@@ -12,6 +12,41 @@
   --safe-top:env(safe-area-inset-top,0px); --safe-bottom:env(safe-area-inset-bottom,0px);
   --font:"Inter",-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
 }
+:root[data-theme="dark"]{
+  --bg:#0b1120; --bg1:#15213f; --bg2:#1e1740;
+  --ink:#e7ecf5; --muted:#9aa8c0; --faint:#6b7994;
+  --card:#141d31; --line:#26314a; --line-strong:#374663; --brand-soft:#1d2545;
+  --soft-pink:#1d2545; --soft-purple:#241b40; --soft-blue:#12233c; --soft-green:#123024; --soft-orange:#33240f;
+  --b-good:#166534; --b-partial:#a1741a; --b-low:#7f2b2b;
+  --shadow-sm:0 6px 16px rgba(0,0,0,.35); --shadow:0 14px 34px rgba(0,0,0,.45); --shadow-lg:0 24px 60px rgba(0,0,0,.6);
+}
+:root[data-theme="dark"] .habit-row,
+:root[data-theme="dark"] .day-cell,
+:root[data-theme="dark"] .journal-item,
+:root[data-theme="dark"] .activity,
+:root[data-theme="dark"] .ledger-item,
+:root[data-theme="dark"] .rule-card,
+:root[data-theme="dark"] .gift-card,
+:root[data-theme="dark"] .month-mini,
+:root[data-theme="dark"] .backup-status,
+:root[data-theme="dark"] .field input,
+:root[data-theme="dark"] .field select,
+:root[data-theme="dark"] .journal-area textarea,
+:root[data-theme="dark"] .note-area textarea,
+:root[data-theme="dark"] .empty,
+:root[data-theme="dark"] .upload-profile-box{background:#0f1830}
+:root[data-theme="dark"] .day-cell.future{background:#0f1830}
+:root[data-theme="dark"] .segmented,
+:root[data-theme="dark"] .mood,
+:root[data-theme="dark"] .day-pill,
+:root[data-theme="dark"] .emoji-swatch,
+:root[data-theme="dark"] .round-nav,
+:root[data-theme="dark"] .btn-inline,
+:root[data-theme="dark"] .close-x,
+:root[data-theme="dark"] .switch{background:#1b2540}
+:root[data-theme="dark"] .segmented button.active{background:#2a3556}
+:root[data-theme="dark"] .wnum.band-none,:root[data-theme="dark"] .wnum{background:#1b2540}
+:root[data-theme="dark"] .day-cell{color:#8f9bb5}
 *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
 html,body{margin:0;height:100%}
 body{font-family:var(--font);color:var(--ink);line-height:1.45;-webkit-font-smoothing:antialiased;
@@ -21,7 +56,7 @@ button,input,textarea,select{font:inherit;color:var(--ink)} button{border:0;back
 input,textarea,select{font-size:16px}
 h1,h2,h3,h4{margin:0}
 
-.app-shell{position:relative;display:flex;flex-direction:column;width:100%;max-width:480px;min-height:100dvh;margin:0 auto;background:transparent}
+.app-shell{position:relative;display:flex;flex-direction:column;width:100%;max-width:480px;height:100dvh;min-height:100dvh;margin:0 auto;background:transparent;overflow:hidden}
 @media(min-width:520px){
   body{padding:22px 0}
   .app-shell{height:min(900px,calc(100dvh - 44px));min-height:min(900px,calc(100dvh - 44px));border-radius:34px;overflow:hidden;border:1px solid var(--line);box-shadow:var(--shadow-lg);
@@ -51,7 +86,7 @@ h1,h2,h3,h4{margin:0}
 .status-pill.warn .status-dot{background:var(--orange)}
 
 /* View host */
-.view-host{flex:1;overflow-y:auto;overflow-x:hidden;-webkit-overflow-scrolling:touch;padding:6px 14px calc(var(--tabbar-h) + 26px + var(--safe-bottom))}
+.view-host{flex:1;min-height:0;overflow-y:auto;overflow-x:hidden;-webkit-overflow-scrolling:touch;padding:6px 14px calc(var(--tabbar-h) + 26px + var(--safe-bottom))}
 .view{display:none;animation:fade-up .3s ease both}
 .view.active{display:block}
 @keyframes fade-up{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:none}}
@@ -279,6 +314,10 @@ input[type=range]::-moz-range-track{height:6px;border-radius:999px;background:va
 .gift-icon{font-size:30px}
 .gift-title{font-size:14px;font-weight:900;margin-top:6px}
 .gift-sub{font-size:11px;color:var(--muted);margin-top:4px}
+.gift-goal{background:linear-gradient(145deg,var(--brand-soft),#f3efff);border-color:#e5e7ff}
+:root[data-theme="dark"] .gift-goal{background:#151f38}
+.goal-hero{display:flex;align-items:center;gap:14px;margin-top:6px}
+.goal-hero .gift-icon{font-size:40px;flex:0 0 auto}
 .redeem-form{display:grid;gap:10px}
 .gift-rule-chip{display:inline-flex;align-items:center;gap:6px;background:var(--soft-purple);color:var(--purple);border-radius:999px;padding:5px 8px;font-size:11px;font-weight:900}
 
