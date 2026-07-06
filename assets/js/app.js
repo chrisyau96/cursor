@@ -36,7 +36,19 @@
   let rewardActiveTab='credit';
   let weekOffset=0;
   let trendCursor=hkNow();
+  let calendarHabitFilter='';
+  let onboardStep=0;
+  let lastLevel=1;
   let state=load(); normalizeState();
+
+  const ONBOARD_STEPS=[
+    {title:'Welcome to Momentum',body:'Track habits, journal mood & energy, and grow through an identity ladder — all private in your browser.',action:'Next'},
+    {title:'Bottom navigation',body:'Home for daily logging · Habits for setup · + to add · Report for trends · Progress for level & rewards.',nav:true},
+    {title:'Log with one tap',body:'Tap +1 on any habit. Swipe a row left for Edit or Undo last tap. Habits can be grouped into routines like Morning block.',action:'Next'},
+    {title:'Rewards system',body:'Earn XP (max 5 per habit/day), credits at 50%/100% days, and gift streaks. Penalties apply only on consecutive 0% days — paused during vacation.',action:'Next'},
+    {title:'Journal insights',body:'Mood and energy feed weekly reviews and correlation insights on the Progress tab.',action:'Next'},
+    {title:'Backup (optional)',body:'On desktop Chrome, connect a JSON file inside Google Drive and turn on Auto Sync. Your data stays yours — no account needed.',action:'Get started'}
+  ];
 
   const ICON_EDIT='<svg viewBox="0 0 24 24" class="ai"><path fill="currentColor" d="M3 17.25V21h3.75L17.81 9.94l-3.75-3.75L3 17.25zM20.71 7.04a1 1 0 0 0 0-1.41l-2.34-2.34a1 1 0 0 0-1.41 0l-1.83 1.83 3.75 3.75 1.83-1.83z"/></svg>';
   const ICON_DEL='<svg viewBox="0 0 24 24" class="ai"><path fill="currentColor" d="M6 7h12l-1 13.1A2 2 0 0 1 16 22H8a2 2 0 0 1-2-1.9L5 7h1zm3-3h6l1 2h4v2H2V6h4l1-2z"/></svg>';
@@ -65,8 +77,8 @@
       if(k!==todayKey() && Math.random()<0.6){ journals[k]={mood:MOODS[Math.floor(Math.random()*MOODS.length)],energy:4+Math.floor(Math.random()*7),text:'',updatedAt:new Date().toISOString()}; }
     }
     return {
-      habits, records, journals, redemptions:[],
-      settings:{autoSync:false,fileConnected:false,reminders:false,theme:'light',globalReminderTime:'20:30',startDate:dateKey(startD),profileIcon:'',
+      habits, records, journals, redemptions:[], groups:[],
+      settings:{autoSync:false,fileConnected:false,reminders:false,theme:'system',globalReminderTime:'20:30',startDate:dateKey(startD),profileIcon:'',userName:'',onboardingComplete:false,statusRowOpen:false,lastExportAt:'',vacations:[],
         rewards:{creditRules:[{id:uid(),pct:50,amount:2},{id:uid(),pct:100,amount:10}], giftRules:[{id:uid(),gift:'Buffet',icon:'🍽️',pct:80,days:30}], penaltyCredit:5,penaltyXp:20,penaltyZeroDays:2}
       }
     };
@@ -76,14 +88,28 @@
     state.settings=state.settings||{};
     if(!state.settings.startDate) state.settings.startDate=todayKey();
     if(state.settings.profileIcon===undefined) state.settings.profileIcon='';
-    if(!state.settings.theme) state.settings.theme='light';
+    if(!state.settings.theme) state.settings.theme='system';
+    if(state.settings.userName===undefined) state.settings.userName='';
+    if(state.settings.onboardingComplete===undefined) state.settings.onboardingComplete=state.habits.length>2;
+    if(state.settings.statusRowOpen===undefined) state.settings.statusRowOpen=false;
+    if(!Array.isArray(state.settings.vacations)) state.settings.vacations=[];
+    state.groups=state.groups||[];
     state.habits=state.habits||[]; state.records=state.records||[]; state.journals=state.journals||{}; state.redemptions=state.redemptions||[];
-    state.habits.forEach(h=>{h.target=Number(h.target||1); h.frequency=h.frequency||{mode:'daily',days:[0,1,2,3,4,5,6]}; if(!h.frequency.schedule&&h.frequency.mode!=='daily') h.frequency.schedule={type:'any'};});
+    state.habits.forEach((h,i)=>{h.target=Number(h.target||1); h.frequency=h.frequency||{mode:'daily',days:[0,1,2,3,4,5,6]}; if(!h.frequency.schedule&&h.frequency.mode!=='daily') h.frequency.schedule={type:'any'}; if(h.sortOrder===undefined) h.sortOrder=i; if(h.paused===undefined) h.paused=false; if(h.archived===undefined) h.archived=false; if(h.groupId===undefined) h.groupId=null;});
+    state.groups.forEach((g,i)=>{if(!g.id)g.id=uid(); if(g.sortOrder===undefined) g.sortOrder=i; if(!g.emoji)g.emoji='📋'; if(!g.color)g.color='#4f46e5';});
     ensureRewardShape(); localStorage.setItem(STORAGE,JSON.stringify(state));
   }
-  async function save(skipSync=false){localStorage.setItem(STORAGE,JSON.stringify(state)); if(!skipSync) await autoSync(); renderAll();}
+  function isVacationDay(k){return (state.settings.vacations||[]).some(v=>k>=v.from&&k<=v.to);}
+  function activeHabits(){return state.habits.filter(h=>!h.archived);}
+  function haptic(){try{navigator.vibrate?.(12);}catch(e){}}
+  function greetName(){const n=(state.settings.userName||'').trim(); return n?`, ${n}`:'';}
+  function timeGreeting(){const h=hkNow().getHours(); if(h<12)return 'Good morning'; if(h<17)return 'Good afternoon'; return 'Good evening';}
+  function sortedGroups(){return [...state.groups].sort((a,b)=>(a.sortOrder||0)-(b.sortOrder||0));}
+  function habitsInGroup(gid){return activeHabits().filter(h=>h.groupId===gid&&!h.paused).sort((a,b)=>(a.sortOrder||0)-(b.sortOrder||0));}
+  function ungroupedHabits(){return activeHabits().filter(h=>!h.groupId&&!h.paused).sort((a,b)=>(a.sortOrder||0)-(b.sortOrder||0));}
+  function applyTheme(){const pref=state.settings.theme||'system'; const dark=pref==='dark'||(pref==='system'&&window.matchMedia('(prefers-color-scheme:dark)').matches); document.documentElement.setAttribute('data-theme',dark?'dark':'light');}
+  async function save(skipSync=false){localStorage.setItem(STORAGE,JSON.stringify(state)); if(!skipSync) await autoSync(); checkCelebrations(); renderAll();}
   function toast(msg){const t=$('#toast'); t.textContent=msg; t.classList.add('show'); setTimeout(()=>t.classList.remove('show'),1600)}
-  function applyTheme(){document.documentElement.setAttribute('data-theme',state.settings.theme==='dark'?'dark':'light');}
   async function autoSync(){ updateStatus(); if(!state.settings.autoSync||!fileHandle) return; try{const w=await fileHandle.createWritable(); await w.write(JSON.stringify(state,null,2)); await w.close(); state.settings.fileConnected=true; localStorage.setItem(STORAGE,JSON.stringify(state)); updateStatus();}catch(e){toast('Backup sync needs reconnection'); state.settings.fileConnected=false; updateStatus();}}
 
   function monthKey(date){return `${date.getFullYear()}-${String(date.getMonth()+1).padStart(2,'0')}`;}
@@ -156,7 +182,7 @@
     return 'Daily';
   }
   function isFlexibleHabit(habit,date=hkNow()){const f=habit.frequency||{}; return f.mode!=='daily' && (!f.schedule || f.schedule.type==='any') && periodMonthAllowed(f,date) && periodCount(habit,date)<periodTarget(habit);}
-  function isScheduledToday(habit,date=hkNow()){
+  function isScheduledToday(habit,date=hkNow()){if(habit.paused||habit.archived)return false;
     if(!afterStart(dateKey(date))) return false;
     const f=habit.frequency||{};
     if(f.mode==='daily') return (f.days||[0,1,2,3,4,5,6]).includes(date.getDay());
@@ -170,7 +196,8 @@
   function completionOfHabit(habit,date=hkNow()){const target=periodTarget(habit); const count=habit.frequency.mode==='daily'?todayHabitCount(habit,date):periodCount(habit,date); return {count,target,pct:Math.min(100,Math.round(count/target*100)),done:count>=target};}
   function habitXpKey(habit,date){return habit.id+'|'+currentPeriodKey(habit,date);}
   function habitPeriodXp(habit,date){
-    const pk=currentPeriodKey(habit,date);
+    const pk=currentPeriodKey(habit,date); const k=dateKey(date);
+    if(isVacationDay(k)) return 0;
     const count=state.records.filter(r=>r.habitId===habit.id&&currentPeriodKey(habit,parseDate(r.date))===pk&&afterStart(r.date)).length;
     if(!count) return 0;
     const target=Math.max(1,periodTarget(habit));
@@ -185,7 +212,7 @@
     });
     return total;
   }
-  function journalXpTotal(){return Object.keys(state.journals).filter(afterStart).length*5;}
+  function journalXpTotal(){return Object.keys(state.journals).filter(k=>afterStart(k)&&!isVacationDay(k)).length*5;}
   function fmtXp(x){return Number.isInteger(Number(x))?String(Math.round(Number(x))):Number(x).toFixed(1).replace(/\.0$/,'');}
   function ensureRewardShape(){
     const r=state.settings.rewards=state.settings.rewards||{};
@@ -202,43 +229,78 @@
   function autoLedger(){
     ensureRewardShape(); const rewards=state.settings.rewards; const entries=[];
     const dates=[...new Set(state.records.map(r=>r.date).concat(Object.keys(state.journals)))].filter(afterStart).sort();
-    dates.forEach(d=>{const p=dayPct(parseDate(d)); if(p===null)return; (rewards.creditRules||[]).forEach(rule=>{if(p>=Number(rule.pct||100)){entries.push({id:`auto-credit-${rule.id}-${d}`,date:d,type:'credit',amount:Number(rule.amount||0),gift:'',desc:`${rule.pct}% daily completion`,credit:Number(rule.amount||0),xp:rule.pct>=100?30:12});}});});
+    dates.forEach(d=>{if(isVacationDay(d))return; const p=dayPct(parseDate(d)); if(p===null)return; (rewards.creditRules||[]).forEach(rule=>{if(p>=Number(rule.pct||100)){entries.push({id:`auto-credit-${rule.id}-${d}`,date:d,type:'credit',amount:Number(rule.amount||0),gift:'',desc:`${rule.pct}% daily completion`,credit:Number(rule.amount||0),xp:rule.pct>=100?30:12});}});});
     const start=parseDate(trackerStart()), end=hkNow();
     for(let d=new Date(start); d<=end; d.setDate(d.getDate()+1)){
+      if(isVacationDay(dateKey(d))) continue;
       const p=dayPct(d); if(p!==0) continue;
       const zero=zeroStreakAt(d); const every=Math.max(1,Number(rewards.penaltyZeroDays||2));
       if(zero>=every && zero%every===0){
         entries.push({id:'auto-penalty-'+dateKey(d),date:dateKey(d),type:'penalty',desc:`${zero} consecutive 0% days`,credit:-Math.abs(Number(rewards.penaltyCredit||0)),xp:-Math.abs(Number(rewards.penaltyXp||0))});
       }
     }
-    (rewards.giftRules||[]).forEach(rule=>{dates.forEach(d=>{const streak=streakAt(parseDate(d),Number(rule.pct||80)); if(streak>0 && streak%Number(rule.days||30)===0){entries.push({id:`auto-gift-${rule.id}-${d}`,date:d,type:'gift',amount:1,gift:rule.gift||'Gift',giftIcon:rule.icon||'🎁',giftRuleId:rule.id,desc:`${rule.days} days at ${rule.pct}%+ · ${rule.gift||'Gift'}`,credit:0,xp:120});}});});
+    (rewards.giftRules||[]).forEach(rule=>{dates.forEach(d=>{if(isVacationDay(d))return; const streak=streakAt(parseDate(d),Number(rule.pct||80)); if(streak>0 && streak%Number(rule.days||30)===0){entries.push({id:`auto-gift-${rule.id}-${d}`,date:d,type:'gift',amount:1,gift:rule.gift||'Gift',giftIcon:rule.icon||'🎁',giftRuleId:rule.id,desc:`${rule.days} days at ${rule.pct}%+ · ${rule.gift||'Gift'}`,credit:0,xp:120});}});});
     return entries;
   }
   function activeGiftRule(){ensureRewardShape(); const r=state.settings.rewards; return (r.giftRules||[]).find(g=>g.id===r.activeGiftId)||null;}
-  function zeroStreakAt(date){let s=0; const d=new Date(date); for(let i=0;i<366;i++){const p=dayPct(d); if(p===0){s++; d.setDate(d.getDate()-1)} else break;} return s;}
   function ledger(){return autoLedger().concat(state.redemptions||[]).sort((a,b)=>b.date.localeCompare(a.date));}
   function xpTotal(){return Math.max(0,recordsXpTotal()+journalXpTotal()+ledger().reduce((s,l)=>s+(l.xp||0),0));}
   function creditTotal(){return Math.max(0,ledger().reduce((s,l)=>s+(l.credit||0),0));}
   function giftCount(rule){const id=typeof rule==='object'?rule.id:rule; const name=typeof rule==='object'?rule.gift:rule; return Math.max(0,ledger().filter(l=>l.type==='gift'&&((l.giftRuleId&&l.giftRuleId===id)||(!l.giftRuleId&&l.gift===name))).length - ledger().filter(l=>l.type==='redeemGift'&&((l.giftRuleId&&l.giftRuleId===id)||(!l.giftRuleId&&l.gift===name))).length)}
   function levelInfo(){const xp=xpTotal(); let cur=identities[0], next=identities[identities.length-1]; identities.forEach((l,i)=>{if(xp>=l.xp){cur=l; next=identities[i+1]||l;}}); const span=Math.max(1,next.xp-cur.xp); return {cur,next,xp,pct:cur===next?100:Math.min(100,Math.round((xp-cur.xp)/span*100))};}
-  function streakAt(date,threshold=100){let s=0; const d=new Date(date); for(let i=0;i<366;i++){const p=dayPct(d); if(p!==null && p>=threshold){s++; d.setDate(d.getDate()-1)} else break;} return s;}
-  function longestPerfectStreak(){let max=0,cur=0; const start=parseDate(trackerStart()), end=hkNow(); for(let d=new Date(start); d<=end; d.setDate(d.getDate()+1)){const p=dayPct(d); if(p!==null&&p>=100){cur++; max=Math.max(max,cur)}else if(p!==null) cur=0;} return max;}
+  function streakAt(date,threshold=100){let s=0; const d=new Date(date); for(let i=0;i<366;i++){const k=dateKey(d); if(isVacationDay(k)){d.setDate(d.getDate()-1);continue;} const p=dayPct(d); if(p!==null && p>=threshold){s++; d.setDate(d.getDate()-1)} else break;} return s;}
+  function longestPerfectStreak(){let max=0,cur=0; const start=parseDate(trackerStart()), end=hkNow(); for(let d=new Date(start); d<=end; d.setDate(d.getDate()+1)){if(isVacationDay(dateKey(d))) continue; const p=dayPct(d); if(p!==null&&p>=100){cur++; max=Math.max(max,cur)}else if(p!==null) cur=0;} return max;}
+  function zeroStreakAt(date){let s=0; const d=new Date(date); for(let i=0;i<366;i++){const k=dateKey(d); if(isVacationDay(k)){d.setDate(d.getDate()-1);continue;} const p=dayPct(d); if(p===0){s++; d.setDate(d.getDate()-1)} else break;} return s;}
 
   function pctClass(p){if(p>=100)return 'perfect'; if(p>=80)return 'good'; if(p>=50)return 'partial'; if(p>0)return 'low'; return 'zero';}
-  function updateStatus(){const sync=$('#syncStatus'), file=$('#fileStatus'), rem=$('#reminderStatus'); if(!sync)return; const connected=!!fileHandle; if(!connected && state.settings.autoSync){state.settings.autoSync=false; localStorage.setItem(STORAGE,JSON.stringify(state));} sync.className='status-pill '+(state.settings.autoSync&&connected?'on':''); sync.querySelector('span:last-child').textContent=(state.settings.autoSync&&connected)?'Auto Sync On':'Sync Off'; file.className='status-pill '+(connected?'on':(state.settings.fileConnected?'warn':'')); file.querySelector('span:last-child').textContent=connected?'File Connected':(state.settings.fileConnected?'Reconnect File':'No File'); rem.className='status-pill '+(state.settings.reminders?'on':''); rem.querySelector('span:last-child').textContent=state.settings.reminders?'Reminders On':'Reminders Off';}
+  function updateStatus(){const sync=$('#syncStatus'), file=$('#fileStatus'), rem=$('#reminderStatus'), bak=$('#backupAgeStatus'); if(!sync)return; const connected=!!fileHandle; if(!connected && state.settings.autoSync){state.settings.autoSync=false; localStorage.setItem(STORAGE,JSON.stringify(state));} sync.className='status-pill '+(state.settings.autoSync&&connected?'on':''); sync.querySelector('span:last-child').textContent=(state.settings.autoSync&&connected)?'Auto Sync On':'Sync Off'; file.className='status-pill '+(connected?'on':(state.settings.fileConnected?'warn':'')); file.querySelector('span:last-child').textContent=connected?'File Connected':(state.settings.fileConnected?'Reconnect File':'No File'); rem.className='status-pill '+(state.settings.reminders?'on':''); rem.querySelector('span:last-child').textContent=state.settings.reminders?'Reminders On':'Reminders Off'; if(bak){const le=state.settings.lastExportAt; bak.className='status-pill '+(le?'on':'warn'); bak.querySelector('span:last-child').textContent=le?`Backup ${le}`:'Export recommended'}; const wrap=$('#statusRowWrap'); if(wrap) wrap.classList.toggle('open',!!state.settings.statusRowOpen);}
 
   /* ---------- HOME ---------- */
   function renderHome(){
-    const now=hkNow(); const scheduled=state.habits.filter(h=>isScheduledToday(h,now));
+    const now=hkNow(); const scheduled=activeHabits().filter(h=>isScheduledToday(h,now));
     let completed=0,total=0; scheduled.forEach(h=>{const c=completionOfHabit(h,now); completed+=Math.min(c.count,c.target); total+=c.target;});
-    $('#greeting').textContent='Today'; $('#todayEntryStamp').textContent=fmtDate(now); const todayPct=total?Math.round(completed/total*100):0; const badge=$('#todayPctBadge'); if(badge){badge.textContent=todayPct+'%'; badge.className='chip band-'+pctClass(todayPct);}
+    const todayPctVal=total?Math.round(completed/total*100):0;
+    $('#greeting').textContent=timeGreeting()+greetName();
+    $('#todayEntryStamp').textContent=fmtDate(now);
+    const ring=$('#todayRingFill'), ringText=$('#todayRingText');
+    if(ring){const circ=97.4; ring.style.strokeDashoffset=String(circ-(circ*todayPctVal/100)); ring.style.stroke=todayPctVal>=100?'var(--green)':todayPctVal>=80?'var(--brand)':'var(--orange)';}
+    if(ringText) ringText.textContent=todayPctVal+'%';
     $('#homeCreditValue').textContent='HK$'+creditTotal(); $('#homeCreditSub').textContent='available to redeem';
     const cur100=streakAt(now,100), best=longestPerfectStreak(); $('#homeStreakValue').textContent=`${cur100} / ${best}`; $('#homeStreakSub').textContent='current / best 100% streak';
     const ng=nextGiftInfo(); $('#homeNextGiftIcon').textContent=ng.icon; $('#homeNextGiftSub').textContent=ng.label; $('#homeNextGiftFill').style.width=ng.pct+'%';
-    const list=$('#todayHabitList'); list.innerHTML=''; if(!scheduled.length) list.innerHTML='<div class="empty">No date-specific habits scheduled for today.</div>';
-    scheduled.forEach(h=>list.appendChild(todayHabitRow(h,now)));
-    renderWeekStrip(); renderFlexibleHabits(now); renderHomeJournal(); renderQuote(); renderTopProfile();
+    renderTodayHabitGroups(now, scheduled);
+    renderWeekStrip(); renderFlexibleHabits(now); renderHomeJournal(); renderQuote(); renderTopProfile(); renderWeeklyReviewCard();
+    const wt=$('#weekToday'); if(wt) wt.style.display=weekOffset===0?'none':'inline-grid';
   }
+  function renderTodayHabitGroups(now, scheduled){
+    const box=$('#todayHabitGroups'); if(!box)return;
+    box.innerHTML='';
+    if(!scheduled.length){box.innerHTML='<div class="empty"><div class="empty-icon">✨</div>No habits scheduled today.<button class="btn-primary empty-cta" data-open-habit>Add your first habit</button></div>'; $$('[data-open-habit]',box).forEach(b=>b.onclick=()=>openHabitModal()); return;}
+    const used=new Set(); const groups=sortedGroups();
+    groups.forEach(g=>{const hs=scheduled.filter(h=>h.groupId===g.id); if(!hs.length)return; hs.forEach(h=>used.add(h.id)); box.appendChild(renderHabitGroupBlock(g,hs,now));});
+    const rest=scheduled.filter(h=>!used.has(h.id));
+    if(rest.length) box.appendChild(renderHabitGroupBlock({id:'_ungrouped',name:'Other',emoji:'📌',color:'#66758c'},rest,now));
+  }
+  function renderHabitGroupBlock(group, habits, now){
+    const wrap=document.createElement('div'); wrap.className='habit-group';
+    let done=0,tot=0; habits.forEach(h=>{const c=completionOfHabit(h,now); done+=Math.min(c.count,c.target); tot+=c.target;});
+    const head=document.createElement('div'); head.className='group-head';
+    head.innerHTML=`<div class="group-icon" style="background:${group.color}22;color:${group.color}">${group.emoji||'📋'}</div><div class="group-name">${escapeHtml(group.name||'Routine')}</div><div class="group-progress">${done}/${tot}</div>`;
+    wrap.appendChild(head);
+    const list=document.createElement('div'); list.className='habit-list';
+    habits.forEach(h=>list.appendChild(todayHabitRow(h,now)));
+    wrap.appendChild(list); return wrap;
+  }
+  function attachSwipeRow(wrap,habit,dateKeyStr,after){
+    let sx=0, open=false;
+    const close=()=>{open=false; wrap.classList.remove('open');};
+    wrap.addEventListener('touchstart',e=>{sx=e.touches[0].clientX;},{passive:true});
+    wrap.addEventListener('touchend',e=>{const dx=e.changedTouches[0].clientX-sx; if(dx<-40) wrap.classList.add('open'); else if(dx>40) close();},{passive:true});
+    wrap.querySelector('[data-swipe-edit]')?.addEventListener('click',e=>{e.stopPropagation(); close(); openHabitModal(habit);});
+    wrap.querySelector('[data-swipe-undo]')?.addEventListener('click',async e=>{e.stopPropagation(); close(); await undoLastTap(habit.id,dateKeyStr); after&&after();});
+    document.addEventListener('click',e=>{if(!wrap.contains(e.target)) close();});
+  }
+  async function undoLastTap(habitId,k){const recs=state.records.filter(r=>r.habitId===habitId&&r.date===k).sort((a,b)=>b.at.localeCompare(a.at)); if(!recs.length){toast('Nothing to undo');return;} state.records=state.records.filter(r=>r.id!==recs[0].id); await save(); toast('Undone last tap'); haptic();}
   function renderWeekStrip(){
     const strip=$('#weekStrip'); if(!strip)return;
     const base=hkNow(); base.setDate(base.getDate()+weekOffset*7);
@@ -246,34 +308,48 @@
     const tKey=todayKey(); strip.innerHTML='';
     for(let i=0;i<7;i++){
       const d=new Date(start); d.setDate(start.getDate()+i); const k=dateKey(d); const p=dayPct(d); const j=state.journals[k];
-      const future=k>tKey; const band = future?'band-future':(p===null?'band-none':'band-'+pctClass(p));
+      const future=k>tKey; const vac=isVacationDay(k);
+      const band = future?'band-future':vac?'band-vacation':(p===null?'band-none':'band-'+pctClass(p));
       const cell=document.createElement('button'); cell.className='wcell'+(k===tKey?' today':'');
       cell.innerHTML=`<span class="wdow">${DOW[d.getDay()][0]}</span><span class="wnum ${band}">${d.getDate()}</span><span class="wmeta"><span class="wmood">${j&&j.mood?j.mood:''}</span><span class="wscore">${j&&j.energy!==undefined&&j.energy!==''?j.energy:''}</span></span>`;
       cell.onclick=()=>openDayDetail(k);
+      let holdTimer=null;
+      cell.addEventListener('touchstart',()=>{holdTimer=setTimeout(()=>openDaySummary(k),500);},{passive:true});
+      cell.addEventListener('touchend',()=>clearTimeout(holdTimer));
+      cell.addEventListener('mousedown',()=>{holdTimer=setTimeout(()=>openDaySummary(k),500);});
+      cell.addEventListener('mouseup',()=>clearTimeout(holdTimer));
       strip.appendChild(cell);
     }
     const label=$('#weekLabel'); if(label){const endd=new Date(start); endd.setDate(start.getDate()+6); label.textContent = weekOffset===0?'This week':`${start.getMonth()+1}/${start.getDate()} – ${endd.getMonth()+1}/${endd.getDate()}`;}
   }
   function todayHabitRow(h,now=hkNow(),after=null){
-    const k=dateKey(now); const c=completionOfHabit(h,now); const row=document.createElement('div'); row.className='habit-row '+(c.done?'done':'');
-    row.innerHTML=`<div class="habit-icon" style="background:${h.color}22;color:${h.color}">${h.emoji}</div><div class="habit-main"><div class="habit-name"></div><div class="habit-meta"><span>${c.count}/${c.target}</span><span class="mini-dot"></span><span>${frequencyLabel(h)}</span></div><div class="progress-mini"><span style="width:${c.pct}%;background:${h.color}"></span></div></div><button class="check-btn ${c.done?'done':''}" ${c.done?'disabled':''}>${c.done?'✓':'+1'}</button>${c.count?'<button class="icon-btn red" data-reset title="Reset">↺</button>':''}`;
+    const k=dateKey(now); const c=completionOfHabit(h,now);
+    const wrap=document.createElement('div'); wrap.className='swipe-wrap';
+    const actions=document.createElement('div'); actions.className='swipe-actions';
+    actions.innerHTML=`<button class="swipe-act undo" data-swipe-undo type="button">Undo</button><button class="swipe-act edit" data-swipe-edit type="button">Edit</button>`;
+    const row=document.createElement('div'); row.className='habit-row '+(c.done?'done':'')+(h.paused?' paused-habit':'');
+    row.innerHTML=`<div class="habit-icon" style="background:${h.color}22;color:${h.color}">${h.emoji}</div><div class="habit-main"><div class="habit-name"></div><div class="habit-meta"><span>${c.count}/${c.target}</span><span class="mini-dot"></span><span>${frequencyLabel(h)}</span></div><div class="progress-mini"><span style="width:${c.pct}%;background:${h.color}"></span></div></div><button class="check-btn ${c.done?'done':''}" ${c.done?'disabled':''} aria-label="Record ${escapeAttr(h.name)}">${c.done?'✓':'+1'}</button>${c.count?'<button class="icon-btn red" data-reset title="Reset" aria-label="Reset habit">↺</button>':''}`;
     row.querySelector('.habit-name').textContent=h.name;
-    if(!c.done) row.onclick=async(e)=>{if(e.target.closest('button[data-reset]'))return; await addRecord(h.id,'',k); after&&after();};
-    const reset=row.querySelector('[data-reset]'); if(reset) reset.onclick=async(e)=>{e.stopPropagation(); await resetHabitForDate(h.id,k); after&&after();};
-    return row;
+    wrap.appendChild(actions); wrap.appendChild(row);
+    if(!c.done) row.onclick=async(e)=>{if(e.target.closest('button'))return; await addRecord(h.id,'',k); after&&after();};
+    const reset=row.querySelector('[data-reset]'); if(reset) reset.onclick=async(e)=>{e.stopPropagation(); if(!confirm('Reset all taps for this habit today?'))return; await resetHabitForDate(h.id,k); after&&after();};
+    attachSwipeRow(wrap,h,k,after);
+    return wrap;
   }
+  function openDaySummary(k){const d=parseDate(k); const p=dayPct(d); const j=state.journals[k]; toast(`${fmtDate(d)} · ${isVacationDay(k)?'Vacation':(p??'—')+'%'}${j?` · ${j.mood} ${j.energy}/10`:''}`);}
   function renderFlexibleHabits(now=hkNow()){
-    const card=$('#flexHabitCard'), list=$('#flexHabitList'); if(!card||!list)return;
-    const flex=state.habits.filter(h=>isFlexibleHabit(h,now));
+    const card=$('#flexHabitCard'), list=$('#flexHabitGroups'); if(!card||!list)return;
+    const flex=activeHabits().filter(h=>isFlexibleHabit(h,now));
     if(!flex.length){card.style.display='none'; return;}
-    card.style.display='block'; const unfinished=flex.reduce((s,h)=>s+Math.max(0,periodTarget(h)-completionOfHabit(h,now).count),0); $('#flexHabitSummary').textContent=`${unfinished} unfinished target${unfinished===1?'':'s'} this period`; list.innerHTML=''; flex.forEach(h=>list.appendChild(todayHabitRow(h,now)));
+    card.style.display='block'; const unfinished=flex.reduce((s,h)=>s+Math.max(0,periodTarget(h)-completionOfHabit(h,now).count),0); $('#flexHabitSummary').textContent=`${unfinished} unfinished target${unfinished===1?'':'s'} this period`;
+    list.innerHTML=''; flex.forEach(h=>list.appendChild(todayHabitRow(h,now)));
     $('#flexHabitToggle').onclick=()=>card.classList.toggle('collapsed');
   }
   function nextGiftInfo(){
     const g=activeGiftRule(); if(!g) return {icon:'🎁',label:'No gift goal set',pct:0};
     const gp=giftProgress(g); return {icon:g.icon||'🎁',label:`${g.gift||'Gift'} · ${gp.current}/${gp.target} days`,pct:gp.pct};
   }
-  async function addRecord(habitId,note='',date=todayKey()){const habit=state.habits.find(h=>h.id===habitId); if(!habit)return; const dt=parseDate(date); const c=completionOfHabit(habit,dt); if(c.count>=c.target){toast('Target already completed'); return;} const before=habitPeriodXp(habit,dt); const r={id:uid(),habitId,date,at:new Date().toISOString(),note}; state.records.push(r); await save(); const gained=habitPeriodXp(habit,dt)-before; if(gained>0) showXpPop('+'+fmtXp(gained)+' XP'); toast('Recorded');}
+  async function addRecord(habitId,note='',date=todayKey()){const habit=state.habits.find(h=>h.id===habitId); if(!habit)return; const dt=parseDate(date); const c=completionOfHabit(habit,dt); if(c.count>=c.target){toast('Target already completed'); return;} const before=habitPeriodXp(habit,dt); const r={id:uid(),habitId,date,at:new Date().toISOString(),note}; state.records.push(r); await save(); const gained=habitPeriodXp(habit,dt)-before; if(gained>0) showXpPop('+'+fmtXp(gained)+' XP'); haptic(); const pct=dayPct(dt); if(pct===100) celebrate('Perfect day! 🎉'); toast('Recorded');}
   async function removeRecord(id){state.records=state.records.filter(r=>r.id!==id); await save(); toast('Record removed')}
   async function removeRedemption(id){state.redemptions=state.redemptions.filter(r=>r.id!==id); await save(); toast('Redemption removed')}
   async function resetTodayRecords(){if(!confirm('Reset all habit records for today?'))return; const k=todayKey(); state.records=state.records.filter(r=>r.date!==k); await save(); toast('Today reset')}
@@ -312,12 +388,46 @@
   function renderQuote(){const el=$('#dailyQuote'); if(!el)return; const q=[['Commit to the LORD whatever you do, and he will establish your plans.','Proverbs 16:3'],['Small actions become identity when repeated.','Habit principle'],['Discipline today, freedom tomorrow.','Reminder']][hkNow().getDate()%3]; el.innerHTML=`<div class="quote-text">${q[0]}</div><div class="quote-ref">${q[1]}</div>`;}
 
   /* ---------- HABITS ---------- */
-  function renderHabits(){const list=$('#allHabitList'); if(!list)return; list.innerHTML=''; $('#habitCountChip').textContent=state.habits.length+' habits'; if(!state.habits.length){list.innerHTML='<div class="empty">No habits yet.</div>'} state.habits.forEach(h=>{const row=document.createElement('div'); row.className='habit-row'; row.style.cursor='default'; row.innerHTML=`<div class="habit-icon" style="background:${h.color}22;color:${h.color}">${h.emoji}</div><div class="habit-main"><div class="habit-name"></div><div class="habit-meta"><span>${frequencyLabel(h)}</span><span class="mini-dot"></span><span class="count-pill">Target ${periodTarget(h)}</span>${h.reminder?.enabled?'<span class="mini-dot"></span><span>Reminder '+h.reminder.time+'</span>':''}</div></div>`; row.querySelector('.habit-name').textContent=h.name; const actions=document.createElement('div'); actions.className='habit-actions'; actions.innerHTML='<button class="icon-btn" data-edit>✎</button><button class="icon-btn red" data-del>×</button>'; actions.querySelector('[data-edit]').onclick=()=>openHabitModal(h); actions.querySelector('[data-del]').onclick=async()=>{if(confirm('Delete this habit? Existing records will remain in history.')){state.habits=state.habits.filter(x=>x.id!==h.id); await save(); toast('Habit deleted')}}; row.appendChild(actions); list.appendChild(row);}); renderRecentActivity();}
+  function renderGroupManager(){
+    const box=$('#groupManager'); if(!box)return;
+    if(!state.groups.length){box.innerHTML='<div class="empty">No routines yet. Group habits like a Morning block.</div>'; return;}
+    box.innerHTML='';
+    sortedGroups().forEach((g,gi)=>{
+      const div=document.createElement('div'); div.className='group-manage-item';
+      div.innerHTML=`<span style="font-size:20px">${g.emoji}</span><input value="${escapeAttr(g.name)}" data-gname><div class="sort-btns"><button type="button" data-gup>↑</button><button type="button" data-gdown>↓</button></div><button class="btn-inline red" type="button" data-gdel>×</button>`;
+      div.querySelector('[data-gname]').onchange=e=>{g.name=e.target.value.trim()||'Routine'; save();};
+      div.querySelector('[data-gup]').onclick=()=>{if(gi>0){const o=state.groups[gi-1]; g.sortOrder=(o.sortOrder||gi)-1; o.sortOrder=(g.sortOrder||gi)+1; save();}};
+      div.querySelector('[data-gdown]').onclick=()=>{if(gi<state.groups.length-1){const o=state.groups[gi+1]; g.sortOrder=(o.sortOrder||gi)+1; o.sortOrder=(g.sortOrder||gi)-1; save();}};
+      div.querySelector('[data-gdel]').onclick=()=>{if(confirm('Delete this routine? Habits become ungrouped.')){state.habits.forEach(h=>{if(h.groupId===g.id)h.groupId=null;}); state.groups=state.groups.filter(x=>x.id!==g.id); save();}};
+      box.appendChild(div);
+    });
+  }
+  function renderHabits(){
+    renderGroupManager();
+    const list=$('#allHabitList'); if(!list)return; list.innerHTML='';
+    const habits=activeHabits().sort((a,b)=>(a.sortOrder||0)-(b.sortOrder||0));
+    $('#habitCountChip').textContent=habits.length+' habits';
+    if(!habits.length){list.innerHTML='<div class="empty"><div class="empty-icon">🎯</div>No habits yet.<button class="btn-primary empty-cta" data-open-habit>Add habit</button></div>'; $$('[data-open-habit]',list).forEach(b=>b.onclick=()=>openHabitModal()); renderRecentActivity(); return;}
+    habits.forEach((h,idx)=>{
+      const grp=state.groups.find(g=>g.id===h.groupId);
+      const row=document.createElement('div'); row.className='habit-row'+(h.paused?' paused-habit':''); row.style.cursor='default';
+      row.innerHTML=`<div class="sort-btns"><button type="button" data-up>↑</button><button type="button" data-down>↓</button></div><div class="habit-icon" style="background:${h.color}22;color:${h.color}">${h.emoji}</div><div class="habit-main"><div class="habit-name"></div><div class="habit-meta"><span>${frequencyLabel(h)}</span>${grp?`<span class="mini-dot"></span><span>${escapeHtml(grp.name)}</span>`:''}<span class="mini-dot"></span><span class="count-pill">Target ${periodTarget(h)}</span>${h.paused?'<span class="chip gray">Paused</span>':''}</div></div>`;
+      row.querySelector('.habit-name').textContent=h.name;
+      row.querySelector('[data-up]').onclick=()=>{if(idx>0){const o=habits[idx-1]; const t=h.sortOrder??idx; h.sortOrder=o.sortOrder??idx-1; o.sortOrder=t; save();}};
+      row.querySelector('[data-down]').onclick=()=>{if(idx<habits.length-1){const o=habits[idx+1]; const t=h.sortOrder??idx; h.sortOrder=o.sortOrder??idx+1; o.sortOrder=t; save();}};
+      const actions=document.createElement('div'); actions.className='habit-actions';
+      actions.innerHTML='<button class="icon-btn" data-edit aria-label="Edit">✎</button><button class="icon-btn" data-pause aria-label="Pause">'+(h.paused?'▶':'⏸')+'</button><button class="icon-btn red" data-del aria-label="Delete">×</button>';
+      actions.querySelector('[data-edit]').onclick=()=>openHabitModal(h);
+      actions.querySelector('[data-pause]').onclick=async()=>{h.paused=!h.paused; await save(); toast(h.paused?'Habit paused':'Habit resumed');};
+      actions.querySelector('[data-del]').onclick=async()=>{if(!confirm('Delete this habit? Records stay in history.'))return; state.habits=state.habits.filter(x=>x.id!==h.id); await save(); toast('Habit deleted');};
+      row.appendChild(actions); list.appendChild(row);
+    }); renderRecentActivity();
+  }
 
   function openHabitModal(habit=null){
     const isEdit=!!habit;
     const h=habit||{name:'',emoji:'📖',color:COLOURS[0],target:1,frequency:{mode:'daily',days:[1,2,3,4,5]},reminder:{enabled:false,time:state.settings.globalReminderTime||'20:30'}};
-    openModal(isEdit?'Edit Habit':'Add Habit',`<div class="form-grid"><div class="field"><label>Habit Name</label><input id="habitName" value="${escapeAttr(h.name)}" placeholder="e.g. Bible Time"></div><div class="field"><label>Icon</label><div class="emoji-row">${EMOJIS.map(e=>`<button class="emoji-swatch ${h.emoji===e?'active':''}" data-emoji="${e}">${e}</button>`).join('')}</div><input id="habitEmoji" value="${escapeAttr(h.emoji||'📖')}" maxlength="4" placeholder="📖" style="margin-top:8px"></div><div class="field"><label>Colour</label><div class="color-row">${COLOURS.map(c=>`<button class="color-swatch ${h.color===c?'active':''}" data-color="${c}" style="background:${c}"></button>`).join('')}</div></div><div class="field"><label>Target Count</label><select id="habitTarget">${Array.from({length:10},(_,i)=>i+1).map(n=>`<option value="${n}" ${Number(h.target||1)===n?'selected':''}>${n} time${n>1?'s':''}</option>`).join('')}</select></div><div class="field"><label>Frequency</label><select id="freqMode"><option value="daily">Daily</option><option value="monthly">Monthly</option><option value="custom">Custom</option></select></div><div class="dynamic-fields" id="freqFields"></div><div class="dynamic-fields"><div class="switch-row"><div><strong>Habit Reminder</strong><div class="small-note" id="habitReminderHint"></div></div><button class="switch" id="habitReminderToggle"></button></div><div class="field" style="margin-top:10px"><label>Reminder Time</label><input type="time" id="habitReminderTime" value="${h.reminder?.time||'20:30'}"></div></div><div class="modal-actions"><button class="btn-secondary" data-close>Cancel</button><button class="btn-primary" id="saveHabitBtn">Save</button></div></div>`);
+    openModal(isEdit?'Edit Habit':'Add Habit',`<div class="form-grid"><div class="field"><label>Habit Name</label><input id="habitName" value="${escapeAttr(h.name)}" placeholder="e.g. Bible Time"></div><div class="field"><label>Routine group</label><select id="habitGroup"><option value="">No group</option>${sortedGroups().map(g=>`<option value="${g.id}" ${h.groupId===g.id?'selected':''}>${escapeHtml(g.name)}</option>`).join('')}</select></div><div class="field"><label>Icon</label><div class="emoji-row">${EMOJIS.map(e=>`<button class="emoji-swatch ${h.emoji===e?'active':''}" data-emoji="${e}">${e}</button>`).join('')}</div><input id="habitEmoji" value="${escapeAttr(h.emoji||'📖')}" maxlength="4" placeholder="📖" style="margin-top:8px"></div><div class="field"><label>Colour</label><div class="color-row">${COLOURS.map(c=>`<button class="color-swatch ${h.color===c?'active':''}" data-color="${c}" style="background:${c}"></button>`).join('')}</div></div><div class="field"><label>Target Count</label><select id="habitTarget">${Array.from({length:10},(_,i)=>i+1).map(n=>`<option value="${n}" ${Number(h.target||1)===n?'selected':''}>${n} time${n>1?'s':''}</option>`).join('')}</select></div><div class="field"><label>Frequency</label><select id="freqMode"><option value="daily">Daily</option><option value="monthly">Monthly</option><option value="custom">Custom</option></select></div><div class="dynamic-fields" id="freqFields"></div><div class="dynamic-fields"><div class="switch-row"><div><strong>Habit Reminder</strong><div class="small-note" id="habitReminderHint"></div></div><button class="switch" id="habitReminderToggle"></button></div><div class="field" style="margin-top:10px"><label>Reminder Time</label><input type="time" id="habitReminderTime" value="${h.reminder?.time||'20:30'}"></div></div><div class="modal-actions"><button class="btn-secondary" data-close>Cancel</button><button class="btn-primary" id="saveHabitBtn">Save</button></div></div>`);
     const f=h.frequency||{mode:'daily',days:[1,2,3,4,5]}; $('#freqMode').value=f.mode||'daily'; let selectedColor=h.color;
     $$('.color-swatch').forEach(b=>b.onclick=()=>{$$('.color-swatch').forEach(x=>x.classList.remove('active')); b.classList.add('active'); selectedColor=b.dataset.color});
     $$('.emoji-swatch').forEach(b=>b.onclick=()=>{$$('.emoji-swatch').forEach(x=>x.classList.remove('active')); b.classList.add('active'); $('#habitEmoji').value=b.dataset.emoji});
@@ -374,19 +484,19 @@
         if(schedule.type==='date') schedule.day=Number($('#scheduleDay')?.value||1); else if(schedule.type==='weekday') {schedule.ordinal=$('#scheduleOrdinal')?.value||1; schedule.weekday=Number($('#scheduleWeekday')?.value||1);}
         freq.schedule=schedule;
       }
-      const item={id:h.id||uid(),name:$('#habitName').value.trim()||'Untitled Habit',emoji:$('#habitEmoji').value,color:selectedColor,target:Number($('#habitTarget').value),frequency:freq,reminder:{enabled:t.classList.contains('on')&&reminderEnabled,time:$('#habitReminderTime').value}};
+      const item={id:h.id||uid(),name:$('#habitName').value.trim()||'Untitled Habit',emoji:$('#habitEmoji').value,color:selectedColor,target:Number($('#habitTarget').value),frequency:freq,groupId:$('#habitGroup')?.value||null,sortOrder:h.sortOrder??state.habits.length,paused:!!h.paused,archived:false,reminder:{enabled:t.classList.contains('on')&&reminderEnabled,time:$('#habitReminderTime').value}};
       if(isEdit){state.habits=state.habits.map(x=>x.id===h.id?item:x)}else state.habits.push(item); await save(); closeModal(); toast('Habit saved')
     };
   }
 
   /* ---------- REPORT ---------- */
-  function renderReport(){drawTrend(); renderCalendar();}
+  function renderReport(){renderComparePeriods(); drawTrend(); renderCalendar(); populateCalendarFilter();}
   function trendEndDate(){const c=trendCursor, now=hkNow(); if(c.getFullYear()===now.getFullYear()&&c.getMonth()===now.getMonth()) return now; return new Date(c.getFullYear(),c.getMonth()+1,0);}
   function updateTrendTitle(){const t=$('#trendTitle'); if(!t)return; const now=hkNow(); const cur=trendCursor.getFullYear()===now.getFullYear()&&trendCursor.getMonth()===now.getMonth(); t.textContent=trendCursor.toLocaleDateString([], {month:'short',year:'numeric'})+(cur?' · to today':'');}
   function drawTrend(){
     const c=$('#trendCanvas'); if(!c)return; updateTrendTitle(); const ctx=c.getContext('2d'),ratio=devicePixelRatio||1; c.width=c.offsetWidth*ratio; c.height=c.offsetHeight*ratio; ctx.setTransform(ratio,0,0,ratio,0,0); const W=c.offsetWidth,H=c.offsetHeight; ctx.clearRect(0,0,W,H);
     const labels=[]; const pctVals=[]; const energy=[]; const end=trendEndDate();
-    for(let i=trendDays-1;i>=0;i--){const d=new Date(end);d.setDate(d.getDate()-i);const k=dateKey(d); labels.push(`${d.getMonth()+1}/${d.getDate()}`); pctVals.push(dayPct(d)); energy.push(state.journals[k]?.energy??null);}
+    for(let i=trendDays-1;i>=0;i--){const d=new Date(end);d.setDate(d.getDate()-i);const k=dateKey(d); if(isVacationDay(k)){labels.push(`${d.getMonth()+1}/${d.getDate()}`); pctVals.push(null); energy.push(null); continue;} labels.push(`${d.getMonth()+1}/${d.getDate()}`); pctVals.push(dayPct(d)); energy.push(state.journals[k]?.energy??null);}
     $('#trendNote').textContent='Bars show daily habit completion. The line shows your journal energy. Use ‹ › to review other months.';
     const cs=getComputedStyle(document.documentElement); const gridCol=(cs.getPropertyValue('--line')||'#eeeeF6').trim(); const axisCol=(cs.getPropertyValue('--faint')||'#7c8199').trim(); const lineCol=(cs.getPropertyValue('--brand')||'#4f46e5').trim();
     const left=34,right=12,top=18,bottom=42,plotW=W-left-right,plotH=H-top-bottom,bw=plotW/trendDays;
@@ -397,7 +507,9 @@
     const labelStep=trendDays<=7?1:trendDays<=14?3:6; ctx.fillStyle=axisCol;ctx.font='10px Inter,Arial'; ctx.textAlign='center'; labels.forEach((l,i)=>{if(i%labelStep!==0&&i!==labels.length-1)return; const x=left+i*bw+bw/2; ctx.fillText(l,x,H-16);}); ctx.textAlign='left';}
   function roundRect(ctx,x,y,w,h,r,fill){ctx.beginPath();ctx.moveTo(x+r,y);ctx.arcTo(x+w,y,x+w,y+h,r);ctx.arcTo(x+w,y+h,x,y+h,r);ctx.arcTo(x,y+h,x,y,r);ctx.arcTo(x,y,x+w,y,r); if(fill)ctx.fill();}
   function renderCalendar(){const title=$('#reportTitle'); const m=$('#monthReport'), q=$('#quarterReport'); if(!title)return; m.style.display=reportMode==='month'?'block':'none'; q.style.display=reportMode==='quarter'?'grid':'none'; if(reportMode==='month'){title.textContent=reportCursor.toLocaleDateString([], {month:'long',year:'numeric'}); renderMonth(reportCursor,$('#calendarGrid'),$('#calendarWeekdays'));} else {const y=reportCursor.getFullYear(), qi=Math.floor(reportCursor.getMonth()/3); title.textContent=`Q${qi+1} ${y}`; q.innerHTML=''; [0,1,2].forEach(i=>{const d=new Date(y,qi*3+i,1); const wrap=document.createElement('div'); wrap.className='month-mini'; wrap.innerHTML=`<h4>${d.toLocaleDateString([], {month:'long'})}</h4><div class="calendar-weekdays"></div><div class="calendar-grid"></div>`; q.appendChild(wrap); renderMonth(d,wrap.querySelector('.calendar-grid'),wrap.querySelector('.calendar-weekdays'),true);});}}
-  function renderMonth(date,grid,weekdays,mini=false){weekdays.innerHTML=DOW.map(x=>`<div>${x[0]}</div>`).join(''); grid.innerHTML=''; const y=date.getFullYear(),m=date.getMonth(), first=new Date(y,m,1), days=new Date(y,m+1,0).getDate(); const today=todayKey(); for(let i=0;i<first.getDay();i++){const e=document.createElement('div');e.className='day-cell empty';grid.appendChild(e)} for(let d=1;d<=days;d++){const dt=new Date(y,m,d),k=dateKey(dt),p=dayPct(dt),j=state.journals[k]; const cell=document.createElement('div'); let cls='day-cell'; if(k>today){cls+=' future'} else if(p!==null){cls+=' '+pctClass(p);} if(k===today)cls+=' today'; cell.className=cls; cell.innerHTML=`<span>${d}</span>${j?.mood?`<span class="mood-mark">${j.mood}</span>`:''}${j?.energy!==undefined?`<span class="energy-mark">${j.energy}</span>`:''}`; cell.onclick=()=>openDayDetail(k); grid.appendChild(cell);} }
+  function habitDayPct(habit,date){const target=habit.frequency.mode==='daily'?periodTarget(habit):1; const count=habit.frequency.mode==='daily'?todayHabitCount(habit,date):periodCount(habit,date); return Math.min(100,Math.round(Math.min(count,target)/target*100));}
+  function populateCalendarFilter(){const sel=$('#calendarHabitFilter'); if(!sel)return; const cur=sel.value||calendarHabitFilter; sel.innerHTML='<option value="">All habits</option>'+activeHabits().map(h=>`<option value="${h.id}">${escapeHtml(h.emoji+' '+h.name)}</option>`).join(''); sel.value=cur; sel.onchange=()=>{calendarHabitFilter=sel.value; renderCalendar();};}
+  function renderMonth(date,grid,weekdays,mini=false){weekdays.innerHTML=DOW.map(x=>`<div>${x[0]}</div>`).join(''); grid.innerHTML=''; const y=date.getFullYear(),m=date.getMonth(), first=new Date(y,m,1), days=new Date(y,m+1,0).getDate(); const today=todayKey(); const filt=calendarHabitFilter?state.habits.find(h=>h.id===calendarHabitFilter):null; for(let i=0;i<first.getDay();i++){const e=document.createElement('div');e.className='day-cell empty';grid.appendChild(e)} for(let d=1;d<=days;d++){const dt=new Date(y,m,d),k=dateKey(dt),vac=isVacationDay(k); let p=filt?habitDayPct(filt,dt):dayPct(dt); const j=state.journals[k]; const cell=document.createElement('div'); let cls='day-cell'; if(k>today){cls+=' future'} else if(vac){cls+=' vacation';} else if(p!==null){cls+=' '+pctClass(p);} if(k===today)cls+=' today'; cell.className=cls; cell.innerHTML=`<span>${d}</span>${vac?'<span class="mood-mark">🏖</span>':''}${!vac&&j?.mood?`<span class="mood-mark">${j.mood}</span>`:''}${!vac&&j?.energy!==undefined?`<span class="energy-mark">${j.energy}</span>`:''}`; cell.onclick=()=>openDayDetail(k); grid.appendChild(cell);} }
   function openDayDetail(k){const d=parseDate(k); const scheduled=dayScheduledHabits(d); const p=dayPct(d);
     openModal(`Day Detail · ${fmtDate(d)}`,`<div class="small-note">Completion <strong>${p??0}%</strong> · tap +1 to record, ↺ to reset a habit</div><div class="habit-list" id="dayHabitList" style="margin-top:12px"></div><div id="dayJournalBox" style="margin-top:16px"></div>`);
     const list=$('#dayHabitList'); if(!scheduled.length) list.innerHTML='<div class="empty">No habits scheduled on this day.</div>';
@@ -411,7 +523,50 @@
   function renderJournals(){const box=$('#journalHistory'); if(!box)return; const items=Object.keys(state.journals).sort((a,b)=>b.localeCompare(a)).map(k=>({date:k})); renderPreview(box,items,x=>journalNode(x.date),'Journal History');}
   function openJournalEditor(k=todayKey()){const j=state.journals[k]||{mood:'',energy:5,text:''}; openModal('Edit Journal',`<div class="form-grid journal-area"><div class="field"><label>Date</label><input type="date" id="journalDate" value="${k}"></div><div class="field"><label>Mood</label><div class="mood-row">${MOODS.map(m=>`<button class="mood ${j.mood===m?'active':''}" data-mood="${m}">${m}</button>`).join('')}</div></div><div class="field"><label>Energy Score</label><div class="energy-panel"><div class="range-value" id="modalEnergyValue">${j.energy}</div><div class="energy-scale"><input type="range" min="0" max="10" value="${j.energy}" id="modalEnergy"><div class="ticks">${Array.from({length:11},(_,i)=>`<span style="left:calc(10px + ${i}/10*(100% - 20px))">${i}</span>`).join('')}</div></div></div></div><div class="field"><label>Reflection</label><textarea id="modalJournalText">${escapeHtml(j.text||'')}</textarea></div><div class="modal-actions"><button class="btn-secondary" data-close>Cancel</button><button class="btn-primary" id="saveJournalModal">Save</button></div></div>`); $$('.mood').forEach(b=>b.onclick=()=>{$$('.mood').forEach(x=>x.classList.remove('active')); b.classList.add('active')}); $('#modalEnergy').oninput=e=>$('#modalEnergyValue').textContent=e.target.value; $('#saveJournalModal').onclick=async()=>{const nk=$('#journalDate').value||k; const wasNew=!state.journals[k]&&!state.journals[nk]; if(nk!==k) delete state.journals[k]; state.journals[nk]={mood:$('#modalBody .mood.active')?.dataset.mood||'',energy:Number($('#modalEnergy').value),text:$('#modalJournalText').value.trim(),updatedAt:new Date().toISOString()}; await save(); if(wasNew) showXpPop('+5 XP'); closeModal(); toast('Journal saved')};}
 
-  /* ---------- GIFT / LEVEL ---------- */
+  /* ---------- INSIGHTS / REVIEW / CELEBRATE ---------- */
+  function periodAvgPct(fromK,toK){let sum=0,n=0; const a=parseDate(fromK), b=parseDate(toK); for(let d=new Date(a); d<=b; d.setDate(d.getDate()+1)){const k=dateKey(d); if(isVacationDay(k)||!afterStart(k)) continue; const p=dayPct(d); if(p===null) continue; sum+=p; n++;} return n?Math.round(sum/n):0;}
+  function renderWeeklyReviewCard(){
+    const card=$('#weeklyReviewCard'), body=$('#weeklyReviewBody'); if(!card||!body)return;
+    const now=hkNow(); if(now.getDay()!==0 && now.getDay()!==6){card.style.display='none'; return;}
+    card.style.display='block';
+    const end=new Date(now); const start=new Date(now); start.setDate(start.getDate()-6);
+    const from=dateKey(start), to=dateKey(end);
+    const avg=periodAvgPct(from,to);
+    const prevEnd=new Date(start); prevEnd.setDate(prevEnd.getDate()-1); const prevStart=new Date(prevEnd); prevStart.setDate(prevStart.getDate()-6);
+    const prevAvg=periodAvgPct(dateKey(prevStart),dateKey(prevEnd));
+    const delta=avg-prevAvg;
+    const journals=Object.keys(state.journals).filter(k=>k>=from&&k<=to);
+    const best=activeHabits().map(h=>{let c=0; for(let d=new Date(start); d<=end; d.setDate(d.getDate()+1)){const k=dateKey(d); if(todayHabitCount(h,d)>=periodTarget(h)||(h.frequency.mode!=='daily'&&periodCount(h,d)>0)) c++;} return {h,c};}).sort((a,b)=>b.c-a.c)[0];
+    body.innerHTML=`<div class="insight-row"><div class="insight-ico">📅</div><div class="insight-text"><strong>This week: ${avg}% avg</strong>${delta>0?`Up ${delta} pts vs last week`:delta<0?`Down ${Math.abs(delta)} pts vs last week`:'Same as last week'}</div></div><div class="insight-row"><div class="insight-ico">${best?.h?.emoji||'⭐'}</div><div class="insight-text"><strong>Most consistent: ${escapeHtml(best?.h?.name||'—')}</strong>${best?best.c+' active days':'—'}</div></div><div class="insight-row"><div class="insight-ico">📓</div><div class="insight-text"><strong>${journals.length} journal entries</strong>Tap Progress for deeper insights.</div></div>`;
+  }
+  function renderCorrelationInsights(){
+    const box=$('#correlationInsights'); if(!box)return;
+    const keys=Object.keys(state.journals).filter(k=>afterStart(k)&&!isVacationDay(k)).sort().slice(-60);
+    if(keys.length<3){box.innerHTML='<div class="empty">Log at least 3 journal entries to see correlations.</div>'; return;}
+    let hiE=0,loE=0,hiN=0,loN=0; const moodMap={};
+    keys.forEach(k=>{const j=state.journals[k]; const p=dayPct(parseDate(k)); if(p===null) return; if(j.energy>=7){hiE+=p; hiN++;} else if(j.energy<=4){loE+=p; loN++;} if(j.mood){if(!moodMap[j.mood])moodMap[j.mood]={s:0,n:0}; moodMap[j.mood].s+=p; moodMap[j.mood].n++;}});
+    const hiAvg=hiN?Math.round(hiE/hiN):null; const loAvg=loN?Math.round(loE/loN):null;
+    let topMood=null,topV=-1; Object.entries(moodMap).forEach(([m,v])=>{const a=v.s/v.n; if(a>topV){topV=a; topMood=m;}});
+    box.innerHTML='';
+    if(hiAvg!==null&&loAvg!==null) box.innerHTML+=`<div class="insight-row"><div class="insight-ico">⚡</div><div class="insight-text"><strong>Energy vs completion</strong>High energy (7–10): ${hiAvg}% avg · Low (0–4): ${loAvg}% avg</div></div>`;
+    if(topMood) box.innerHTML+=`<div class="insight-row"><div class="insight-ico">${topMood}</div><div class="insight-text"><strong>Mood pattern</strong>${topMood} days average ${Math.round(topV)}% completion.</div></div>`;
+    const habitCorr=activeHabits().slice(0,5).map(h=>{let on=0,off=0,nOn=0,nOff=0; keys.forEach(k=>{const p=dayPct(parseDate(k)); if(p===null)return; const done=todayHabitCount(h,parseDate(k))>0||periodCount(h,parseDate(k))>0; if(done){on+=p;nOn++;}else{off+=p;nOff++;}}); const diff=nOn&&nOff?Math.round(on/nOn-off/nOff):0; return {h,diff};}).filter(x=>x.diff>5).sort((a,b)=>b.diff-a.diff)[0];
+    if(habitCorr) box.innerHTML+=`<div class="insight-row"><div class="insight-ico">${habitCorr.h.emoji}</div><div class="insight-text"><strong>Habit lift</strong>Days with ${escapeHtml(habitCorr.h.name)} score +${habitCorr.diff}% on average.</div></div>`;
+    if(!box.innerHTML) box.innerHTML='<div class="empty">Keep journaling — patterns will appear soon.</div>';
+  }
+  function renderComparePeriods(){
+    const box=$('#comparePeriodBox'); if(!box)return;
+    const now=hkNow(); const curStart=new Date(now.getFullYear(),now.getMonth(),1); const curEnd=now;
+    const prevStart=new Date(now.getFullYear(),now.getMonth()-1,1); const prevEnd=new Date(now.getFullYear(),now.getMonth(),0);
+    const cur=periodAvgPct(dateKey(curStart),dateKey(curEnd)); const prev=periodAvgPct(dateKey(prevStart),dateKey(prevEnd));
+    const delta=cur-prev; const cls=delta>0?'up':delta<0?'down':'flat';
+    box.innerHTML=`<div class="small-note">This month vs last month (vacation days excluded)</div><div class="compare-grid"><div class="compare-box"><div class="compare-val">${cur}%</div><div class="compare-label">This month</div></div><div class="compare-box"><div class="compare-val">${prev}%</div><div class="compare-label">Last month</div></div></div><div class="compare-delta ${cls}">${delta>0?`▲ +${delta} pts`:delta<0?`▼ ${delta} pts`:'— No change'}</div>`;
+  }
+  function celebrate(msg){if(window.matchMedia('(prefers-reduced-motion: reduce)').matches){toast(msg);return;} const layer=$('#celebrateLayer'); if(!layer)return; layer.innerHTML=''; const banner=document.createElement('div'); banner.className='celebrate-banner'; banner.textContent=msg; layer.appendChild(banner); for(let i=0;i<24;i++){const p=document.createElement('div'); p.className='confetti'; p.style.left=Math.random()*100+'%'; p.style.background=['#4f46e5','#059669','#f59e0b','#ea580c','#7c3aed'][i%5]; p.style.animationDelay=(Math.random()*.4)+'s'; layer.appendChild(p);} setTimeout(()=>{layer.innerHTML='';},1600); haptic();}
+  function checkCelebrations(){const li=levelInfo(); if(li.cur.level>lastLevel){lastLevel=li.cur.level; celebrate(`Level up! ${li.cur.icon} ${li.cur.name}`);} else lastLevel=li.cur.level;}
+  function renderOnboarding(){if(state.settings.onboardingComplete)return; onboardStep=0; showOnboardStep();}
+  function showOnboardStep(){const bd=$('#onboardBackdrop'), body=$('#onboardBody'); if(!bd)return; const step=ONBOARD_STEPS[onboardStep]; $('#onboardStepLabel').textContent=`Step ${onboardStep+1} of ${ONBOARD_STEPS.length}`; $('#onboardBarFill').style.width=((onboardStep+1)/ONBOARD_STEPS.length*100)+'%'; body.innerHTML=`<div class="onboard-body"><h3>${step.title}</h3><p>${step.body}</p>${step.nav?'<div class="onboard-nav-preview"><span>🏠 Home</span><span>✅ Habits</span><span>＋</span><span>📊 Report</span><span>⚡ Progress</span></div>':''}</div>`; $('#onboardNext').textContent=onboardStep===ONBOARD_STEPS.length-1?'Get started':'Next'; bd.classList.add('show'); bd.setAttribute('aria-hidden','false');}
+  function finishOnboarding(){state.settings.onboardingComplete=true; localStorage.setItem(STORAGE,JSON.stringify(state)); $('#onboardBackdrop')?.classList.remove('show'); $('#onboardBackdrop')?.setAttribute('aria-hidden','true');}
   function giftProgress(rule){
     const target=Number(rule.days||30);
     const streak=streakAt(hkNow(),Number(rule.pct||80));
@@ -424,18 +579,19 @@
     const li=levelInfo(); const icon=state.settings.profileIcon||''; const avatarEls=['#topProfileAvatar','#levelProfileAvatar','#settingsProfileAvatar']; avatarEls.forEach(sel=>{const el=$(sel); if(!el)return; if(icon){el.style.backgroundImage=`url(${icon})`; el.textContent='';}else{el.style.backgroundImage=''; el.textContent=li.cur.icon||'🌱';}});
     $('#topLevel').textContent='Lv '+li.cur.level; $('#topIdentity').textContent=li.cur.name; $('#topXp').textContent=fmtXp(li.xp)+' XP'; $('#topLevelFill').style.width=li.pct+'%'; const badge=$('#topGiftBadge'); if(badge){const ag=activeGiftRule(); badge.textContent=ag?giftCount(ag):0;}
   }
-  function renderLevel(){
+  function renderProgress(){
     ensureRewardShape(); const li=levelInfo(); renderTopProfile();
-    if(!$('#levelPageValue'))return;
     $('#levelPageValue').textContent='Lv '+li.cur.level; $('#levelPageIdentity').textContent=(li.cur.icon||'🌱')+' '+li.cur.name; $('#levelPageFill').style.width=li.pct+'%'; $('#levelPageXp').textContent=`${fmtXp(li.xp)} XP · next: ${li.next.level===li.cur.level?'max tier':fmtXp(li.next.xp-li.xp)+' XP left'}`;
     $('#identityPath').innerHTML=identities.map(x=>`<div class="tier-card ${x.level===li.cur.level?'current':''}"><div class="tier-icon">${x.icon}</div><div><div class="tier-name">Lv ${x.level} · ${x.name}</div><div class="tier-sub">${x.xp} XP · ${x.desc}</div></div><span class="chip ${li.xp>=x.xp?'band-good':'band-none'}">${li.xp>=x.xp?'Unlocked':'Locked'}</span></div>`).join('');
     const xpItems=[]; const seen=new Set();
     state.records.filter(r=>afterStart(r.date)).forEach(r=>{const h=state.habits.find(x=>x.id===r.habitId)||{}; if(!h.id)return; const key=habitXpKey(h,parseDate(r.date)); if(seen.has(key))return; seen.add(key); xpItems.push({date:r.date,at:r.at,desc:`${h.emoji||'✓'} ${h.name||'Habit'} completed`,xp:habitPeriodXp(h,parseDate(r.date))});});
-    Object.keys(state.journals).filter(afterStart).forEach(k=>xpItems.push({date:k,at:state.journals[k]?.updatedAt||k,desc:'📓 Journal completed',xp:5}));
+    Object.keys(state.journals).filter(k=>afterStart(k)&&!isVacationDay(k)).forEach(k=>xpItems.push({date:k,at:state.journals[k]?.updatedAt||k,desc:'📓 Journal completed',xp:5}));
     ledger().forEach(l=>{if(l.xp) xpItems.push({date:l.date,at:l.date,desc:l.desc,xp:l.xp});}); xpItems.sort((a,b)=>String(b.at).localeCompare(String(a.at))); renderPreview($('#xpHistory'),xpItems,xpNode,'XP History');
-    renderGift();
+    renderCorrelationInsights();
+    renderGiftRedeem();
+    const jPrev=$('#journalHistoryPreview'); if(jPrev){const items=Object.keys(state.journals).sort((a,b)=>b.localeCompare(a)).slice(0,3).map(k=>({date:k})); renderPreview(jPrev,items,x=>journalNode(x.date),'Journal');}
   }
-  function renderGift(){
+  function renderGiftRedeem(){
     ensureRewardShape(); if(!$('#creditValue'))return; const rewards=state.settings.rewards; const rules=rewards.giftRules||[]; const bal=creditTotal();
     $('#creditValue').textContent='HK$'+bal;
     const active=activeGiftRule(); const activeAvail=active?giftCount(active):0;
@@ -456,6 +612,19 @@
   }
 
   /* ---------- SETTINGS ---------- */
+  function renderVacationSettings(){
+    const box=$('#vacationList'); if(!box)return;
+    box.innerHTML='';
+    (state.settings.vacations||[]).forEach((v,idx)=>{
+      const div=document.createElement('div'); div.className='rule-card';
+      div.innerHTML=`<div class="schedule-grid"><div class="field"><label>From</label><input type="date" data-from value="${v.from}"></div><div class="field"><label>To</label><input type="date" data-to value="${v.to}"></div></div><div class="field"><label>Label</label><input data-label value="${escapeAttr(v.label||'Vacation')}" placeholder="Vacation"></div><button class="btn-inline red" data-rm>Remove</button>`;
+      div.querySelector('[data-from]').onchange=e=>{v.from=e.target.value; save();};
+      div.querySelector('[data-to]').onchange=e=>{v.to=e.target.value; save();};
+      div.querySelector('[data-label]').onchange=e=>{v.label=e.target.value; save();};
+      div.querySelector('[data-rm]').onclick=()=>{state.settings.vacations.splice(idx,1); save(); toast('Vacation removed');};
+      box.appendChild(div);
+    });
+  }
   function renderSettings(){
     ensureRewardShape(); if(!$('#rewardSettings'))return; const r=state.settings.rewards;
     $('#rewardSettings').innerHTML=`<div class="segmented" id="rewardTabs" style="width:max-content"><button data-tab="credit" class="${rewardActiveTab==='credit'?'active':''}">Credit</button><button data-tab="gift" class="${rewardActiveTab==='gift'?'active':''}">Gift</button></div><div id="rewardPanel" class="form-grid" style="margin-top:12px"></div>`;
@@ -476,12 +645,19 @@
     $('#rewardTabs').onclick=e=>{if(e.target.tagName!=='BUTTON')return; rewardActiveTab=e.target.dataset.tab; $$('#rewardTabs button').forEach(b=>b.classList.remove('active')); e.target.classList.add('active'); drawRewardPanel(rewardActiveTab);};
     drawRewardPanel(rewardActiveTab);
 
-    renderPenaltySettings();
+    renderPenaltySettings(); renderVacationSettings();
 
     $('#trackerStartDate').value=state.settings.startDate||todayKey(); $('#startDateDisplay').textContent=state.settings.startDate||todayKey(); $('#trackerStartDate').onchange=async()=>{state.settings.startDate=$('#trackerStartDate').value||todayKey(); await save(); toast('Start date updated')};
+    const un=$('#userNameInput'); if(un){un.value=state.settings.userName||''; un.onchange=async()=>{state.settings.userName=un.value.trim(); await save();};}
+    const ts=$('#themeSelect'); if(ts){ts.value=state.settings.theme||'system'; ts.onchange=async()=>{state.settings.theme=ts.value; applyTheme(); await save(); toast('Theme updated');};}
     renderTopProfile(); const upload=$('#profileIconInput'); if(upload){upload.onchange=e=>{const file=e.target.files&&e.target.files[0]; if(!file)return; const reader=new FileReader(); reader.onload=async()=>{state.settings.profileIcon=reader.result; await save(); toast('Profile icon updated')}; reader.readAsDataURL(file);};}
-    const themeSw=$('#themeSwitch'); if(themeSw) themeSw.classList.toggle('on',state.settings.theme==='dark');
-    $('#backupStatus').textContent=fileHandle?'Backup file connected. Edits will sync automatically when Auto Sync is on.':(state.settings.fileConnected?'A file was connected before. Reconnect if the browser asks for access.':'No backup file connected.'); if(!fileHandle) state.settings.autoSync=false; $('#autoSyncSwitch').classList.toggle('on',state.settings.autoSync); $('#autoSyncSwitch').disabled=!fileHandle; $('#reminderSwitch').classList.toggle('on',state.settings.reminders); $('#reminderSettings').innerHTML=`<div class="field"><label>Default Reminder Time</label><input type="time" id="globalReminderTime" value="${state.settings.globalReminderTime||'20:30'}"></div><div class="small-note">Habit-level reminder setup is ${state.settings.reminders?'available':'disabled'}.</div>`; $('#globalReminderTime').onchange=async()=>{state.settings.globalReminderTime=$('#globalReminderTime').value; await save(); setupReminderLoop();};
+    $('#backupStatus').textContent=fileHandle?'Backup file connected. Edits sync to your JSON file (e.g. in Google Drive) when Auto Sync is on.':(state.settings.fileConnected?'Reconnect your backup file if prompted.':'No backup file connected.');
+    if(!fileHandle) state.settings.autoSync=false;
+    $('#autoSyncSwitch').classList.toggle('on',state.settings.autoSync);
+    $('#autoSyncSwitch').disabled=!fileHandle;
+    $('#reminderSwitch').classList.toggle('on',state.settings.reminders);
+    $('#reminderSettings').innerHTML=`<div class="field"><label>Default Reminder Time</label><input type="time" id="globalReminderTime" value="${state.settings.globalReminderTime||'20:30'}"></div>`;
+    $('#globalReminderTime').onchange=async()=>{state.settings.globalReminderTime=$('#globalReminderTime').value; await save(); setupReminderLoop();};
   }
   function renderPenaltySettings(){
     ensureRewardShape(); const r=state.settings.rewards; const box=$('#penaltySettings'); if(!box)return;
@@ -493,33 +669,43 @@
   /* ---------- FILE SYNC ---------- */
   async function connectFile(){if(!window.showOpenFilePicker){toast('File connection needs Chrome/Edge on desktop. Use Export/Import instead.');return;} try{[fileHandle]=await window.showOpenFilePicker({types:[{description:'JSON Backup',accept:{'application/json':['.json']}}]}); const file=await fileHandle.getFile(); const txt=await file.text(); if(txt.trim()){state=JSON.parse(txt); normalizeState();} state.settings.fileConnected=true; await save(true); updateStatus(); renderAll(); toast('File connected');}catch(e){}}
   async function createFile(){if(!window.showSaveFilePicker){toast('Create file needs Chrome/Edge on desktop. Use Export instead.');return;} try{fileHandle=await window.showSaveFilePicker({suggestedName:'habit-tracker-backup.json',types:[{description:'JSON Backup',accept:{'application/json':['.json']}}]}); state.settings.fileConnected=true; state.settings.autoSync=true; await save(); toast('Backup file created');}catch(e){}}
-  function exportJson(){const blob=new Blob([JSON.stringify(state,null,2)],{type:'application/json'}); const a=document.createElement('a'); a.href=URL.createObjectURL(blob); a.download='habit-tracker-backup.json'; a.click(); URL.revokeObjectURL(a.href)}
+  function exportJson(){state.settings.lastExportAt=todayKey(); localStorage.setItem(STORAGE,JSON.stringify(state)); const blob=new Blob([JSON.stringify(state,null,2)],{type:'application/json'}); const a=document.createElement('a'); a.href=URL.createObjectURL(blob); a.download='habit-tracker-backup.json'; a.click(); URL.revokeObjectURL(a.href); updateStatus();}
   function importJson(file){const r=new FileReader(); r.onload=async()=>{try{state=JSON.parse(r.result); normalizeState(); await save(true); renderAll(); toast('Imported')}catch(e){toast('Invalid JSON')}}; r.readAsText(file)}
   async function toggleReminders(){state.settings.reminders=!state.settings.reminders; if(state.settings.reminders && 'Notification' in window && Notification.permission==='default'){await Notification.requestPermission();} await save(); setupReminderLoop();}
   function setupReminderLoop(){if(reminderTimer)clearInterval(reminderTimer); if(!state.settings.reminders)return; reminderTimer=setInterval(()=>{const now=hkNow(); const hm=String(now.getHours()).padStart(2,"0")+":"+String(now.getMinutes()).padStart(2,"0"); state.habits.forEach(h=>{if(!h.reminder?.enabled||h.reminder.time!==hm||!isScheduledToday(h,now))return; const last=`${h.id}-${todayKey()}-${hm}`; if(sessionStorage.getItem(last))return; sessionStorage.setItem(last,'1'); if('Notification' in window && Notification.permission==='granted') new Notification('Habit Tracker',{body:`Reminder: ${h.name}`}); else toast(`Reminder: ${h.name}`);});},30000)}
 
   /* ---------- SHELL ---------- */
-  function renderAll(){updateStatus(); renderHome(); renderHabits(); renderReport(); renderJournals(); renderLevel(); renderGift(); renderSettings();}
+  function renderAll(){updateStatus(); renderHome(); renderHabits(); renderReport(); renderJournals(); renderProgress(); renderSettings();}
   function showXpPop(t){const p=document.createElement('div');p.className='xp-pop';p.textContent=t;document.body.appendChild(p);setTimeout(()=>p.remove(),1200)}
-  function openModal(title,html){$('#modalTitle').textContent=title; $('#modalBody').innerHTML=html; $('#modalBackdrop').classList.add('show'); $$('[data-close]').forEach(b=>b.onclick=closeModal)}
+  let modalDragY=0;
+  function openModal(title,html){$('#modalTitle').textContent=title; $('#modalBody').innerHTML=html; $('#modalBackdrop').classList.add('show'); $$('[data-close]').forEach(b=>b.onclick=closeModal); const sheet=$('#modalSheet'), handle=$('#sheetHandle'); if(handle&&sheet){let sy=0; handle.ontouchstart=e=>{sy=e.touches[0].clientY;}; handle.ontouchend=e=>{if(e.changedTouches[0].clientY-sy>80) closeModal();};}}
   function closeModal(){$('#modalBackdrop').classList.remove('show')}
   function escapeHtml(s=''){return String(s).replace(/[&<>"]/g,m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[m]))}
   function escapeAttr(s=''){return escapeHtml(s).replace(/'/g,'&#39;')}
 
-  function showView(view){$$('.nav-item').forEach(x=>x.classList.toggle('active',x.dataset.view===view)); $$('.view').forEach(v=>v.classList.remove('active')); const el=$('#'+view); if(el)el.classList.add('active'); const host=$('.view-host'); if(host)host.scrollTop=0; if(view==='reportView')renderReport(); if(view==='levelView')renderLevel(); if(view==='giftView')renderGift(); if(view==='settingsView')renderSettings();}
+  function showView(view){$$('.nav-item').forEach(x=>x.classList.toggle('active',x.dataset.view===view)); $$('.view').forEach(v=>v.classList.remove('active')); const el=$('#'+view); if(el)el.classList.add('active'); const host=$('.view-host'); if(host)host.scrollTop=0; if(view==='reportView')renderReport(); if(view==='progressView')renderProgress(); if(view==='settingsView')renderSettings();}
   $$('.nav-item').forEach(b=>b.onclick=()=>showView(b.dataset.view));
   const fab=$('#fabAdd'); if(fab) fab.onclick=()=>openHabitModal();
-  $('#profileQuick').onclick=()=>showView('levelView'); $('#topGiftBtn').onclick=()=>showView('giftView'); $('#topSettingsBtn').onclick=()=>showView('settingsView');
+  $('#profileQuick').onclick=()=>showView('progressView'); $('#topSettingsBtn').onclick=()=>showView('settingsView');
   $$('[data-open-habit]').forEach(b=>b.onclick=()=>openHabitModal()); $('#modalClose').onclick=closeModal; $('#modalBackdrop').onclick=e=>{if(e.target.id==='modalBackdrop')closeModal()};
+  $('#openJournalBtn')?.addEventListener('click',()=>{$$('.nav-item').forEach(x=>x.classList.remove('active')); $$('.view').forEach(v=>v.classList.remove('active')); const jv=$('#journalView'); if(jv){jv.hidden=false; jv.removeAttribute('aria-hidden'); jv.classList.add('active'); renderJournals(); $('.view-host').scrollTop=0;}});
+  $('#expandLadderBtn')?.addEventListener('click',()=>{$('#identityPath')?.scrollIntoView({behavior:'smooth'});});
+  $('#addGroupBtn')?.addEventListener('click',async()=>{state.groups.push({id:uid(),name:'Morning block',emoji:'🌅',color:'#ea580c',sortOrder:state.groups.length}); await save(); toast('Routine added');});
+  $('#addVacationBtn')?.addEventListener('click',async()=>{const t=todayKey(); const e=new Date(hkNow()); e.setDate(e.getDate()+6); state.settings.vacations.push({id:uid(),from:t,to:dateKey(e),label:'Vacation'}); await save(); toast('Vacation period added');});
+  $('#statusToggle')?.addEventListener('click',()=>{state.settings.statusRowOpen=!state.settings.statusRowOpen; localStorage.setItem(STORAGE,JSON.stringify(state)); updateStatus();});
+  $('#onboardNext')?.addEventListener('click',()=>{if(onboardStep<ONBOARD_STEPS.length-1){onboardStep++; showOnboardStep();} else finishOnboarding();});
+  $('#onboardSkip')?.addEventListener('click',finishOnboarding);
+  $('#replayOnboardingBtn')?.addEventListener('click',()=>{state.settings.onboardingComplete=false; renderOnboarding();});
   $('#resetTodayBtn').onclick=resetTodayRecords;
   const wp=$('#weekPrev'); if(wp)wp.onclick=()=>{weekOffset--; renderWeekStrip();}; const wn=$('#weekNext'); if(wn)wn.onclick=()=>{weekOffset++; renderWeekStrip();}; const wt=$('#weekToday'); if(wt)wt.onclick=()=>{weekOffset=0; renderWeekStrip();};
   $('#rangeTabs').onclick=e=>{if(e.target.tagName!=='BUTTON')return; trendDays=Number(e.target.dataset.days); $$('#rangeTabs button').forEach(b=>b.classList.remove('active')); e.target.classList.add('active'); drawTrend();};
   {const tp=$('#trendPrev'); if(tp)tp.onclick=()=>{trendCursor.setMonth(trendCursor.getMonth()-1); drawTrend();}; const tn=$('#trendNext'); if(tn)tn.onclick=()=>{const now=hkNow(); const c=new Date(trendCursor); c.setMonth(c.getMonth()+1); if(c.getFullYear()>now.getFullYear()||(c.getFullYear()===now.getFullYear()&&c.getMonth()>now.getMonth())){toast('Already at the latest month');return;} trendCursor=c; drawTrend();};}
   $('#reportMode').onclick=e=>{if(e.target.tagName!=='BUTTON')return; reportMode=e.target.dataset.mode; $$('#reportMode button').forEach(b=>b.classList.remove('active')); e.target.classList.add('active'); renderCalendar();};
   $('#reportPrev').onclick=()=>{reportCursor.setMonth(reportCursor.getMonth()-(reportMode==='month'?1:3)); renderCalendar();}; $('#reportNext').onclick=()=>{reportCursor.setMonth(reportCursor.getMonth()+(reportMode==='month'?1:3)); renderCalendar();};
-  $('#connectFileBtn').onclick=connectFile; $('#createFileBtn').onclick=createFile; $('#disconnectFileBtn').onclick=async()=>{fileHandle=null; state.settings.fileConnected=false; state.settings.autoSync=false; await save(true); updateStatus(); renderSettings(); toast('Disconnected')}; $('#exportBtn').onclick=exportJson; $('#importInput').onchange=e=>e.target.files[0]&&importJson(e.target.files[0]); $('#autoSyncSwitch').onclick=async()=>{if(!fileHandle){state.settings.autoSync=false; toast('Connect a backup file first'); renderSettings(); return;} state.settings.autoSync=!state.settings.autoSync; await save();}; $('#reminderSwitch').onclick=toggleReminders;
-  {const ts=$('#themeSwitch'); if(ts)ts.onclick=async()=>{state.settings.theme=state.settings.theme==='dark'?'light':'dark'; applyTheme(); await save(); toast(state.settings.theme==='dark'?'Dark mode on':'Light mode on');};}
-  $('#resetAllBtn').onclick=()=>{if($('#confirmDeleteInput').value!=='Confirm'){toast('Type Confirm first');return;} if(confirm('Erase all Habit Tracker data?')){state=defaults(); localStorage.setItem(STORAGE,JSON.stringify(state)); fileHandle=null; renderAll(); toast('Data erased')}};
-  document.body.addEventListener('click',e=>{const h=e.target.closest('[data-help]'); if(!h)return; const key=h.dataset.help; const content={rewardRules:`<div class="sheet-text"><h4>Reward rules</h4><p>Use this to turn discipline into a clear personal reward system.</p><ul><li><strong>Credit rules</strong>: reward when a day reaches configured completion percentages.</li><li><strong>Gift rules</strong>: unlock a configured gift after a chosen number of consecutive days above the selected percentage.</li><li><strong>Penalty</strong>: reduces credits and XP when zero-completion days repeat.</li></ul></div>`,fileSync:`<div class="sheet-text"><h4>Backup & sync (no account needed)</h4><p>Records are always saved in this browser first. File connection creates a JSON backup that can live in a cloud-synced folder — this is how the app syncs, with no Google login.</p><ol><li>Choose <strong>Create New File</strong> or <strong>Connect File</strong>.</li><li>Place or choose the backup file inside your <strong>Google Drive</strong>, OneDrive or iCloud desktop-synced folder.</li><li>Turn on <strong>Auto Sync</strong>.</li><li>Every edit writes to the connected file while permission remains active, and the cloud app syncs it across devices.</li></ol><p>File connection needs Chrome or Edge on desktop. On phones, use <strong>Export / Import JSON</strong> as the reliable backup path.</p></div>`,reminders:`<div class="sheet-text"><h4>Reminders</h4><p>Turn on reminders to enable habit-level reminder setup. Browser reminders work best when the page is open or installed to the home screen.</p></div>`,homeScreen:`<div class="sheet-text"><h4>Add to phone home screen</h4><h4>iPhone / Safari</h4><ol><li>Open this page in Safari.</li><li>Tap <strong>Share</strong>.</li><li>Choose <strong>Add to Home Screen</strong>.</li><li>Tap <strong>Add</strong>.</li></ol><h4>Android / Chrome</h4><ol><li>Open this page in Chrome.</li><li>Tap the <strong>⋮</strong> menu.</li><li>Choose <strong>Install app</strong> or <strong>Add to Home screen</strong>.</li></ol></div>`}; openModal(h.textContent.trim()==='?'?'Help':'Setup Steps',content[key]||'');});
-  applyTheme(); setupReminderLoop(); renderAll();
+  $('#connectFileBtn').onclick=connectFile; $('#createFileBtn').onclick=createFile; $('#disconnectFileBtn').onclick=async()=>{fileHandle=null; state.settings.fileConnected=false; state.settings.autoSync=false; await save(true); updateStatus(); renderSettings(); toast('Disconnected')}; $('#exportBtn').onclick=exportJson; $('#importInput').onchange=e=>e.target.files[0]&&importJson(e.target.files[0]); $('#autoSyncSwitch').onclick=async()=>{if(!fileHandle){state.settings.autoSync=false; toast('Connect a backup file first'); renderSettings(); return;} state.settings.autoSync=!state.settings.autoSync; await save();};   $('#reminderSwitch').onclick=toggleReminders;
+  $('#resetAllBtn').onclick=()=>{if($('#confirmDeleteInput').value!=='Confirm'){toast('Type Confirm first');return;} if(!confirm('Erase all Habit Tracker data? This cannot be undone.'))return; state=defaults(); localStorage.setItem(STORAGE,JSON.stringify(state)); fileHandle=null; renderAll(); toast('Data erased');};
+  document.body.addEventListener('click',e=>{const h=e.target.closest('[data-help]'); if(!h)return; const key=h.dataset.help; const content={rewardRules:`<div class="sheet-text"><h4>Reward rules</h4><p>Credit at completion tiers · Gift streak unlocks · Penalties on repeated 0% days (paused during vacation).</p></div>`,fileSync:`<div class="sheet-text"><h4>Backup & sync</h4><p>Connect + Auto Sync + JSON in Google Drive is safe and private — no account. Data stays in your browser first; the file is your backup.</p><ol><li>Create or Connect a JSON file in a synced folder.</li><li>Turn on Auto Sync on desktop Chrome/Edge.</li><li>On phone, use Export / Import JSON.</li></ol></div>`,reminders:`<div class="sheet-text"><h4>Reminders</h4><p>Best when installed to home screen. Enable per-habit reminders in habit setup.</p></div>`,homeScreen:`<div class="sheet-text"><h4>Add to home screen</h4><p><strong>iPhone:</strong> Safari → Share → Add to Home Screen.</p><p><strong>Android:</strong> Chrome → Install app / Add to Home screen.</p></div>`}; openModal('Help',content[key]||'');});
+  window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change',()=>{if(state.settings.theme==='system') applyTheme();});
+  lastLevel=levelInfo().cur.level;
+  applyTheme(); setupReminderLoop(); renderAll(); renderOnboarding();
 })();
