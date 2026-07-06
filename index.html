@@ -18,11 +18,15 @@
 <body>
   <div class="app-shell">
     <header class="topbar" id="topbar">
+      <div class="top-greeting">
+        <h1 id="greeting">Good morning</h1>
+        <span class="top-greeting-sub" id="todayEntryStamp"></span>
+      </div>
       <button class="profile-pill" id="profileQuick" type="button" aria-label="Open level and XP">
         <div class="profile-avatar" id="topProfileAvatar">🌱</div>
         <div class="profile-meta">
-          <div class="profile-title"><span id="topLevel">Lv 1</span> · <span id="topIdentity">Seed Planter</span></div>
-          <div class="profile-sub"><span id="topXp">0 XP</span><div class="level-bar"><div class="level-fill" id="topLevelFill"></div></div></div>
+          <div class="profile-title"><span id="topLevel">Lv 1</span></div>
+          <div class="profile-sub"><div class="level-bar"><div class="level-fill" id="topLevelFill"></div></div></div>
         </div>
       </button>
       <div class="top-actions">
@@ -61,7 +65,7 @@
             <span><i class="band-partial"></i>50%+</span>
             <span><i class="band-low"></i>1%+</span>
             <span><i class="band-zero"></i>0%</span>
-            <span><i class="band-vacation"></i>Vacation</span>
+            <span><i class="band-vacation"></i>Pause</span>
           </div>
         </div>
 
@@ -73,8 +77,7 @@
 
         <div class="section-title today-header">
           <div class="today-header-main">
-            <h2 id="greeting">Today</h2>
-            <span id="todayEntryStamp"></span>
+            <h2>Today</h2>
           </div>
           <div class="today-ring" id="todayRing" aria-label="Today's completion">
             <svg viewBox="0 0 36 36"><circle class="ring-bg" cx="18" cy="18" r="15.5"/><circle class="ring-fill" id="todayRingFill" cx="18" cy="18" r="15.5"/></svg>
@@ -98,8 +101,12 @@
         </div>
 
         <div class="card">
-          <div class="card-head"><h3>Journal</h3><button class="btn-inline pink" id="homeJournalViewAll" type="button">View all</button></div>
-          <div class="journal-history" id="homeJournalPreview"></div>
+          <div class="card-head"><h3>Today's Journal</h3><span class="chip blue">Mood + Energy</span></div>
+          <div class="form-grid journal-area" id="homeJournalForm"></div>
+          <div class="journal-past-wrap" id="homeJournalPastWrap" style="display:none">
+            <div class="journal-past-head"><span class="small-note">Past entries</span><button class="btn-inline pink" id="homeJournalViewAll" type="button">View all</button></div>
+            <div class="journal-history" id="homeJournalPreview"></div>
+          </div>
         </div>
 
         <div class="quote-card" id="dailyQuote"></div>
@@ -118,9 +125,10 @@
       <section class="view" id="reportView">
         <div class="section-title"><h2>Report</h2><span>Trends and calendar</span></div>
         <div class="card">
-          <div class="card-head"><h3>Compare Periods</h3><span class="chip blue">Analysis</span></div>
+          <div class="card-head"><h3>Compare Periods</h3><div class="segmented" id="comparePeriodTabs"><button data-period="week">Week</button><button data-period="month" class="active">Month</button><button data-period="quarter">Quarter</button></div></div>
           <div id="comparePeriodBox"></div>
         </div>
+        <div class="card"><div class="card-head"><h3>Insights</h3><span class="chip purple">Journal × Habits</span></div><div id="correlationInsights"></div></div>
         <div class="card"><div class="card-head"><h3>Performance Trend</h3><div class="segmented" id="rangeTabs"><button data-days="7" class="active">7D</button><button data-days="14">14D</button><button data-days="30">30D</button></div></div><div class="report-toolbar"><button class="round-nav" id="trendPrev">‹</button><div class="report-title" id="trendTitle">This month</div><button class="round-nav" id="trendNext">›</button></div><div class="canvas-wrap"><canvas id="trendCanvas"></canvas></div><p class="small-note" id="trendNote"></p></div>
         <div class="card">
           <div class="card-head"><h3>Calendar Review</h3><div class="segmented" id="reportMode"><button data-mode="month" class="active">Month</button><button data-mode="quarter">Quarter</button></div></div>
@@ -133,13 +141,12 @@
       </section>
 
       <section class="view" id="rewardsView">
-        <div class="section-title"><h2>Rewards</h2><span>Credits, gifts and insights</span></div>
-        <div class="cards">
-          <div class="stat-card" style="--c:var(--orange)"><div class="stat-label">Credits</div><div class="stat-value" id="creditValue">HK$0</div><div class="stat-sub">Available</div></div>
-          <div class="stat-card" style="--c:var(--brand)"><div class="stat-label">Gifts</div><div class="stat-value" id="giftUnlockValue">0</div><div class="stat-sub" id="giftUnlockSub">available</div></div>
+        <div class="section-title"><h2>Rewards</h2><span>Credits and gifts</span></div>
+        <div class="cards reward-summary">
+          <div class="stat-card reward-credit-card"><div class="stat-label">Credits</div><div class="stat-value" id="creditValue">HK$0</div><div class="stat-sub">Available</div></div>
+          <div class="stat-card reward-gift-card"><div class="stat-label">Gifts</div><div class="stat-value" id="giftUnlockValue">0</div><div class="stat-sub" id="giftUnlockSub">available</div></div>
         </div>
-        <div class="card"><div class="card-head"><h3>Insights</h3><span class="chip purple">Journal × Habits</span></div><div id="correlationInsights"></div></div>
-        <div class="card"><div class="card-head"><h3>Redeem Rewards</h3><span class="chip orange">Credits &amp; gifts</span></div><div class="reward-grid" id="redeemGrid"></div></div>
+        <div class="card"><div class="card-head"><h3>Redeem</h3></div><div class="reward-grid" id="redeemGrid"></div></div>
         <div class="card"><div class="card-head"><h3>Reward Ledger</h3><span class="chip green">Auto updated</span></div><div class="ledger-list" id="ledgerList"></div></div>
       </section>
 
@@ -161,13 +168,16 @@
 
       <section class="view" id="settingsView">
         <div class="section-title"><h2>Settings</h2><span>Appearance, rewards and backup</span></div>
-        <div class="card"><div class="card-head"><h3>Appearance</h3><span class="chip">Theme</span></div>
-          <div class="field"><label>Theme</label><select id="themeSelect"><option value="system">System</option><option value="light">Light</option><option value="dark">Dark</option></select></div>
+        <div class="card"><div class="card-head"><h3>Appearance</h3></div>
+          <div class="appearance-row">
+            <div class="field"><label>Mode</label><select id="colorModeSelect"><option value="system">System</option><option value="light">Light</option><option value="dark">Dark</option></select></div>
+            <div class="field"><label>Theme</label><select id="styleThemeSelect"><option value="vivid">Vivid</option><option value="modern">Modern</option></select></div>
+          </div>
         </div>
-        <div class="card"><div class="card-head"><h3>Display Name</h3><span class="chip">Greeting</span></div><div class="field"><label>Your name (optional)</label><input id="userNameInput" placeholder="e.g. Chris"></div></div>
+        <div class="card"><div class="card-head"><h3>Display Name</h3><span class="chip">Greeting</span></div><div class="field"><label>Your name (optional)</label><input id="userNameInput" placeholder="e.g. Chris"></div><button class="btn-secondary" id="saveUserNameBtn" type="button" style="margin-top:8px">Save name</button></div>
         <div class="card"><div class="card-head"><h3>Profile Icon</h3><span class="chip">Personal</span></div><div class="upload-profile-box"><div class="profile-avatar" id="settingsProfileAvatar">🌱</div><div class="upload-profile-copy"><strong>Choose your avatar</strong><span>Upload a photo — it is fitted into a circle.</span><label class="upload-file-btn">Upload Photo<input type="file" id="profileIconInput" accept="image/*" hidden></label></div></div></div>
         <div class="card"><div class="card-head"><h3>App Icon</h3><span class="chip">Home screen</span></div><div class="small-note" style="margin-bottom:10px">Choose how Momentum appears on your home screen. This is separate from your profile avatar.</div><div class="app-icon-grid" id="appIconGrid"></div><label class="upload-file-btn" style="margin-top:10px;display:inline-grid">Upload Custom Icon<input type="file" id="appIconInput" accept="image/*" hidden></label></div>
-        <div class="card"><div class="card-head"><h3>Vacation / Pause</h3><span class="chip gray">No XP or rewards</span></div><div class="small-note">Records are kept, but XP, credits, gifts and penalties are paused for selected dates.</div><div id="vacationList" style="margin-top:12px"></div><button class="btn-secondary" id="addVacationBtn" style="margin-top:10px">+ Add vacation period</button></div>
+        <div class="card"><div class="card-head"><h3>Pause Periods</h3><span class="chip gray">No XP or rewards</span></div><div class="small-note">Records are kept, but XP, credits, gifts and penalties are paused for selected dates.</div><div id="vacationSummary" class="vacation-summary" style="margin-top:12px"></div><div class="vacation-actions"><button class="btn-secondary" id="addVacationBtn" type="button">+ Add pause period</button><button class="btn-inline pink" id="viewVacationLogBtn" type="button">View log</button></div></div>
         <div class="card"><div class="card-head"><h3>Tracker Start Date</h3><span class="date-pill" id="startDateDisplay">—</span></div><div class="field"><label>Start Date</label><input type="date" id="trackerStartDate"></div></div>
         <div class="card"><div class="card-head"><h3>Reward Rules</h3><button class="help-dot" data-help="rewardRules">?</button></div><div class="form-grid" id="rewardSettings"></div></div>
         <div class="card"><div class="card-head"><h3>Penalty Rules</h3><span class="chip red">0% completion</span></div><div class="form-grid" id="penaltySettings"></div></div>
@@ -193,7 +203,7 @@
         <span>Report</span>
       </button>
       <button class="nav-item" data-view="rewardsView" aria-label="Rewards">
-        <svg class="nav-svg" viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M20 6h-2.18A3 3 0 0 0 17 4H7a3 3 0 0 0-.82 2H4c-1.1 0-2 .9-2 2v2c0 2.21 1.79 4 4 4h.5c.28 1.21 1.4 2.1 2.67 2.1h7.66c1.27 0 2.39-.89 2.67-2.1H20c2.21 0 4-1.79 4-4V8c0-1.1-.9-2-2-2zm-8 0a1 1 0 0 1 1-1h2a1 1 0 0 1 1 1v1h-4V6zm8 4c0 .55-.45 1-1 1h-1.17c-.41-1.17-1.52-2-2.83-2H11c-1.31 0-2.42.83-2.83 2H7c-.55 0-1-.45-1-1V8h14v2zM7 20h10v2H7z"/></svg>
+        <svg class="nav-svg" viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M12 2l2.4 7.4h7.6l-6 4.6 2.3 7-6.3-4.6L5.7 21l2.3-7-6-4.6h7.6z"/></svg>
         <span>Rewards</span>
       </button>
     </nav>
