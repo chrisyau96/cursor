@@ -65,9 +65,10 @@
   ];
   const iconBtn=(cls,svg,title)=>{const b=document.createElement('button'); b.className='act-btn '+cls; b.innerHTML=svg; b.title=title; b.setAttribute('aria-label',title); return b;};
 
-  function rewardDefaults(){return{creditRules:[{id:uid(),pct:50,amount:2},{id:uid(),pct:100,amount:10}],giftRules:[{id:uid(),gift:'Buffet',icon:'🍽️',pct:80,days:30}],penaltyCredit:5,penaltyXp:20,penaltyZeroDays:2};}
-  function pickSettings(overrides={}){return{autoSync:false,fileConnected:false,reminders:false,colorMode:'system',styleTheme:'vivid',globalReminderTime:'20:30',profileIcon:'',userName:'',onboardingComplete:false,statusRowOpen:false,lastExportAt:'',vacations:[],dataMode:'demo',appIcon:'default',appIconCustom:'',defaultReminderMessage:'Time for {habit}',rewards:rewardDefaults(),...overrides};}
-  function freshState(opts={}){const keep=opts.keep||{}; return{habits:[],records:[],journals:{},redemptions:[],groups:[],settings:pickSettings({dataMode:'real',startDate:todayKey(),onboardingComplete:opts.onboardingComplete??true,colorMode:keep.colorMode||'system',styleTheme:keep.styleTheme||'vivid',userName:keep.userName||'',profileIcon:keep.profileIcon||'',appIcon:keep.appIcon||'default',appIconCustom:keep.appIconCustom||''})};}
+  const USER_NAME_MAX=12;
+  function rewardDefaults(includeGifts=false){return{creditRules:[{id:uid(),pct:50,amount:2},{id:uid(),pct:100,amount:10}],giftRules:includeGifts?[{id:uid(),gift:'Buffet',icon:'🍽️',pct:80,days:30}]:[],penaltyCredit:5,penaltyXp:20,penaltyZeroDays:2};}
+  function pickSettings(overrides={}){const gifts=overrides.includeGifts===true; const {includeGifts,...rest}=overrides; return{autoSync:false,fileConnected:false,reminders:false,colorMode:'system',styleTheme:'vivid',globalReminderTime:'20:30',profileIcon:'',userName:'',onboardingComplete:false,statusRowOpen:false,lastExportAt:'',vacations:[],dataMode:'demo',appIcon:'default',appIconCustom:'',defaultReminderMessage:'Time for {habit}',rewards:rewardDefaults(gifts),...rest};}
+  function freshState(opts={}){const keep=opts.keep||{}; return{habits:[],records:[],journals:{},redemptions:[],groups:[],settings:pickSettings({dataMode:'real',includeGifts:false,startDate:todayKey(),onboardingComplete:opts.onboardingComplete??true,colorMode:keep.colorMode||'system',styleTheme:keep.styleTheme||'vivid',userName:keep.userName||'',profileIcon:keep.profileIcon||'',appIcon:keep.appIcon||'default',appIconCustom:keep.appIconCustom||''})};}
   function demoState(opts={}){const keep=opts.keep||{};
     const habits=[
       {id:uid(),name:'Bible Time & Prayer',emoji:'📖',color:'#7c3aed',target:1,xpReward:5,frequency:{mode:'daily',days:[0,1,2,3,4,5,6]},reminder:{enabled:false,time:'07:15',message:''}},
@@ -90,7 +91,7 @@
       });
       if(k!==todayKey() && Math.random()<0.6){ journals[k]={mood:MOODS[Math.floor(Math.random()*MOODS.length)],energy:4+Math.floor(Math.random()*7),text:'',updatedAt:new Date().toISOString()}; }
     }
-    return{habits,records,journals,redemptions:[],groups,settings:pickSettings({dataMode:'demo',startDate:dateKey(startD),onboardingComplete:opts.onboardingComplete??false,colorMode:keep.colorMode||'system',styleTheme:keep.styleTheme||'vivid',userName:keep.userName||'',profileIcon:keep.profileIcon||'',appIcon:keep.appIcon||'default',appIconCustom:keep.appIconCustom||''})};
+    return{habits,records,journals,redemptions:[],groups,settings:pickSettings({dataMode:'demo',includeGifts:true,startDate:dateKey(startD),onboardingComplete:opts.onboardingComplete??false,colorMode:keep.colorMode||'system',styleTheme:keep.styleTheme||'vivid',userName:keep.userName||'',profileIcon:keep.profileIcon||'',appIcon:keep.appIcon||'default',appIconCustom:keep.appIconCustom||''})};
   }
   function defaults(){const mode=localStorage.getItem('momentumDataMode')||'demo'; return mode==='real'?freshState({onboardingComplete:false}):demoState({onboardingComplete:false});}
   function stateForMode(mode,opts={}){return mode==='real'?freshState(opts):demoState(opts);}
@@ -118,7 +119,7 @@
   function isVacationDay(k){return (state.settings.vacations||[]).some(v=>k>=v.from&&k<=v.to);}
   function activeHabits(){return state.habits.filter(h=>!h.archived);}
   function haptic(){try{navigator.vibrate?.(12);}catch(e){}}
-  function greetName(){const n=(state.settings.userName||'').trim(); return n?`, ${n}`:'';}
+  function greetName(){const n=(state.settings.userName||'').trim().slice(0,USER_NAME_MAX); return n?`, ${n}`:'';}
   function timeGreeting(){const h=hkNow().getHours(); if(h<12)return 'Good morning'; if(h<17)return 'Good afternoon'; return 'Good evening';}
   function sortedGroups(){return [...state.groups].sort((a,b)=>(a.sortOrder||0)-(b.sortOrder||0));}
   function habitsInGroup(gid){return activeHabits().filter(h=>h.groupId===gid&&!h.paused).sort((a,b)=>(a.sortOrder||0)-(b.sortOrder||0));}
@@ -256,7 +257,10 @@
       else r.creditRules=[{id:uid(),pct:Number(r.primaryPct||50),amount:Number(r.primaryAmount||2)},{id:uid(),pct:100,amount:10}];
     }
     r.creditRules.forEach(c=>{if(!c.id)c.id=uid(); c.pct=Number(c.pct||100); c.amount=Number(c.amount||0);});
-    if(!Array.isArray(r.giftRules)) r.giftRules=[{id:uid(),gift:r.streakGift||'Buffet',icon:'🍽️',pct:r.streakPct||80,days:r.streakDays||30}];
+    if(!Array.isArray(r.giftRules)){
+      if(r.streakGift) r.giftRules=[{id:uid(),gift:r.streakGift||'Gift',icon:'🍽️',pct:r.streakPct||80,days:r.streakDays||30}];
+      else r.giftRules=[];
+    }
     r.giftRules.forEach(g=>{if(!g.id)g.id=uid(); if(!g.icon)g.icon=(g.gift==='Buffet'?'🍽️':'🎁');});
     if(!r.activeGiftId || !r.giftRules.some(g=>g.id===r.activeGiftId)) r.activeGiftId=r.giftRules[0]?.id||null;
     if(r.penaltyCredit===undefined) r.penaltyCredit=5; if(r.penaltyXp===undefined) r.penaltyXp=20; if(r.penaltyZeroDays===undefined) r.penaltyZeroDays=2;
@@ -697,13 +701,12 @@
   }
   function renderTopProfile(){
     const li=levelInfo(); const icon=state.settings.profileIcon||''; const avatarEls=['#topProfileAvatar','#levelProfileAvatar','#settingsProfileAvatar']; avatarEls.forEach(sel=>{const el=$(sel); if(!el)return; if(icon){el.style.backgroundImage=`url(${icon})`; el.textContent='';}else{el.style.backgroundImage=''; el.textContent=li.cur.icon||'🌱';}});
-    $('#topLevel').textContent='Lv '+li.cur.level; $('#topLevelFill').style.width=li.pct+'%'; const topExp=$('#topLevelExp'); if(topExp) topExp.textContent=li.next.level===li.cur.level?`${fmtXp(li.xp)} EXP`:`${fmtXp(li.xp)}/${fmtXp(li.next.xp)} EXP`; const badge=$('#topGiftBadge'); if(badge){const ag=activeGiftRule(); badge.textContent=ag?giftCount(ag):0;}
+    $('#topLevel').textContent='Lv '+li.cur.level; $('#topLevelFill').style.width=li.pct+'%'; const badge=$('#topGiftBadge'); if(badge){const ag=activeGiftRule(); badge.textContent=ag?giftCount(ag):0;}
   }
   function renderLevel(){
     ensureRewardShape(); const li=levelInfo(); renderTopProfile();
     $('#levelPageValue').textContent='Lv '+li.cur.level; $('#levelPageIdentity').textContent=(li.cur.icon||'🌱')+' '+li.cur.name; $('#levelPageFill').style.width=li.pct+'%';
-    const barExp=$('#levelPageBarExp'); if(barExp) barExp.textContent=`${fmtXp(li.xp)} / ${fmtXp(li.next.xp)} EXP`;
-    $('#levelPageXp').textContent=li.next.level===li.cur.level?'Max tier reached':`${fmtXp(li.next.xp-li.xp)} EXP to Lv ${li.next.level} · ${li.next.name}`;
+    $('#levelPageXp').textContent=li.next.level===li.cur.level?'Max tier reached':`Next · ${li.next.icon} ${li.next.name}`;
     $('#identityPath').innerHTML=identities.map(x=>{const unlocked=li.xp>=x.xp; return `<div class="tier-card ${x.level===li.cur.level?'current':''} ${unlocked?'':'locked'}"><div class="tier-icon">${x.icon}</div><div><div class="tier-name">Lv ${x.level} · ${x.name}</div><div class="tier-sub">${fmtXp(x.xp)} EXP · ${x.desc}</div></div><span class="chip ${unlocked?'green':'gray'}">${unlocked?'Unlocked':'Locked'}</span></div>`;}).join('');
     const xpItems=[]; const seen=new Set();
     state.records.filter(r=>afterStart(r.date)).forEach(r=>{const h=state.habits.find(x=>x.id===r.habitId)||{}; if(!h.id)return; const key=habitXpKey(h,parseDate(r.date)); if(seen.has(key))return; seen.add(key); xpItems.push({date:r.date,at:r.at,desc:`${h.emoji||'✓'} ${h.name||'Habit'} completed`,xp:habitPeriodXp(h,parseDate(r.date))});});
@@ -869,8 +872,10 @@
     renderPenaltySettings(); renderVacationSettings(); renderSyncActions(); renderAppIconSettings(); renderDataModeSettings();
 
     $('#trackerStartDate').value=state.settings.startDate||todayKey(); $('#startDateDisplay').textContent=state.settings.startDate||todayKey(); $('#trackerStartDate').onchange=async()=>{state.settings.startDate=$('#trackerStartDate').value||todayKey(); await save(); toast('Start date updated')};
-    const un=$('#userNameInput'); if(un){un.value=state.settings.userName||'';}
-    const saveName=$('#saveUserNameBtn'); if(saveName) saveName.onclick=async()=>{state.settings.userName=(un?.value||'').trim(); await save(); toast('Name saved'); renderHome();};
+    const un=$('#userNameInput'); if(un){un.value=(state.settings.userName||'').slice(0,USER_NAME_MAX); un.maxLength=USER_NAME_MAX;}
+    const nameCount=$('#userNameCount'); if(nameCount) nameCount.textContent=String((un?.value||'').length);
+    if(un && !un.dataset.bound){un.dataset.bound='1'; un.oninput=()=>{const c=$('#userNameCount'); if(c)c.textContent=String(un.value.length);};}
+    const saveName=$('#saveUserNameBtn'); if(saveName) saveName.onclick=async()=>{state.settings.userName=(un?.value||'').trim().slice(0,USER_NAME_MAX); await save(); toast('Name saved'); renderHome();};
     const cms=$('#colorModeSelect'); if(cms){cms.value=state.settings.colorMode||'system'; cms.onchange=async()=>{state.settings.colorMode=cms.value; applyAppearance(); await save(); toast('Mode updated');};}
     const sts=$('#styleThemeSelect'); if(sts){sts.value=state.settings.styleTheme||'vivid'; sts.onchange=async()=>{state.settings.styleTheme=sts.value; applyAppearance(); await save(); toast('Theme updated');};}
     renderTopProfile();
@@ -938,12 +943,13 @@
   $('#profileQuick').onclick=()=>showView('levelView'); $('#topSettingsBtn').onclick=()=>showView('settingsView');
   $$('[data-open-habit]').forEach(b=>b.onclick=()=>openHabitModal()); $('#modalClose').onclick=closeModal; $('#modalBackdrop').onclick=e=>{if(e.target.id==='modalBackdrop')closeModal()};
   $('#addGroupBtn')?.addEventListener('click',async()=>{state.groups.push({id:uid(),name:'Morning block',emoji:'🌅',color:'#ea580c',sortOrder:state.groups.length}); await save(); toast('Group added');});
+  $('#addHabitBtn')?.addEventListener('click',()=>openHabitModal());
   $('#addVacationBtn')?.addEventListener('click',()=>openAddPauseModal());
   $('#viewVacationLogBtn')?.addEventListener('click',openVacationLog);
   $('#statusToggle')?.addEventListener('click',()=>{state.settings.statusRowOpen=!state.settings.statusRowOpen; localStorage.setItem(STORAGE,JSON.stringify(state)); updateStatus();});
   $('#onboardNext')?.addEventListener('click',()=>{if(onboardStep<ONBOARD_STEPS.length-1){onboardStep++; showOnboardStep();} else finishOnboarding();});
   $('#onboardBack')?.addEventListener('click',()=>{if(onboardStep>0){onboardStep--; showOnboardStep();}});
-  $('#onboardSkip')?.addEventListener('click',finishOnboarding);
+  $('#onboardClose')?.addEventListener('click',finishOnboarding);
   $('#replayOnboardingBtn')?.addEventListener('click',()=>{state.settings.onboardingComplete=false; onboardStep=0; renderOnboarding();});
   $('#resetTodayBtn')?.addEventListener('click',resetTodayRecords);
   const wp=$('#weekPrev'); if(wp)wp.onclick=()=>{weekOffset--; renderWeekStrip();}; const wn=$('#weekNext'); if(wn)wn.onclick=()=>{weekOffset++; renderWeekStrip();}; const wt=$('#weekToday'); if(wt)wt.onclick=()=>{weekOffset=0; renderWeekStrip();};

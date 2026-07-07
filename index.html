@@ -26,7 +26,7 @@
         <div class="profile-avatar" id="topProfileAvatar">🌱</div>
         <div class="profile-meta">
           <div class="profile-title"><span id="topLevel">Lv 1</span></div>
-          <div class="profile-sub"><div class="level-bar-track"><div class="level-bar"><div class="level-fill" id="topLevelFill"></div></div><span class="level-bar-exp" id="topLevelExp"></span></div></div>
+          <div class="profile-sub"><div class="level-bar"><div class="level-fill" id="topLevelFill"></div></div></div>
         </div>
       </button>
       <div class="top-actions">
@@ -113,7 +113,7 @@
           <div class="card-head"><h3>Groups</h3><button class="btn-inline pink" id="addGroupBtn" type="button">+ Group</button></div>
           <div id="groupManager"></div>
         </div>
-        <div class="card"><div class="card-head"><h3>Habit Setup</h3><span class="chip" id="habitCountChip">0 habits</span></div><div class="habit-list" id="allHabitList"></div><button class="btn-primary" style="margin-top:12px" data-open-habit>+ Add Habit</button></div>
+        <div class="card"><div class="card-head"><h3>Habit Setup</h3><button class="btn-inline pink" id="addHabitBtn" type="button">+ Habit</button></div><div class="habit-list" id="allHabitList"></div><span class="chip" id="habitCountChip" style="margin-top:10px;display:inline-block">0 habits</span></div>
         <div class="card"><div class="card-head"><h3>Recent Habit Records</h3></div><div class="activity-log" id="recentActivityLog"></div></div>
       </section>
 
@@ -153,8 +153,8 @@
             <div class="level-eyebrow">Building identity</div>
             <div class="level-value" id="levelPageValue">Lv 1</div>
             <div class="level-identity" id="levelPageIdentity">Seed Planter</div>
-            <div class="lvl-bar"><div class="lvl-fill" id="levelPageFill"></div><span class="lvl-bar-exp" id="levelPageBarExp"></span></div>
-            <div class="level-xp" id="levelPageXp">0 EXP</div>
+            <div class="lvl-bar"><div class="lvl-fill" id="levelPageFill"></div></div>
+            <div class="level-xp" id="levelPageXp">Building identity</div>
           </div>
         </div>
         <div class="card"><div class="card-head"><h3>Identity Ladder</h3></div><div class="identity-ladder" id="identityPath"></div></div>
@@ -169,7 +169,7 @@
             <div class="field"><label>Theme</label><select id="styleThemeSelect"><option value="vivid">Vivid</option><option value="modern">Modern</option></select></div>
           </div>
         </div>
-        <div class="card"><div class="card-head"><h3>Display Name</h3><span class="chip">Greeting</span></div><div class="field"><label>Your name (optional)</label><input id="userNameInput" placeholder="e.g. Chris"></div><button class="btn-secondary" id="saveUserNameBtn" type="button" style="margin-top:8px">Save name</button></div>
+        <div class="card"><div class="card-head"><h3>Display Name</h3><span class="chip">Greeting</span></div><div class="field"><label>Your name (optional)</label><input id="userNameInput" placeholder="e.g. Chris" maxlength="12"><div class="inline-hint"><span id="userNameCount">0</span>/12 characters · shown in greeting</div></div><button class="btn-secondary" id="saveUserNameBtn" type="button" style="margin-top:8px">Save name</button></div>
         <div class="card"><div class="card-head"><h3>Profile Icon</h3><span class="chip">Personal</span></div><div class="upload-profile-box"><div class="profile-avatar" id="settingsProfileAvatar">🌱</div><div class="upload-profile-copy"><strong>Choose your avatar</strong><span>Upload a photo — it is fitted into a circle.</span><label class="upload-file-btn">Upload Photo<input type="file" id="profileIconInput" accept="image/*" hidden></label></div></div></div>
         <div class="card"><div class="card-head"><h3>App Icon</h3><span class="chip">Home screen</span></div><div class="small-note" style="margin-bottom:10px">Choose how Momentum appears on your home screen. This is separate from your profile avatar.</div><div class="app-icon-grid" id="appIconGrid"></div><label class="upload-file-btn" style="margin-top:10px;display:inline-grid">Upload Custom Icon<input type="file" id="appIconInput" accept="image/*" hidden></label></div>
         <div class="card"><div class="card-head"><h3>Pause Periods</h3></div><div class="small-note">Records are kept, but EXP, credits, gifts and penalties are paused for selected dates.</div><div id="vacationSummary" class="vacation-summary" style="margin-top:12px"></div><div class="vacation-actions"><button class="btn-secondary" id="addVacationBtn" type="button">+ Add pause period</button><button class="btn-inline pink" id="viewVacationLogBtn" type="button">View log</button></div></div>
@@ -206,11 +206,13 @@
 
     <div class="onboard-backdrop" id="onboardBackdrop" aria-hidden="true">
       <div class="onboard-card">
-        <div class="onboard-progress"><span id="onboardStepLabel">Step 1 of 6</span><div class="onboard-bar"><span id="onboardBarFill"></span></div></div>
-        <div id="onboardBody"></div>
+        <div class="onboard-head">
+          <div class="onboard-progress"><span id="onboardStepLabel">Step 1 of 6</span><div class="onboard-bar"><span id="onboardBarFill"></span></div></div>
+          <button class="onboard-close" id="onboardClose" type="button" aria-label="Skip tour">×</button>
+        </div>
+        <div class="onboard-body-wrap" id="onboardBody"></div>
         <div class="onboard-actions">
           <button class="btn-onboard btn-back" id="onboardBack" type="button">Back</button>
-          <button class="btn-onboard btn-skip" id="onboardSkip" type="button">Skip</button>
           <button class="btn-onboard btn-next" id="onboardNext" type="button">Next</button>
         </div>
       </div>
