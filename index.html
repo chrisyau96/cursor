@@ -19,14 +19,14 @@
   <div class="app-shell">
     <header class="topbar" id="topbar">
       <div class="top-greeting">
-        <h1 id="greeting">Good morning</h1>
+        <h1 id="greeting">Hi</h1>
         <span class="top-greeting-sub" id="todayEntryStamp"></span>
       </div>
       <button class="profile-pill" id="profileQuick" type="button" aria-label="Open level and EXP">
         <div class="profile-avatar" id="topProfileAvatar">🌱</div>
         <div class="profile-meta">
           <div class="profile-title"><span id="topLevel">Lv 1</span></div>
-          <div class="profile-sub"><div class="level-bar"><div class="level-fill" id="topLevelFill"></div></div></div>
+          <div class="profile-sub"><div class="level-bar-wrap"><div class="level-bar"><div class="level-fill" id="topLevelFill"></div></div><span class="level-pct" id="topLevelPct">0%</span></div></div>
         </div>
       </button>
       <div class="top-actions">
@@ -113,7 +113,7 @@
           <div class="card-head"><h3>Groups</h3><button class="btn-inline pink" id="addGroupBtn" type="button">+ Group</button></div>
           <div id="groupManager"></div>
         </div>
-        <div class="card"><div class="card-head"><h3>Habit Setup</h3><button class="btn-inline pink" id="addHabitBtn" type="button">+ Habit</button></div><div class="habit-list" id="allHabitList"></div><span class="chip" id="habitCountChip" style="margin-top:10px;display:inline-block">0 habits</span></div>
+        <div class="card"><div class="card-head"><h3>Habit Setup</h3><button class="btn-inline pink" id="addHabitBtn" type="button">+ Habit</button></div><div class="habit-list" id="allHabitList"></div></div>
         <div class="card"><div class="card-head"><h3>Recent Habit Records</h3></div><div class="activity-log" id="recentActivityLog"></div></div>
       </section>
 
@@ -169,17 +169,17 @@
             <div class="field"><label>Theme</label><select id="styleThemeSelect"><option value="vivid">Vivid</option><option value="modern">Modern</option></select></div>
           </div>
         </div>
-        <div class="card"><div class="card-head"><h3>Display Name</h3><span class="chip">Greeting</span></div><div class="field"><label>Your name (optional)</label><input id="userNameInput" placeholder="e.g. Chris" maxlength="12"><div class="inline-hint"><span id="userNameCount">0</span>/12 characters · shown in greeting</div></div><button class="btn-secondary" id="saveUserNameBtn" type="button" style="margin-top:8px">Save name</button></div>
+        <div class="card"><div class="card-head"><h3>Display Name</h3><span class="chip">Greeting</span></div><div class="field"><label>Your name (optional)</label><input id="userNameInput" placeholder="e.g. Chris" maxlength="12"><div class="inline-hint"><span id="userNameCount">0</span>/12 characters · shown in greeting</div></div><button class="btn-secondary settings-save" id="saveUserNameBtn" type="button">Save name</button></div>
         <div class="card"><div class="card-head"><h3>Profile Icon</h3><span class="chip">Personal</span></div><div class="upload-profile-box"><div class="profile-avatar" id="settingsProfileAvatar">🌱</div><div class="upload-profile-copy"><strong>Choose your avatar</strong><span>Upload a photo — it is fitted into a circle.</span><label class="upload-file-btn">Upload Photo<input type="file" id="profileIconInput" accept="image/*" hidden></label></div></div></div>
         <div class="card"><div class="card-head"><h3>App Icon</h3><span class="chip">Home screen</span></div><div class="small-note" style="margin-bottom:10px">Choose how Momentum appears on your home screen. This is separate from your profile avatar.</div><div class="app-icon-grid" id="appIconGrid"></div><label class="upload-file-btn" style="margin-top:10px;display:inline-grid">Upload Custom Icon<input type="file" id="appIconInput" accept="image/*" hidden></label></div>
         <div class="card"><div class="card-head"><h3>Pause Periods</h3></div><div class="small-note">Records are kept, but EXP, credits, gifts and penalties are paused for selected dates.</div><div id="vacationSummary" class="vacation-summary" style="margin-top:12px"></div><div class="vacation-actions"><button class="btn-secondary" id="addVacationBtn" type="button">+ Add pause period</button><button class="btn-inline pink" id="viewVacationLogBtn" type="button">View log</button></div></div>
         <div class="card"><div class="card-head"><h3>Tracker Start Date</h3><span class="date-pill" id="startDateDisplay">—</span></div><div class="field"><label>Start Date</label><input type="date" id="trackerStartDate"></div></div>
         <div class="card"><div class="card-head"><h3>Reward Rules</h3></div><div class="form-grid" id="rewardSettings"></div></div>
-        <div class="card"><div class="card-head"><h3>Penalty Rules</h3><span class="chip red">0% completion</span></div><div class="form-grid" id="penaltySettings"></div></div>
+        <div class="card"><div class="card-head"><h3>Penalty Rules</h3></div><div class="form-grid" id="penaltySettings"></div></div>
         <div class="card"><div class="card-head"><h3>Backup &amp; Sync</h3></div><div class="backup-status" id="backupStatus">No backup file connected.</div><div class="sync-grid" id="syncActionsGrid" style="margin-top:12px"></div><div class="switch-row" style="margin-top:14px"><div><strong>Auto Sync</strong><div class="small-note">Connect a JSON file in Google Drive (desktop) — Auto Sync writes every edit there.</div></div><button class="switch" id="autoSyncSwitch" aria-label="Auto sync toggle"></button></div></div>
         <div class="card"><div class="card-head"><h3>Reminders</h3></div><div class="switch-row"><div><strong>Enable Reminders</strong></div><button class="switch" id="reminderSwitch" aria-label="Reminder toggle"></button></div><div class="form-grid" id="reminderSettings" style="margin-top:12px"></div></div>
-        <div class="card"><div class="card-head"><h3>Help</h3></div><button class="btn-secondary" id="replayOnboardingBtn">Replay onboarding tour</button></div>
-        <div class="card"><div class="card-head"><h3>Data Mode</h3><span class="chip" id="dataModeChip">Demo</span></div><p class="small-note">Demo loads sample habits and 40 days of history for testing reports. Real use starts clean so you can track from today.</p><div class="segmented data-mode-tabs" id="dataModeTabs"><button type="button" data-mode="demo">Demo data</button><button type="button" data-mode="real">Real use</button></div><button class="btn-secondary" id="applyDataModeBtn" type="button" style="margin-top:10px">Apply mode</button></div>
+        <div class="card"><div class="card-head"><h3>Help</h3></div><button class="btn-secondary settings-save" id="replayOnboardingBtn">Replay onboarding tour</button></div>
+        <div class="card"><div class="card-head"><h3>Data Mode</h3><span class="chip" id="dataModeChip">Demo</span></div><p class="small-note">Demo loads sample habits and 40 days of history for testing reports. Real use starts clean so you can track from today.</p><div class="segmented data-mode-tabs" id="dataModeTabs"><button type="button" data-mode="demo">Demo data</button><button type="button" data-mode="real">Real use</button></div><button class="btn-secondary settings-save" id="applyDataModeBtn" type="button">Apply mode</button></div>
         <div class="card"><div class="card-head"><h3>Danger Zone</h3><span class="chip gray">Protected</span></div><p class="small-note">Resets to your selected data mode. Type <strong>Confirm</strong> exactly.</p><div class="field"><input id="confirmDeleteInput" placeholder="Type Confirm"></div><button class="btn-danger" id="resetAllBtn" style="margin-top:10px">Erase All Data</button></div>
       </section>
     </main>
