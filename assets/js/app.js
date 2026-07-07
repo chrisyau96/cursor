@@ -46,11 +46,11 @@
     {title:'Welcome to Momentum',body:'Build habits, reflect daily, and grow your identity. Everything stays on this device unless you connect a backup file.',view:'homeView',layout:'fullscreen',label:'👋 Let\'s take a quick tour'},
     {title:'Today\'s progress',body:'The ring shows how much of today\'s scheduled habits you\'ve completed.',view:'homeView',target:'#todayRing',placement:'below',cardAnchor:'below',label:'Completion ring'},
     {title:'Log habits here',body:'Tap +1 on each habit. Swipe a row for undo or edit.',view:'homeView',target:'#todayHabitGroups',placement:'spotlight',cardAnchor:'top',label:'Today\'s habits'},
-    {title:'Habits tab',body:'Open Habits to manage groups, schedules, EXP rewards, and order.',view:'homeView',layout:'preview',preview:'habits',label:'Habits'},
-    {title:'Quick add',body:'Tap the + button anytime to create a new habit from any screen.',view:'homeView',layout:'preview',preview:'fab',label:'Add habit'},
-    {title:'Reports',body:'Review trends, compare weeks vs months, and browse your calendar history.',view:'homeView',layout:'preview',preview:'report',label:'Report'},
-    {title:'Rewards',body:'Earn credits from daily completion and unlock gifts from streak rules.',view:'homeView',layout:'preview',preview:'rewards',label:'Rewards'},
-    {title:'Settings',body:'Set your name, reward rules, reminders, and optional backup. You\'re ready!',view:'homeView',layout:'preview',preview:'settings',label:'Settings',final:true}
+    {title:'Habits tab',body:'Manage groups, schedules, EXP rewards, and order.',view:'habitsView',target:'.tabbar .nav-item[data-view="habitsView"]',placement:'spotlight',cardAnchor:'near-bottom',highlightNav:'habitsView',label:'Habits'},
+    {title:'Quick add',body:'Tap + anytime to create a new habit without leaving your current screen.',view:'homeView',target:'#fabAdd .fab-plus',placement:'spotlight',cardAnchor:'near-bottom',highlightFab:true,spotlightRound:true,label:'Add habit'},
+    {title:'Reports',body:'Review trends, compare periods, and browse your calendar history.',view:'reportView',target:'.tabbar .nav-item[data-view="reportView"]',placement:'spotlight',cardAnchor:'near-bottom',highlightNav:'reportView',label:'Report'},
+    {title:'Rewards',body:'Earn credits and unlock gifts from your completion rules.',view:'rewardsView',target:'.tabbar .nav-item[data-view="rewardsView"]',placement:'spotlight',cardAnchor:'near-bottom',highlightNav:'rewardsView',label:'Rewards'},
+    {title:'Settings',body:'Set your name, reward rules, and optional backup. You\'re ready!',view:'homeView',target:'#topSettingsBtn',placement:'spotlight',cardAnchor:'near-bottom',highlightSettings:true,label:'Settings',final:true}
   ];
 
   const ICON_EDIT='<svg viewBox="0 0 24 24" class="ai"><path fill="currentColor" d="M3 17.25V21h3.75L17.81 9.94l-3.75-3.75L3 17.25zM20.71 7.04a1 1 0 0 0 0-1.41l-2.34-2.34a1 1 0 0 0-1.41 0l-1.83 1.83 3.75 3.75 1.83-1.83z"/></svg>';
@@ -675,71 +675,73 @@
     $('#fabAdd')?.classList.remove('onboard-highlight');
     $('#topSettingsBtn')?.classList.remove('onboard-highlight');
   }
-  function onboardPreviewHtml(type){
-    const tab=(activeIdx,markFab=false)=>{
-      const labels=['Home','Habits','+','Report','Rewards'];
-      return `<div class="onboard-mock-tabbar">${labels.map((l,i)=>`<span class="${activeIdx===i?'active':''}${l==='+'?' onboard-mock-fab':''}${l==='+'&&markFab?' fab-mark':''}">${l}</span>`).join('')}</div>`;
-    };
-    const mocks={
-      habits:`<div class="onboard-mock">${tab(1)}<div class="onboard-mock-card"><div class="onboard-mock-row"><span class="ico">🌅</span><span>Morning block</span><span class="meta">3 habits</span></div><div class="onboard-mock-habit"><span class="ico">📖</span><span>Bible Time</span><span class="pill">Daily · 5 EXP</span></div><div class="onboard-mock-habit"><span class="ico">🏃</span><span>Morning Movement</span><span class="pill">Mon–Fri</span></div></div></div>`,
-      fab:`<div class="onboard-mock">${tab(2,true)}<div class="onboard-mock-card"><div class="onboard-mock-habit"><span class="ico">📖</span><span>Today's habits</span><span class="pill">+1</span></div><div class="onboard-mock-note">The + button opens the habit editor from any tab.</div></div></div>`,
-      report:`<div class="onboard-mock"><div class="onboard-mock-card"><div class="onboard-mock-row"><span>Compare</span><span class="pill">Week · Month</span></div><div class="onboard-mock-bars"><span style="height:42%"></span><span style="height:68%"></span><span style="height:55%"></span><span style="height:80%"></span><span style="height:72%"></span><span style="height:90%"></span><span style="height:100%"></span></div><div class="onboard-mock-cal">${Array.from({length:14},(_,i)=>`<i class="${['perfect','good','partial','low','zero','good','perfect','good','partial','perfect','good','low','good','perfect'][i]}"></i>`).join('')}</div></div></div>`,
-      rewards:`<div class="onboard-mock"><div class="onboard-mock-stats"><div><span class="lbl">Credits</span><strong>HK$12</strong></div><div><span class="lbl">Gifts</span><strong>🎁 1</strong></div></div><div class="onboard-mock-card"><div class="onboard-mock-row"><span>Credit redeem</span><span class="pill orange">HK$12</span></div><div class="onboard-mock-row"><span>🍽️ Buffet goal</span><span class="pill">18/30 days</span></div></div></div>`,
-      settings:`<div class="onboard-mock"><div class="onboard-mock-card"><div class="onboard-mock-row"><span>Profile</span><span class="meta">Name & photo</span></div><div class="onboard-mock-row"><span>Reward rules</span><span class="meta">Credit & gifts</span></div><div class="onboard-mock-row"><span>Backup & sync</span><span class="meta">JSON file</span></div><div class="onboard-mock-row"><span class="gear">⚙️</span><span>Top-right gear opens Settings</span></div></div></div>`
-    };
-    return mocks[type]||'';
-  }
-  function positionOnboardCallout(step){
+  function positionOnboardCallout(step, remeasure=false){
     const shell=$('.app-shell'), card=$('#onboardCard'), spot=$('#onboardSpotlight'), bd=$('#onboardBackdrop');
     if(!shell||!card)return;
     const shellRect=shell.getBoundingClientRect();
     const cardW=Math.min(300,shellRect.width-28);
-    const isOverlay=step.layout==='fullscreen'||step.layout==='preview';
+    const tabbarH=parseInt(getComputedStyle(document.documentElement).getPropertyValue('--tabbar-h'))||62;
+    const bottomGap=14;
     bd?.classList.toggle('onboard-fullscreen',step.layout==='fullscreen');
-    bd?.classList.toggle('onboard-preview',step.layout==='preview');
-    card.classList.toggle('onboard-center',isOverlay);
-    card.classList.toggle('onboard-with-preview',!!step.preview);
-    if(isOverlay){
+    card.classList.toggle('onboard-center',step.layout==='fullscreen');
+    if(step.layout==='fullscreen'){
       if(spot){spot.hidden=true; spot.style.cssText='';}
-      card.style.top='50%'; card.style.left='50%'; card.style.width=Math.min(step.preview?320:320,shellRect.width-32)+'px'; card.style.transform='translate(-50%,-50%)';
+      card.style.top='50%'; card.style.left='50%'; card.style.width=Math.min(320,shellRect.width-32)+'px'; card.style.transform='translate(-50%,-50%)';
       return;
     }
     card.style.transform='none';
     const el=step.target?$(step.target):null;
     if(!el){if(spot)spot.hidden=true; card.classList.add('onboard-center'); card.style.top='50%'; card.style.left='50%'; card.style.width=cardW+'px'; card.style.transform='translate(-50%,-50%)'; return;}
     const rect=el.getBoundingClientRect();
-    const pad=5;
+    const pad=step.spotlightRound?3:5;
     const top=rect.top-shellRect.top-pad;
     const left=rect.left-shellRect.left-pad;
     const width=rect.width+pad*2;
     const height=rect.height+pad*2;
     if(spot){
       spot.hidden=false;
-      spot.style.top=Math.max(6,top)+'px';
-      spot.style.left=Math.max(6,left)+'px';
-      spot.style.width=Math.min(width,shellRect.width-12)+'px';
-      spot.style.height=Math.min(height,shellRect.height-12)+'px';
+      if(step.spotlightRound){
+        const size=Math.max(width,height)+4;
+        const cx=left+width/2, cy=top+height/2;
+        spot.style.borderRadius='50%';
+        spot.style.top=Math.max(6,cy-size/2)+'px';
+        spot.style.left=Math.max(6,Math.min(cx-size/2,shellRect.width-size-6))+'px';
+        spot.style.width=Math.min(size,shellRect.width-12)+'px';
+        spot.style.height=Math.min(size,shellRect.height-12)+'px';
+      }else{
+        spot.style.borderRadius=step.highlightNav?'12px':'14px';
+        spot.style.top=Math.max(6,top)+'px';
+        spot.style.left=Math.max(6,left)+'px';
+        spot.style.width=Math.min(width,shellRect.width-12)+'px';
+        spot.style.height=Math.min(height,shellRect.height-12)+'px';
+      }
     }
     const anchor=step.cardAnchor||step.placement||'below';
     let cardTop,cardLeft;
-    if(anchor==='top'){
-      cardTop=68; cardLeft=(shellRect.width-cardW)/2;
-    }else if(anchor==='above-tabbar'){
-      cardTop=shellRect.height-tabbarH-168;
+    const cardH=card.offsetHeight||170;
+    if(anchor==='near-bottom'||anchor==='above-tabbar'){
+      cardTop=shellRect.height-tabbarH-cardH-bottomGap;
       cardLeft=(shellRect.width-cardW)/2;
+    }else if(anchor==='top'){
+      cardTop=68; cardLeft=(shellRect.width-cardW)/2;
     }else if(anchor==='below-header'){
-      cardTop=Math.min(shellRect.height-180, top+height+14);
+      cardTop=Math.min(shellRect.height-tabbarH-cardH-bottomGap, top+height+14);
       cardLeft=14;
     }else if(anchor==='below'){
-      cardTop=Math.min(shellRect.height-170, top+height+12);
+      cardTop=Math.min(shellRect.height-tabbarH-cardH-bottomGap, top+height+12);
       cardLeft=Math.max(14, Math.min(left, shellRect.width-cardW-14));
     }else{
       cardTop=Math.max(68, top-150);
       cardLeft=Math.max(14, Math.min(left, shellRect.width-cardW-14));
     }
+    const maxTop=shellRect.height-tabbarH-cardH-bottomGap;
+    cardTop=Math.min(cardTop, maxTop);
     card.style.top=Math.max(12,cardTop)+'px';
     card.style.left=Math.max(14,cardLeft)+'px';
     card.style.width=cardW+'px';
+    if(!remeasure && (anchor==='near-bottom'||anchor==='above-tabbar'||anchor==='below-header')){
+      requestAnimationFrame(()=>positionOnboardCallout(step,true));
+    }
   }
   function showOnboardStep(){
     const bd=$('#onboardBackdrop'), body=$('#onboardBody'); if(!bd)return;
@@ -747,8 +749,7 @@
     $('#onboardStepLabel').textContent=`Step ${onboardStep+1} of ${ONBOARD_STEPS.length}`;
     $('#onboardBarFill').style.width=((onboardStep+1)/ONBOARD_STEPS.length*100)+'%';
     const label=step.label?`<div class="onboard-spotlight-label">${escapeHtml(step.label)}</div>`:'';
-    const preview=step.preview?onboardPreviewHtml(step.preview):'';
-    body.innerHTML=`<div class="onboard-body"><h3>${step.title}</h3><p>${step.body}</p>${preview}${label}</div>`;
+    body.innerHTML=`<div class="onboard-body"><h3>${step.title}</h3><p>${step.body}</p>${label}</div>`;
     const back=$('#onboardBack'); if(back) back.disabled=onboardStep===0;
     const next=$('#onboardNext'); if(next) next.textContent=step.final?'Get started':'Next';
     clearOnboardHighlights();
@@ -763,7 +764,7 @@
     clearOnboardHighlights();
     state.settings.onboardingComplete=true;
     localStorage.setItem(STORAGE,JSON.stringify(state));
-    $('#onboardBackdrop')?.classList.remove('show','onboard-fullscreen','onboard-preview');
+    $('#onboardBackdrop')?.classList.remove('show','onboard-fullscreen');
     $('#onboardBackdrop')?.setAttribute('aria-hidden','true');
     const spot=$('#onboardSpotlight'); if(spot) spot.hidden=true;
     celebrate('You\'re all set! 🎉');
@@ -805,9 +806,9 @@
     const gp=active?giftProgress(active):{current:0,target:0,pct:0};
     const canRedeemGift=activeAvail>0;
     const canRedeemCredit=bal>0;
-    const giftCardHtml = active ? `<div class="gift-card gift-goal compact" style="grid-column:1/-1"><div class="redeem-head"><span class="gift-title">Gift · ${escapeHtml(active.gift||'Gift')}</span><span class="chip purple">${activeAvail}</span></div><div class="field compact-field"><select id="activeGiftSelect">${goalOptions}</select></div><div class="goal-hero compact"><div class="gift-icon">${active.icon||'🎁'}</div><div class="goal-copy"><div class="gift-sub">${active.days} days at ${active.pct}%+</div><div class="progress-mini"><span style="width:${gp.pct}%"></span></div><div class="gift-sub">${gp.current}/${gp.target} days</div></div></div><button class="btn-gold btn-compact ${canRedeemGift?'redeem-ready':'redeem-locked'}" id="redeemGiftBtn" ${canRedeemGift?'':'disabled'}">${canRedeemGift?'Redeem':'Locked'}</button></div>` : `<div class="gift-empty compact" style="grid-column:1/-1">No gift goal yet. Add one in Settings → Reward Rules.</div>`;
+    const giftCardHtml = active ? `<div class="gift-card gift-goal" style="grid-column:1/-1"><div class="card-head"><h3>Gift Rewards</h3><span class="chip purple">${activeAvail} available</span></div><div class="field"><label>Pursuing</label><select id="activeGiftSelect">${goalOptions}</select></div><div class="goal-hero"><div class="gift-icon">${active.icon||'🎁'}</div><div style="flex:1;min-width:0"><div class="gift-title">${escapeHtml(active.gift||'Gift')}</div><div class="gift-sub">${active.days} days at ${active.pct}%+</div><div class="progress-mini" style="margin-top:8px"><span style="width:${gp.pct}%"></span></div><div class="gift-sub">${gp.current}/${gp.target} days</div></div></div><button class="btn-gold ${canRedeemGift?'redeem-ready':'redeem-locked'}" style="margin-top:12px" id="redeemGiftBtn" ${canRedeemGift?'':'disabled'}">${canRedeemGift?'Redeem '+escapeHtml(active.gift||'Gift'):'Not unlocked yet'}</button></div>` : `<div class="gift-empty" style="grid-column:1/-1">No gift goal yet. Add one in Settings → Reward Rules.</div>`;
 
-    $('#redeemGrid').innerHTML=`<div class="gift-card credit-spend compact" style="grid-column:1/-1"><div class="redeem-head"><span class="gift-title">Credit</span><span class="chip orange">HK$${bal}</span></div><div class="redeem-inline"><input id="creditSpendText" placeholder="Redeemed for…"><input id="creditSpendAmount" type="number" min="0" max="${bal}" step="1" value="${Math.min(10,bal)}"></div><input id="creditSpendSlider" type="range" min="0" max="${bal}" step="1" value="${Math.min(10,bal)}"><button class="btn-primary btn-compact ${canRedeemCredit?'':'btn-dim'}" id="spendCreditBtn" ${canRedeemCredit?'':'disabled'}>Redeem credit</button></div>` + giftCardHtml;
+    $('#redeemGrid').innerHTML=`<div class="gift-card credit-spend" style="grid-column:1/-1"><div class="card-head"><h3>Credit Rewards</h3><span class="chip orange">HK$${bal} available</span></div><div class="redeem-form"><div class="field"><label>Redeemed For</label><input id="creditSpendText" placeholder="e.g. headphone, game, coffee"></div><div class="field"><label>Credit Amount</label><input id="creditSpendAmount" type="number" min="0" max="${bal}" step="1" value="${Math.min(10,bal)}"><input id="creditSpendSlider" type="range" min="0" max="${bal}" step="1" value="${Math.min(10,bal)}"><div class="inline-hint">Use the number box or slider, up to your balance.</div></div><button class="btn-primary ${canRedeemCredit?'':'btn-dim'}" id="spendCreditBtn" ${canRedeemCredit?'':'disabled'}>Redeem Credit</button></div></div>` + giftCardHtml;
 
     const slider=$('#creditSpendSlider'), amount=$('#creditSpendAmount'); if(slider&&amount){slider.oninput=()=>amount.value=slider.value; amount.oninput=()=>{let v=Math.max(0,Math.min(bal,Number(amount.value||0))); amount.value=v; slider.value=v;};}
     $('#spendCreditBtn').onclick=async()=>{if(bal<=0)return; const amt=Number($('#creditSpendAmount').value); const what=$('#creditSpendText').value.trim(); if(!what){toast('Enter what you redeemed');return;} if(amt<=0){toast('Enter credit amount');return;} if(creditTotal()<amt){toast('Not enough credits');return;} state.redemptions.push({id:uid(),date:todayKey(),type:'redeemCredit',desc:'Credit spend · '+what,credit:-amt,xp:0,what}); await save(); toast('Credit redeemed')};
@@ -852,7 +853,7 @@
       const btn=document.createElement('button'); btn.type='button'; btn.className='app-icon-opt'+(state.settings.appIcon===p.id?' active':'');
       if(p.src) btn.innerHTML=`<img src="${p.src}" alt=""><span>${p.label}</span>`;
       else btn.innerHTML=`<div class="app-icon-emoji" style="background:${p.bg};display:grid;place-items:center;font-size:24px">${p.emoji}</div><span>${p.label}</span>`;
-      btn.onclick=async()=>{state.settings.appIcon=p.id; state.settings.appIconCustom=''; await save(); applyAppIcon(); renderAppIconSettings(); toast('App icon updated — re-add to home screen if needed');};
+      btn.onclick=async()=>{state.settings.appIcon=p.id; state.settings.appIconCustom=''; await save(); applyAppIcon(); renderAppIconSettings(); toast('Icon saved. Re-add to home screen if it doesn\'t update.');};
       grid.appendChild(btn);
     });
     const custom=document.createElement('button'); custom.type='button'; custom.className='app-icon-opt'+(state.settings.appIcon==='custom'?' active':'');
@@ -959,13 +960,18 @@
   }
   function renderSettings(){
     ensureRewardShape(); if(!$('#rewardSettings'))return; const r=state.settings.rewards;
-    $('#rewardSettings').innerHTML=`<div class="segmented" id="rewardTabs" style="width:max-content"><button data-tab="credit" class="${rewardActiveTab==='credit'?'active':''}">Credit</button><button data-tab="gift" class="${rewardActiveTab==='gift'?'active':''}">Gift</button></div><div id="rewardPanel" class="form-grid" style="margin-top:12px"></div>`;
+    $('#rewardSettings').innerHTML=`<div class="segmented reward-rule-tabs" id="rewardTabs"><button data-tab="credit" class="${rewardActiveTab==='credit'?'active':''}">Credit</button><button data-tab="gift" class="${rewardActiveTab==='gift'?'active':''}">Gift</button><button data-tab="penalty" class="${rewardActiveTab==='penalty'?'active':''}">Penalty</button></div><div id="rewardPanel" class="form-grid" style="margin-top:12px"></div>`;
     function drawRewardPanel(tab=rewardActiveTab){
       rewardActiveTab=tab; const p=$('#rewardPanel');
       if(tab==='credit'){
         p.innerHTML=`<div class="field"><label>Credit Rules</label><div class="small-note">Each completion level can be used once. A 100% day also earns every lower level's reward.</div></div><div id="creditRulesBox"></div><button class="btn-secondary" id="addCreditRule" type="button">+ Add Credit Rule</button>`;
         const box=$('#creditRulesBox'); box.innerHTML='';
         (r.creditRules||[]).forEach((rule,idx)=>{const div=document.createElement('div'); div.className='rule-card'; div.innerHTML=`<div class="rule-card-head"><div class="rule-card-title">Credit rule</div><span class="gift-rule-chip">HK$${rule.amount||0}</span></div><div class="rule-grid"><div class="field"><label>Completion</label><select data-pct>${[50,60,70,80,90,100].map(n=>`<option value="${n}">${n}%+</option>`).join('')}</select></div><div class="field"><label>Credit amount</label><select data-amount>${[1,2,5,10,20,30,50,100].map(n=>`<option value="${n}">HK$${n}</option>`).join('')}</select></div></div><div class="rule-actions"><button class="btn-inline red" data-remove>Remove</button></div>`; div.querySelector('[data-pct]').value=rule.pct||100; div.querySelector('[data-amount]').value=rule.amount||10; const persist=async()=>{const pct=Number(div.querySelector('[data-pct]').value); const dup=(r.creditRules||[]).some((x,i)=>i!==idx&&Number(x.pct)===pct); if(dup){toast('Duplicate completion %'); return;} rule.pct=pct; rule.amount=Number(div.querySelector('[data-amount]').value); await save();}; div.querySelector('[data-pct]').onchange=persist; div.querySelector('[data-amount]').onchange=persist; div.querySelector('[data-remove]').onclick=async()=>{r.creditRules.splice(idx,1); await save(); toast('Credit rule removed')}; box.appendChild(div);});
+      } else if(tab==='penalty'){
+        p.innerHTML=`<div class="field"><label>Penalty rules</label><div class="small-note">Charged once each time you hit consecutive 0% days.</div></div><div class="rule-card"><div class="rule-grid"><div class="field"><label>Trigger</label><select id="penaltyZeroDays">${[1,2,3,4,5,7].map(n=>`<option value="${n}">${n} missed day${n>1?'s':''} in a row</option>`).join('')}</select></div><div class="field"><label>Deduct credit</label><select id="penaltyCredit">${[0,2,5,10,20,30,50].map(n=>`<option value="${n}">HK$${n}</option>`).join('')}</select></div><div class="field"><label>Deduct EXP</label><select id="penaltyXp">${[0,10,20,30,50,100].map(n=>`<option value="${n}">${n} EXP</option>`).join('')}</select></div></div></div>`;
+        $('#penaltyZeroDays').value=r.penaltyZeroDays||2; $('#penaltyCredit').value=r.penaltyCredit||5; $('#penaltyXp').value=r.penaltyXp||20;
+        const persist=async()=>{r.penaltyZeroDays=Number($('#penaltyZeroDays').value); r.penaltyCredit=Number($('#penaltyCredit').value); r.penaltyXp=Number($('#penaltyXp').value); await save();};
+        $('#penaltyZeroDays').onchange=persist; $('#penaltyCredit').onchange=persist; $('#penaltyXp').onchange=persist;
       } else {
         p.innerHTML=`<div class="field"><label>Gift Rules</label><div class="small-note">Unlock a gift for keeping a streak. Earned gifts appear on the Gift page.</div></div><div id="giftRulesBox"></div><button class="btn-secondary" id="addGiftRule" type="button">+ Add Gift Rule</button>`;
         const box=$('#giftRulesBox'); box.innerHTML='';
@@ -975,16 +981,16 @@
     $('#rewardTabs').onclick=e=>{if(e.target.tagName!=='BUTTON')return; rewardActiveTab=e.target.dataset.tab; $$('#rewardTabs button').forEach(b=>b.classList.remove('active')); e.target.classList.add('active'); drawRewardPanel(rewardActiveTab);};
     drawRewardPanel(rewardActiveTab);
 
-    renderPenaltySettings(); renderVacationSettings(); renderSyncActions(); renderAppIconSettings(); renderDataModeSettings();
+    renderVacationSettings(); renderSyncActions(); renderAppIconSettings(); renderDataModeSettings();
 
-    $('#trackerStartDate').value=state.settings.startDate||todayKey(); $('#startDateDisplay').textContent=state.settings.startDate||todayKey(); $('#trackerStartDate').onchange=async()=>{state.settings.startDate=$('#trackerStartDate').value||todayKey(); await save(); toast('Start date updated')};
+    $('#trackerStartDate').value=state.settings.startDate||todayKey(); $('#startDateDisplay').textContent=state.settings.startDate||todayKey(); $('#trackerStartDate').onchange=async()=>{state.settings.startDate=$('#trackerStartDate').value||todayKey(); await save(); toast('Start date saved')};
     const un=$('#userNameInput'); if(un){un.value=(state.settings.userName||'').slice(0,USER_NAME_MAX); un.maxLength=USER_NAME_MAX;}
     const nameCount=$('#userNameCount'); if(nameCount) nameCount.textContent=String((un?.value||'').length);
     if(un && !un.dataset.bound){un.dataset.bound='1'; un.oninput=()=>{const c=$('#userNameCount'); if(c)c.textContent=String(un.value.length);}; un.onblur=async()=>{state.settings.userName=(un.value||'').trim().slice(0,USER_NAME_MAX); await save(); renderHome();};}
-    const cms=$('#colorModeSelect'); if(cms){cms.value=state.settings.colorMode||'system'; cms.onchange=async()=>{state.settings.colorMode=cms.value; applyAppearance(); await save(); toast('Mode updated');};}
+    const cms=$('#colorModeSelect'); if(cms){cms.value=state.settings.colorMode||'system'; cms.onchange=async()=>{state.settings.colorMode=cms.value; applyAppearance(); await save(); toast('Theme saved');};}
     renderTopProfile();
-    const upload=$('#profileIconInput'); if(upload){upload.onchange=e=>{const file=e.target.files&&e.target.files[0]; if(!file)return; const reader=new FileReader(); reader.onload=async()=>{state.settings.profileIcon=reader.result; await save(); toast('Profile icon updated')}; reader.readAsDataURL(file);};}
-    const appUpload=$('#appIconInput'); if(appUpload){appUpload.onchange=e=>{const file=e.target.files&&e.target.files[0]; if(!file)return; const reader=new FileReader(); reader.onload=async()=>{state.settings.appIcon='custom'; state.settings.appIconCustom=reader.result; await save(); applyAppIcon(); renderAppIconSettings(); toast('Custom icon saved — re-add to home screen if needed')}; reader.readAsDataURL(file);};}
+    const upload=$('#profileIconInput'); if(upload){upload.onchange=e=>{const file=e.target.files&&e.target.files[0]; if(!file)return; const reader=new FileReader(); reader.onload=async()=>{state.settings.profileIcon=reader.result; await save(); toast('Profile photo saved')}; reader.readAsDataURL(file);};}
+    const appUpload=$('#appIconInput'); if(appUpload){appUpload.onchange=e=>{const file=e.target.files&&e.target.files[0]; if(!file)return; const reader=new FileReader(); reader.onload=async()=>{state.settings.appIcon='custom'; state.settings.appIconCustom=reader.result; await save(); applyAppIcon(); renderAppIconSettings(); toast('Icon saved. Re-add to home screen if it doesn\'t update.')}; reader.readAsDataURL(file);};}
     renderBackupStatus();
     if(!fileHandle) state.settings.autoSync=false;
     $('#autoSyncSwitch').classList.toggle('on',state.settings.autoSync);
@@ -994,14 +1000,6 @@
     $('#globalReminderTime').onchange=async()=>{state.settings.globalReminderTime=$('#globalReminderTime').value; await save(); setupReminderLoop();};
     $('#defaultReminderMessage').onchange=async()=>{state.settings.defaultReminderMessage=($('#defaultReminderMessage').value||'Time for {habit}').slice(0,REMINDER_MSG_LIMIT); await save();};
   }
-  function renderPenaltySettings(){
-    ensureRewardShape(); const r=state.settings.rewards; const box=$('#penaltySettings'); if(!box)return;
-    box.innerHTML=`<div class="field"><label>Penalty rules</label><div class="small-note">Charged once each time you hit consecutive 0% days.</div></div><div class="field"><label>Trigger</label><select id="penaltyZeroDays">${[1,2,3,4,5,7].map(n=>`<option value="${n}">${n} missed day${n>1?'s':''} in a row</option>`).join('')}</select></div><div class="schedule-grid"><div class="field"><label>Deduct credit</label><select id="penaltyCredit">${[0,2,5,10,20,30,50].map(n=>`<option value="${n}">HK$${n}</option>`).join('')}</select></div><div class="field"><label>Deduct EXP</label><select id="penaltyXp">${[0,10,20,30,50,100].map(n=>`<option value="${n}">${n} EXP</option>`).join('')}</select></div></div>`;
-    $('#penaltyZeroDays').value=r.penaltyZeroDays||2; $('#penaltyCredit').value=r.penaltyCredit||5; $('#penaltyXp').value=r.penaltyXp||20;
-    const persist=async()=>{r.penaltyZeroDays=Number($('#penaltyZeroDays').value); r.penaltyCredit=Number($('#penaltyCredit').value); r.penaltyXp=Number($('#penaltyXp').value); await save();};
-    $('#penaltyZeroDays').onchange=persist; $('#penaltyCredit').onchange=persist; $('#penaltyXp').onchange=persist;
-  }
-
   /* ---------- FILE SYNC ---------- */
   async function connectFile(){if(!window.showOpenFilePicker){toast('File connection needs Chrome/Edge on desktop. Use Export/Import instead.');return;} try{[fileHandle]=await window.showOpenFilePicker({types:[{description:'JSON Backup',accept:{'application/json':['.json']}}]}); const file=await fileHandle.getFile(); const txt=await file.text(); if(txt.trim()){state=JSON.parse(txt); normalizeState();} state.settings.fileConnected=true; state.settings.autoSync=true; await save(true); updateStatus(); renderAll(); toast('File connected');}catch(e){}}
   async function createFile(){if(!window.showSaveFilePicker){toast('Create file needs Chrome/Edge on desktop. Use Export instead.');return;} try{fileHandle=await window.showSaveFilePicker({suggestedName:'habit-tracker-backup.json',types:[{description:'JSON Backup',accept:{'application/json':['.json']}}]}); state.settings.fileConnected=true; state.settings.autoSync=true; await save(); renderSettings(); toast('Backup file created');}catch(e){}}
@@ -1091,6 +1089,7 @@
       if(!pct){toast('All completion rules already used');return;}
       r.creditRules.push({id:uid(),pct,amount:pct>=100?10:2});
       await save(); toast('Credit rule added');
+      if($('#rewardSettings')) renderSettings();
       return;
     }
     const addGift=e.target.closest('#addGiftRule');
@@ -1099,6 +1098,7 @@
       r.giftRules=r.giftRules||[];
       r.giftRules.push({id:uid(),gift:'Buffet',icon:'🍽️',pct:80,days:30});
       await save(); toast('Gift rule added');
+      if($('#rewardSettings')) renderSettings();
       return;
     }
     if(!e.target.closest('.swipe-wrap')) $$('.swipe-wrap.open').forEach(w=>w.classList.remove('open'));
