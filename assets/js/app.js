@@ -129,7 +129,12 @@
     document.documentElement.setAttribute('data-style',state.settings.styleTheme||'vivid');
   }
   function applyTheme(){applyAppearance();}
-  async function save(skipSync=false){localStorage.setItem(STORAGE,JSON.stringify(state)); if(!skipSync) await autoSync(); checkCelebrations(); renderAll();}
+  async function save(skipSync=false){
+    localStorage.setItem(STORAGE,JSON.stringify(state));
+    checkCelebrations();
+    renderAll();
+    if(!skipSync) void autoSync();
+  }
   function toast(msg){const t=$('#toast'); t.textContent=msg; t.classList.add('show'); setTimeout(()=>t.classList.remove('show'),1600)}
   async function autoSync(){ updateStatus(); if(!state.settings.autoSync||!fileHandle) return; try{const w=await fileHandle.createWritable(); await w.write(JSON.stringify(state,null,2)); await w.close(); state.settings.fileConnected=true; localStorage.setItem(STORAGE,JSON.stringify(state)); updateStatus();}catch(e){toast('Backup sync needs reconnection'); state.settings.fileConnected=false; updateStatus();}}
 
@@ -227,11 +232,17 @@
     return Math.min(total, count*habitXpPerTap(habit));
   }
   function recordsXpTotal(){
-    const seen=new Set(); let total=0;
+    const keys=new Set();
     state.records.filter(r=>afterStart(r.date)).forEach(r=>{
       const h=state.habits.find(x=>x.id===r.habitId); if(!h)return;
-      const key=habitXpKey(h,parseDate(r.date)); if(seen.has(key))return;
-      seen.add(key); total+=habitPeriodXp(h,parseDate(r.date));
+      keys.add(habitXpKey(h,parseDate(r.date)));
+    });
+    let total=0;
+    keys.forEach(key=>{
+      const hid=key.split('|')[0];
+      const h=state.habits.find(x=>x.id===hid); if(!h)return;
+      const sample=state.records.find(r=>r.habitId===hid&&habitXpKey(h,parseDate(r.date))===key);
+      if(sample) total+=habitPeriodXp(h,parseDate(sample.date));
     });
     return total;
   }
@@ -315,13 +326,11 @@
     wrap.appendChild(list); return wrap;
   }
   function attachSwipeRow(wrap,habit,dateKeyStr,after){
-    let sx=0, open=false;
-    const close=()=>{open=false; wrap.classList.remove('open');};
+    let sx=0;
     wrap.addEventListener('touchstart',e=>{sx=e.touches[0].clientX;},{passive:true});
-    wrap.addEventListener('touchend',e=>{const dx=e.changedTouches[0].clientX-sx; if(dx<-40) wrap.classList.add('open'); else if(dx>40) close();},{passive:true});
-    wrap.querySelector('[data-swipe-edit]')?.addEventListener('click',e=>{e.stopPropagation(); close(); openHabitModal(habit);});
-    wrap.querySelector('[data-swipe-undo]')?.addEventListener('click',async e=>{e.stopPropagation(); close(); await undoLastTap(habit.id,dateKeyStr); after&&after();});
-    document.addEventListener('click',e=>{if(!wrap.contains(e.target)) close();});
+    wrap.addEventListener('touchend',e=>{const dx=e.changedTouches[0].clientX-sx; if(dx<-40) wrap.classList.add('open'); else if(dx>40) wrap.classList.remove('open');},{passive:true});
+    wrap.querySelector('[data-swipe-edit]')?.addEventListener('click',e=>{e.stopPropagation(); wrap.classList.remove('open'); openHabitModal(habit);});
+    wrap.querySelector('[data-swipe-undo]')?.addEventListener('click',async e=>{e.stopPropagation(); wrap.classList.remove('open'); await undoLastTap(habit.id,dateKeyStr); after&&after();});
   }
   async function undoLastTap(habitId,k){const recs=state.records.filter(r=>r.habitId===habitId&&r.date===k).sort((a,b)=>b.at.localeCompare(a.at)); if(!recs.length){toast('Nothing to undo');return;} state.records=state.records.filter(r=>r.id!==recs[0].id); await save(); toast('Undone last tap'); haptic();}
   function renderWeekStrip(){
@@ -351,13 +360,11 @@
     const actions=document.createElement('div'); actions.className='swipe-actions';
     actions.innerHTML=`<button class="swipe-act undo" data-swipe-undo type="button">Undo</button><button class="swipe-act edit" data-swipe-edit type="button">Edit</button>`;
     const row=document.createElement('div'); row.className='habit-row '+(c.done?'done':'')+(h.paused?' paused-habit':'');
-    row.innerHTML=`<div class="habit-icon" style="background:${h.color}22;color:${h.color}">${h.emoji}</div><div class="habit-main"><div class="habit-name"></div><div class="habit-meta"><span>${c.count}/${c.target}</span><span class="mini-dot"></span><span>${frequencyLabel(h)}</span></div><div class="progress-mini"><span style="width:${c.pct}%;background:${h.color}"></span></div></div><button class="check-btn ${c.done?'done':''}" ${c.done?'disabled':''} aria-label="Record ${escapeAttr(h.name)}">${c.done?'✓':'+1'}</button>${c.count?'<button class="icon-btn muted" data-reset title="Reset" aria-label="Reset habit">↺</button>':''}`;
+    row.innerHTML=`<div class="habit-icon" style="background:${h.color}22;color:${h.color}">${h.emoji}</div><div class="habit-main"><div class="habit-name"></div><div class="habit-meta"><span>${c.count}/${c.target}</span><span class="mini-dot"></span><span>${frequencyLabel(h)}</span></div><div class="progress-mini"><span style="width:${c.pct}%;background:${h.color}"></span></div></div><button type="button" class="check-btn ${c.done?'done':''}" data-habit-id="${h.id}" data-date="${k}" ${c.done?'disabled':''} aria-label="Record ${escapeAttr(h.name)}">${c.done?'✓':'+1'}</button>${c.count?'<button type="button" class="icon-btn muted" data-reset data-habit-id="'+h.id+'" data-date="'+k+'" title="Reset" aria-label="Reset habit">↺</button>':''}`;
     row.querySelector('.habit-name').textContent=h.name;
     wrap.appendChild(actions); wrap.appendChild(row);
-    const checkBtn=row.querySelector('.check-btn');
-    if(checkBtn && !c.done) checkBtn.onclick=async(e)=>{e.stopPropagation(); await addRecord(h.id,'',k); after&&after();};
     if(!c.done) row.onclick=async(e)=>{if(e.target.closest('button'))return; await addRecord(h.id,'',k); after&&after();};
-    const reset=row.querySelector('[data-reset]'); if(reset) reset.onclick=async(e)=>{e.stopPropagation(); await resetHabitForDate(h.id,k); after&&after();};
+    if(after) wrap.dataset.afterKey=k;
     attachSwipeRow(wrap,h,k,after);
     return wrap;
   }
@@ -374,7 +381,20 @@
     const g=activeGiftRule(); if(!g) return {icon:'🎁',label:'No gift goal set',pct:0};
     const gp=giftProgress(g); return {icon:g.icon||'🎁',label:`${g.gift||'Gift'} · ${gp.current}/${gp.target} days`,pct:gp.pct};
   }
-  async function addRecord(habitId,note='',date=todayKey()){const habit=state.habits.find(h=>h.id===habitId); if(!habit)return; const dt=parseDate(date); const c=completionOfHabit(habit,dt); if(c.count>=c.target){toast('Target already completed'); return;} const before=habitPeriodXp(habit,dt); const r={id:uid(),habitId,date,at:new Date().toISOString(),note}; state.records.push(r); await save(); const gained=habitPeriodXp(habit,dt)-before; if(gained>0) showXpPop('+'+fmtXp(gained)+' EXP'); haptic(); const pct=dayPct(dt); if(pct===100) celebrate('Perfect day! 🎉'); toast('Recorded');}
+  async function addRecord(habitId,note='',date=todayKey()){
+    const habit=state.habits.find(h=>h.id===habitId); if(!habit)return;
+    const dt=parseDate(date); const c=completionOfHabit(habit,dt);
+    if(c.count>=c.target){toast('Target already completed'); return;}
+    const before=habitPeriodXp(habit,dt);
+    state.records.push({id:uid(),habitId,date,at:new Date().toISOString(),note});
+    const gained=habitPeriodXp(habit,dt)-before;
+    haptic();
+    if(gained>0) showXpPop('+'+fmtXp(gained)+' EXP');
+    await save();
+    const pct=dayPct(dt);
+    if(pct===100) celebrate('Perfect day! 🎉');
+    toast(gained>0?`Recorded · +${fmtXp(gained)} EXP`:'Recorded');
+  }
   async function removeRecord(id){state.records=state.records.filter(r=>r.id!==id); await save(); toast('Record removed')}
   async function removeRedemption(id){state.redemptions=state.redemptions.filter(r=>r.id!==id); await save(); toast('Redemption removed')}
   async function resetTodayRecords(){if(!confirm('Reset all habit records for today?'))return; const k=todayKey(); state.records=state.records.filter(r=>r.date!==k); await save(); toast('Today reset')}
@@ -428,7 +448,7 @@
     el.innerHTML=`<div class="field"><label>Mood</label><div class="mood-row">${MOODS.map(m=>`<button class="mood ${j.mood===m?'active':''}" data-mood="${m}">${m}</button>`).join('')}</div></div><div class="field"><label>Energy Score</label><div class="energy-panel"><div class="range-value" id="homeEnergyValue">${j.energy}</div><div class="energy-scale"><input type="range" min="0" max="10" value="${j.energy}" id="homeEnergy"><div class="ticks">${Array.from({length:11},(_,i)=>`<span style="left:calc(10px + ${i}/10*(100% - 20px))">${i}</span>`).join('')}</div></div></div></div><div class="field journal-area"><label>Reflection</label><textarea id="homeJournalText" placeholder="What went well? What needs adjustment?">${escapeHtml(j.text)}</textarea></div><button class="btn-primary" id="saveJournalHome">Save Journal</button>`;
     $$('.mood',el).forEach(b=>b.onclick=()=>{$$('.mood',el).forEach(x=>x.classList.remove('active')); b.classList.add('active')});
     $('#homeEnergy').oninput=e=>$('#homeEnergyValue').textContent=e.target.value;
-    $('#saveJournalHome').onclick=async()=>{const mood=$('#homeJournalForm .mood.active')?.dataset.mood||''; const wasNew=!state.journals[k]; state.journals[k]={mood,energy:Number($('#homeEnergy').value),text:$('#homeJournalText').value.trim(),updatedAt:new Date().toISOString()}; await save(); if(wasNew) showXpPop('+5 EXP'); toast('Journal saved');};
+    $('#saveJournalHome').onclick=async()=>{const mood=$('#homeJournalForm .mood.active')?.dataset.mood||''; const wasNew=!state.journals[k]; state.journals[k]={mood,energy:Number($('#homeEnergy').value),text:$('#homeJournalText').value.trim(),updatedAt:new Date().toISOString()}; if(wasNew) showXpPop('+5 EXP'); await save(); toast(wasNew?'Journal saved · +5 EXP':'Journal saved');};
     const viewBtn=$('#homeJournalViewAll'); if(viewBtn) viewBtn.onclick=()=>openJournalListModal();
   }
   function openJournalListModal(){
@@ -863,7 +883,17 @@
 
   /* ---------- SHELL ---------- */
   function renderAll(){updateStatus(); applyAppearance(); applyAppIcon(); renderHome(); renderHabits(); renderReport(); renderRewards(); renderLevel(); renderSettings();}
-  function showXpPop(t){const p=document.createElement('div');p.className='xp-pop';p.textContent=t;document.body.appendChild(p);setTimeout(()=>p.remove(),1200)}
+  function showXpPop(t){
+    const shell=$('.app-shell');
+    let layer=$('#expPopLayer');
+    if(shell){
+      if(!layer){layer=document.createElement('div');layer.id='expPopLayer';shell.appendChild(layer);}
+      layer.innerHTML=`<div class="xp-pop">${escapeHtml(t)}</div>`;
+      setTimeout(()=>{if(layer)layer.innerHTML='';},1400);
+    }
+    const toastEl=$('#toast');
+    if(toastEl){toastEl.textContent=t;toastEl.classList.add('show','xp-toast');setTimeout(()=>toastEl.classList.remove('show','xp-toast'),1400);}
+  }
   let modalDragY=0;
   function openModal(title,html){$('#modalTitle').textContent=title; $('#modalBody').innerHTML=html; $('#modalBackdrop').classList.add('show'); $$('[data-close]').forEach(b=>b.onclick=closeModal); const sheet=$('#modalSheet'), handle=$('#sheetHandle'); if(handle&&sheet){let sy=0; handle.ontouchstart=e=>{sy=e.touches[0].clientY;}; handle.ontouchend=e=>{if(e.changedTouches[0].clientY-sy>80) closeModal();};}}
   function closeModal(){$('#modalBackdrop').classList.remove('show')}
@@ -882,31 +912,51 @@
   $('#onboardNext')?.addEventListener('click',()=>{if(onboardStep<ONBOARD_STEPS.length-1){onboardStep++; showOnboardStep();} else finishOnboarding();});
   $('#onboardSkipStep')?.addEventListener('click',skipOnboardStep);
   $('#replayOnboardingBtn')?.addEventListener('click',()=>{state.settings.onboardingComplete=false; onboardStep=0; renderOnboarding();});
-  $('#resetTodayBtn').onclick=resetTodayRecords;
+  $('#resetTodayBtn')?.addEventListener('click',resetTodayRecords);
   const wp=$('#weekPrev'); if(wp)wp.onclick=()=>{weekOffset--; renderWeekStrip();}; const wn=$('#weekNext'); if(wn)wn.onclick=()=>{weekOffset++; renderWeekStrip();}; const wt=$('#weekToday'); if(wt)wt.onclick=()=>{weekOffset=0; renderWeekStrip();};
   $('#rangeTabs').onclick=e=>{if(e.target.tagName!=='BUTTON')return; trendDays=Number(e.target.dataset.days); $$('#rangeTabs button').forEach(b=>b.classList.remove('active')); e.target.classList.add('active'); drawTrend();};
   {const tp=$('#trendPrev'); if(tp)tp.onclick=()=>{trendCursor.setMonth(trendCursor.getMonth()-1); drawTrend();}; const tn=$('#trendNext'); if(tn)tn.onclick=()=>{const now=hkNow(); const c=new Date(trendCursor); c.setMonth(c.getMonth()+1); if(c.getFullYear()>now.getFullYear()||(c.getFullYear()===now.getFullYear()&&c.getMonth()>now.getMonth())){toast('Already at the latest month');return;} trendCursor=c; drawTrend();};}
   $('#reportMode').onclick=e=>{if(e.target.tagName!=='BUTTON')return; reportMode=e.target.dataset.mode; $$('#reportMode button').forEach(b=>b.classList.remove('active')); e.target.classList.add('active'); renderCalendar();};
   $('#reportPrev').onclick=()=>{reportCursor.setMonth(reportCursor.getMonth()-(reportMode==='month'?1:3)); renderCalendar();}; $('#reportNext').onclick=()=>{reportCursor.setMonth(reportCursor.getMonth()+(reportMode==='month'?1:3)); renderCalendar();};
-  $('#autoSyncSwitch').onclick=async()=>{if(!fileHandle){state.settings.autoSync=false; toast('Connect a backup file first'); renderSettings(); return;} state.settings.autoSync=!state.settings.autoSync; await save();};
-  $('#reminderSwitch').onclick=toggleReminders;
+  $('#autoSyncSwitch')?.addEventListener('click',async()=>{if(!fileHandle){state.settings.autoSync=false; toast('Connect a backup file first'); renderSettings(); return;} state.settings.autoSync=!state.settings.autoSync; await save();});
+  $('#reminderSwitch')?.addEventListener('click',toggleReminders);
   $('#resetAllBtn').onclick=()=>{if($('#confirmDeleteInput').value!=='Confirm'){toast('Type Confirm first');return;} if(!confirm('Erase all Habit Tracker data? This cannot be undone.'))return; state=defaults(); localStorage.setItem(STORAGE,JSON.stringify(state)); fileHandle=null; renderAll(); toast('Data erased');};
   document.body.addEventListener('click',async e=>{
-    const t=e.target;
-    if(t.id==='addCreditRule'){
+    const check=e.target.closest('button.check-btn[data-habit-id]:not(.done):not(:disabled)');
+    if(check){
+      e.preventDefault(); e.stopPropagation();
+      const wrap=check.closest('.swipe-wrap');
+      await addRecord(check.dataset.habitId,'',check.dataset.date||todayKey());
+      if(wrap?.dataset.afterKey) openDayDetail(wrap.dataset.afterKey);
+      return;
+    }
+    const reset=e.target.closest('[data-reset][data-habit-id]');
+    if(reset){
+      e.preventDefault(); e.stopPropagation();
+      const wrap=reset.closest('.swipe-wrap');
+      await resetHabitForDate(reset.dataset.habitId,reset.dataset.date||todayKey());
+      if(wrap?.dataset.afterKey) openDayDetail(wrap.dataset.afterKey);
+      return;
+    }
+    const addCredit=e.target.closest('#addCreditRule');
+    if(addCredit){
       ensureRewardShape(); const r=state.settings.rewards;
       const used=new Set((r.creditRules||[]).map(x=>Number(x.pct)));
       const pct=[50,60,70,80,90,100].find(x=>!used.has(x));
       if(!pct){toast('All completion rules already used');return;}
       r.creditRules.push({id:uid(),pct,amount:pct>=100?10:2});
       await save(); toast('Credit rule added');
+      return;
     }
-    if(t.id==='addGiftRule'){
+    const addGift=e.target.closest('#addGiftRule');
+    if(addGift){
       ensureRewardShape(); const r=state.settings.rewards;
       r.giftRules=r.giftRules||[];
       r.giftRules.push({id:uid(),gift:'Buffet',icon:'🍽️',pct:80,days:30});
       await save(); toast('Gift rule added');
+      return;
     }
+    if(!e.target.closest('.swipe-wrap')) $$('.swipe-wrap.open').forEach(w=>w.classList.remove('open'));
   });
   $('#comparePeriodTabs')?.addEventListener('click',e=>{if(e.target.tagName!=='BUTTON')return; comparePeriod=e.target.dataset.period; $$('#comparePeriodTabs button').forEach(b=>b.classList.remove('active')); e.target.classList.add('active'); renderComparePeriods();});
   window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change',()=>{if((state.settings.colorMode||'system')==='system') applyAppearance();});
