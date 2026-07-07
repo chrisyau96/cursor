@@ -398,7 +398,7 @@
     await save();
     const pct=dayPct(dt);
     if(pct===100) celebrate('Perfect day! 🎉');
-    toast(gained>0?`Recorded · +${fmtXp(gained)} EXP`:'Recorded');
+    toast('Recorded');
   }
   async function removeRecord(id){state.records=state.records.filter(r=>r.id!==id); await save(); toast('Record removed')}
   async function removeRedemption(id){state.redemptions=state.redemptions.filter(r=>r.id!==id); await save(); toast('Redemption removed')}
@@ -453,7 +453,7 @@
     el.innerHTML=`<div class="field"><label>Mood</label><div class="mood-row">${MOODS.map(m=>`<button class="mood ${j.mood===m?'active':''}" data-mood="${m}">${m}</button>`).join('')}</div></div><div class="field"><label>Energy Score</label><div class="energy-panel"><div class="range-value" id="homeEnergyValue">${j.energy}</div><div class="energy-scale"><input type="range" min="0" max="10" value="${j.energy}" id="homeEnergy"><div class="ticks">${Array.from({length:11},(_,i)=>`<span style="left:calc(10px + ${i}/10*(100% - 20px))">${i}</span>`).join('')}</div></div></div></div><div class="field journal-area"><label>Reflection</label><textarea id="homeJournalText" placeholder="What went well? What needs adjustment?">${escapeHtml(j.text)}</textarea></div><button class="btn-primary" id="saveJournalHome">Save Journal</button>`;
     $$('.mood',el).forEach(b=>b.onclick=()=>{$$('.mood',el).forEach(x=>x.classList.remove('active')); b.classList.add('active')});
     $('#homeEnergy').oninput=e=>$('#homeEnergyValue').textContent=e.target.value;
-    $('#saveJournalHome').onclick=async()=>{const mood=$('#homeJournalForm .mood.active')?.dataset.mood||''; const wasNew=!state.journals[k]; state.journals[k]={mood,energy:Number($('#homeEnergy').value),text:$('#homeJournalText').value.trim(),updatedAt:new Date().toISOString()}; if(wasNew) showXpPop('+5 EXP'); await save(); toast(wasNew?'Journal saved · +5 EXP':'Journal saved');};
+    $('#saveJournalHome').onclick=async()=>{const mood=$('#homeJournalForm .mood.active')?.dataset.mood||''; const wasNew=!state.journals[k]; state.journals[k]={mood,energy:Number($('#homeEnergy').value),text:$('#homeJournalText').value.trim(),updatedAt:new Date().toISOString()}; if(wasNew) showXpPop('+5 EXP'); await save(); toast('Journal saved');};
     const viewBtn=$('#homeJournalViewAll'); if(viewBtn) viewBtn.onclick=()=>openJournalListModal();
   }
   function openJournalListModal(){
@@ -925,10 +925,9 @@
     if(shell){
       if(!layer){layer=document.createElement('div');layer.id='expPopLayer';shell.appendChild(layer);}
       layer.innerHTML=`<div class="xp-pop">${escapeHtml(t)}</div>`;
-      setTimeout(()=>{if(layer)layer.innerHTML='';},1400);
+      clearTimeout(showXpPop._timer);
+      showXpPop._timer=setTimeout(()=>{if(layer)layer.innerHTML='';},900);
     }
-    const toastEl=$('#toast');
-    if(toastEl){toastEl.textContent=t;toastEl.classList.add('show','xp-toast');setTimeout(()=>toastEl.classList.remove('show','xp-toast'),1400);}
   }
   let modalDragY=0;
   function openModal(title,html){$('#modalTitle').textContent=title; $('#modalBody').innerHTML=html; $('#modalBackdrop').classList.add('show'); $$('[data-close]').forEach(b=>b.onclick=closeModal); const sheet=$('#modalSheet'), handle=$('#sheetHandle'); if(handle&&sheet){let sy=0; handle.ontouchstart=e=>{sy=e.touches[0].clientY;}; handle.ontouchend=e=>{if(e.changedTouches[0].clientY-sy>80) closeModal();};}}
