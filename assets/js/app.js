@@ -42,13 +42,14 @@
   let state=load(); normalizeState();
 
   const ONBOARD_STEPS=[
-    {title:'Welcome to Momentum',body:'A private habit system for daily execution, reflection, and long-term identity. Your data stays on your device unless you choose to back it up.',view:null},
-    {title:'Set up your first habit',body:'Open Habits to create routines, assign groups, and configure schedules. You can skip this and add habits later.',view:'habitsView',action:()=>openHabitModal()},
-    {title:'Personalize appearance',body:'Choose a theme, display name, and app icon in Settings. These preferences apply across the app.',view:'settingsView'},
-    {title:'Configure rewards',body:'Define credit tiers, gift streaks, and penalty rules in Settings → Reward Rules. Defaults work well if you prefer to start simple.',view:'settingsView',scroll:'#rewardSettings'},
-    {title:'Daily workflow',body:'Log completions on Home, review trends in Report, and redeem credits or gifts in Rewards. Tap the level bar anytime to view your identity ladder.',view:'homeView'},
-    {title:'Backup (optional)',body:'On desktop Chrome or Edge, create a JSON backup file in a synced folder and enable Auto Sync. On mobile, use Export and Import as needed.',view:'settingsView',scroll:'#syncActionsGrid',final:true}
+    {title:'Welcome',body:'Momentum helps you build habits, reflect daily, and grow your identity over time.',view:'homeView',spotlight:{icon:'👋',text:'Your private tracker — data stays on this device.'}},
+    {title:'Home',body:'Log habits with +1, write your journal, and see today\'s progress at a glance.',view:'homeView',spotlight:{icon:'🏠',text:'Today\'s habits, journal, and completion ring'},nav:'homeView'},
+    {title:'Habits',body:'Create habits, set schedules, groups, and EXP rewards. Tap + to add your first one.',view:'habitsView',spotlight:{icon:'✅',text:'Habits tab · tap + to add'},nav:'habitsView'},
+    {title:'Report',body:'Review trends, compare weeks, and browse your calendar history.',view:'reportView',spotlight:{icon:'📈',text:'Charts, insights, and calendar'},nav:'reportView'},
+    {title:'Rewards',body:'Earn credits and unlock gifts from your completion rules. Redeem when you\'ve earned them.',view:'rewardsView',spotlight:{icon:'⭐',text:'Credits, gifts, and ledger'},nav:'rewardsView'},
+    {title:'Settings',body:'Set your name, theme, reward rules, and optional backup. You\'re ready to begin!',view:'settingsView',spotlight:{icon:'⚙️',text:'Appearance, rules, and data mode'},nav:'settingsView',final:true}
   ];
+  const ONBOARD_NAV=[{id:'homeView',label:'Home'},{id:'habitsView',label:'Habits'},{id:'_fab',label:'+'},{id:'reportView',label:'Report'},{id:'rewardsView',label:'Rewards'}];
 
   const ICON_EDIT='<svg viewBox="0 0 24 24" class="ai"><path fill="currentColor" d="M3 17.25V21h3.75L17.81 9.94l-3.75-3.75L3 17.25zM20.71 7.04a1 1 0 0 0 0-1.41l-2.34-2.34a1 1 0 0 0-1.41 0l-1.83 1.83 3.75 3.75 1.83-1.83z"/></svg>';
   const ICON_DEL='<svg viewBox="0 0 24 24" class="ai"><path fill="currentColor" d="M6 7h12l-1 13.1A2 2 0 0 1 16 22H8a2 2 0 0 1-2-1.9L5 7h1zm3-3h6l1 2h4v2H2V6h4l1-2z"/></svg>';
@@ -64,7 +65,10 @@
   ];
   const iconBtn=(cls,svg,title)=>{const b=document.createElement('button'); b.className='act-btn '+cls; b.innerHTML=svg; b.title=title; b.setAttribute('aria-label',title); return b;};
 
-  function defaults(){
+  function rewardDefaults(){return{creditRules:[{id:uid(),pct:50,amount:2},{id:uid(),pct:100,amount:10}],giftRules:[{id:uid(),gift:'Buffet',icon:'🍽️',pct:80,days:30}],penaltyCredit:5,penaltyXp:20,penaltyZeroDays:2};}
+  function pickSettings(overrides={}){return{autoSync:false,fileConnected:false,reminders:false,colorMode:'system',styleTheme:'vivid',globalReminderTime:'20:30',profileIcon:'',userName:'',onboardingComplete:false,statusRowOpen:false,lastExportAt:'',vacations:[],dataMode:'demo',appIcon:'default',appIconCustom:'',defaultReminderMessage:'Time for {habit}',rewards:rewardDefaults(),...overrides};}
+  function freshState(opts={}){const keep=opts.keep||{}; return{habits:[],records:[],journals:{},redemptions:[],groups:[],settings:pickSettings({dataMode:'real',startDate:todayKey(),onboardingComplete:opts.onboardingComplete??true,colorMode:keep.colorMode||'system',styleTheme:keep.styleTheme||'vivid',userName:keep.userName||'',profileIcon:keep.profileIcon||'',appIcon:keep.appIcon||'default',appIconCustom:keep.appIconCustom||''})};}
+  function demoState(opts={}){const keep=opts.keep||{};
     const habits=[
       {id:uid(),name:'Bible Time & Prayer',emoji:'📖',color:'#7c3aed',target:1,xpReward:5,frequency:{mode:'daily',days:[0,1,2,3,4,5,6]},reminder:{enabled:false,time:'07:15',message:''}},
       {id:uid(),name:'Morning Movement',emoji:'🏃',color:'#059669',target:1,xpReward:5,frequency:{mode:'daily',days:[1,2,3,4,5]},reminder:{enabled:false,time:'07:35',message:''}},
@@ -76,7 +80,6 @@
     ];
     const morningId=uid(); habits[0].groupId=morningId; habits[0].sortOrder=0; habits[1].groupId=morningId; habits[1].sortOrder=1; habits[2].groupId=morningId; habits[2].sortOrder=2;
     const groups=[{id:morningId,name:'Morning block',emoji:'🌅',color:'#ea580c',sortOrder:0}];
-    // Seed ~40 days of history so reports, streaks and rewards are meaningful.
     const startD=new Date(hkNow()); startD.setDate(startD.getDate()-40);
     const records=[]; const journals={};
     for(let d=new Date(startD); d<=hkNow(); d.setDate(d.getDate()+1)){
@@ -87,13 +90,10 @@
       });
       if(k!==todayKey() && Math.random()<0.6){ journals[k]={mood:MOODS[Math.floor(Math.random()*MOODS.length)],energy:4+Math.floor(Math.random()*7),text:'',updatedAt:new Date().toISOString()}; }
     }
-    return {
-      habits, records, journals, redemptions:[], groups:[],
-      settings:{autoSync:false,fileConnected:false,reminders:false,colorMode:'system',styleTheme:'vivid',globalReminderTime:'20:30',startDate:dateKey(startD),profileIcon:'',userName:'',onboardingComplete:false,statusRowOpen:false,lastExportAt:'',vacations:[],
-        rewards:{creditRules:[{id:uid(),pct:50,amount:2},{id:uid(),pct:100,amount:10}], giftRules:[{id:uid(),gift:'Buffet',icon:'🍽️',pct:80,days:30}], penaltyCredit:5,penaltyXp:20,penaltyZeroDays:2}
-      }
-    };
+    return{habits,records,journals,redemptions:[],groups,settings:pickSettings({dataMode:'demo',startDate:dateKey(startD),onboardingComplete:opts.onboardingComplete??false,colorMode:keep.colorMode||'system',styleTheme:keep.styleTheme||'vivid',userName:keep.userName||'',profileIcon:keep.profileIcon||'',appIcon:keep.appIcon||'default',appIconCustom:keep.appIconCustom||''})};
   }
+  function defaults(){const mode=localStorage.getItem('momentumDataMode')||'demo'; return mode==='real'?freshState({onboardingComplete:false}):demoState({onboardingComplete:false});}
+  function stateForMode(mode,opts={}){return mode==='real'?freshState(opts):demoState(opts);}
   function load(){try{const raw=localStorage.getItem(STORAGE);return raw?JSON.parse(raw):defaults()}catch(e){return defaults()}}
   function normalizeState(){
     state.settings=state.settings||{};
@@ -103,6 +103,7 @@
     if(!state.settings.styleTheme) state.settings.styleTheme='vivid';
     if(state.settings.userName===undefined) state.settings.userName='';
     if(state.settings.onboardingComplete===undefined) state.settings.onboardingComplete=state.habits.length>2;
+    if(!state.settings.dataMode) state.settings.dataMode=state.records.length>20?'demo':'real';
     if(state.settings.statusRowOpen===undefined) state.settings.statusRowOpen=false;
     if(!Array.isArray(state.settings.vacations)) state.settings.vacations=[];
     state.groups=state.groups||[];
@@ -668,19 +669,24 @@
   function celebrate(msg){if(window.matchMedia('(prefers-reduced-motion: reduce)').matches){toast(msg);return;} const layer=$('#celebrateLayer'); if(!layer)return; layer.innerHTML=''; const banner=document.createElement('div'); banner.className='celebrate-banner'; banner.textContent=msg; layer.appendChild(banner); for(let i=0;i<24;i++){const p=document.createElement('div'); p.className='confetti'; p.style.left=Math.random()*100+'%'; p.style.background=['#4f46e5','#059669','#f59e0b','#ea580c','#7c3aed'][i%5]; p.style.animationDelay=(Math.random()*.4)+'s'; layer.appendChild(p);} setTimeout(()=>{layer.innerHTML='';},1600); haptic();}
   function checkCelebrations(){const li=levelInfo(); if(li.cur.level>lastLevel){lastLevel=li.cur.level; celebrate(`Level up! ${li.cur.icon} ${li.cur.name}`);} else lastLevel=li.cur.level;}
   function renderOnboarding(){if(state.settings.onboardingComplete)return; onboardStep=0; showOnboardStep();}
+  function onboardNavHtml(active){
+    return `<div class="onboard-nav-preview">${ONBOARD_NAV.map(n=>`<span class="${n.id===active?'active':''}">${n.label}</span>`).join('')}</div>`;
+  }
   function showOnboardStep(){
     const bd=$('#onboardBackdrop'), body=$('#onboardBody'); if(!bd)return;
     const step=ONBOARD_STEPS[onboardStep];
     $('#onboardStepLabel').textContent=`Step ${onboardStep+1} of ${ONBOARD_STEPS.length}`;
     $('#onboardBarFill').style.width=((onboardStep+1)/ONBOARD_STEPS.length*100)+'%';
-    body.innerHTML=`<div class="onboard-body"><h3>${step.title}</h3><p>${step.body}</p></div>`;
-    $('#onboardNext').textContent=step.final?'Get started':(step.view?'Open & continue':'Continue');
-    $('#onboardSkipStep').textContent='Skip step';
-    if(step.view){showView(step.view); setTimeout(()=>{if(step.scroll){const el=document.querySelector(step.scroll); el?.scrollIntoView({behavior:'smooth',block:'start'});} if(step.action) step.action();},120);}
+    const spot=step.spotlight?`<div class="onboard-spotlight"><span class="onboard-spotlight-icon">${step.spotlight.icon}</span><span>${step.spotlight.text}</span></div>`:'';
+    const nav=step.nav?onboardNavHtml(step.nav):'';
+    body.innerHTML=`<div class="onboard-body"><h3>${step.title}</h3><p>${step.body}</p>${spot}${nav}</div>`;
+    const back=$('#onboardBack'); if(back){back.disabled=onboardStep===0;}
+    const next=$('#onboardNext'); if(next) next.textContent=step.final?'Get started':'Next';
+    $$('.nav-item').forEach(n=>n.classList.toggle('onboard-highlight',!!step.nav&&n.dataset.view===step.nav));
+    if(step.view){showView(step.view); const host=$('.view-host'); if(host) host.scrollTop=0;}
     bd.classList.add('show'); bd.setAttribute('aria-hidden','false');
   }
-  function skipOnboardStep(){if(onboardStep<ONBOARD_STEPS.length-1){onboardStep++; showOnboardStep();} else finishOnboarding();}
-  function finishOnboarding(){state.settings.onboardingComplete=true; localStorage.setItem(STORAGE,JSON.stringify(state)); $('#onboardBackdrop')?.classList.remove('show'); $('#onboardBackdrop')?.setAttribute('aria-hidden','true');}
+  function finishOnboarding(){$$('.nav-item').forEach(n=>n.classList.remove('onboard-highlight')); state.settings.onboardingComplete=true; localStorage.setItem(STORAGE,JSON.stringify(state)); $('#onboardBackdrop')?.classList.remove('show'); $('#onboardBackdrop')?.setAttribute('aria-hidden','true');}
   function giftProgress(rule){
     const target=Number(rule.days||30);
     const streak=streakAt(hkNow(),Number(rule.pct||80));
@@ -816,6 +822,32 @@
     });
     $('#addVacationFromLog').onclick=()=>openAddPauseModal(()=>openVacationLog());
   }
+  function renderDataModeSettings(){
+    const mode=state.settings.dataMode||'demo';
+    const chip=$('#dataModeChip'); if(chip){chip.textContent=mode==='real'?'Real use':'Demo'; chip.className='chip '+(mode==='real'?'green':'blue');}
+    $$('#dataModeTabs button').forEach(b=>b.classList.toggle('active',b.dataset.mode===mode));
+    const tabs=$('#dataModeTabs');
+    if(tabs && !tabs.dataset.bound){tabs.dataset.bound='1'; tabs.onclick=e=>{if(e.target.tagName!=='BUTTON')return; $$('#dataModeTabs button').forEach(b=>b.classList.toggle('active',b===e.target));};}
+    const apply=$('#applyDataModeBtn');
+    if(apply) apply.onclick=async()=>{
+      const selected=$('#dataModeTabs button.active')?.dataset.mode||mode;
+      if(selected===(state.settings.dataMode||'demo')){toast('Already using '+selected+' mode');return;}
+      const label=selected==='real'?'real use (clean slate)':'demo data (40 days of sample history)';
+      if(!confirm(`Replace all habits, records, and journals with ${label}? Appearance settings are kept.`))return;
+      await applyDataMode(selected);
+    };
+  }
+  async function applyDataMode(mode){
+    const keep={colorMode:state.settings.colorMode,styleTheme:state.settings.styleTheme,userName:state.settings.userName,profileIcon:state.settings.profileIcon,appIcon:state.settings.appIcon,appIconCustom:state.settings.appIconCustom};
+    localStorage.setItem('momentumDataMode',mode);
+    state=stateForMode(mode,{onboardingComplete:true,keep});
+    normalizeState();
+    fileHandle=null;
+    weekOffset=0; trendCursor=hkNow(); reportCursor=hkNow();
+    await save(true);
+    toast(mode==='real'?'Real use mode — start adding habits':'Demo data loaded');
+    renderDataModeSettings();
+  }
   function renderSettings(){
     ensureRewardShape(); if(!$('#rewardSettings'))return; const r=state.settings.rewards;
     $('#rewardSettings').innerHTML=`<div class="segmented" id="rewardTabs" style="width:max-content"><button data-tab="credit" class="${rewardActiveTab==='credit'?'active':''}">Credit</button><button data-tab="gift" class="${rewardActiveTab==='gift'?'active':''}">Gift</button></div><div id="rewardPanel" class="form-grid" style="margin-top:12px"></div>`;
@@ -834,7 +866,7 @@
     $('#rewardTabs').onclick=e=>{if(e.target.tagName!=='BUTTON')return; rewardActiveTab=e.target.dataset.tab; $$('#rewardTabs button').forEach(b=>b.classList.remove('active')); e.target.classList.add('active'); drawRewardPanel(rewardActiveTab);};
     drawRewardPanel(rewardActiveTab);
 
-    renderPenaltySettings(); renderVacationSettings(); renderSyncActions(); renderAppIconSettings();
+    renderPenaltySettings(); renderVacationSettings(); renderSyncActions(); renderAppIconSettings(); renderDataModeSettings();
 
     $('#trackerStartDate').value=state.settings.startDate||todayKey(); $('#startDateDisplay').textContent=state.settings.startDate||todayKey(); $('#trackerStartDate').onchange=async()=>{state.settings.startDate=$('#trackerStartDate').value||todayKey(); await save(); toast('Start date updated')};
     const un=$('#userNameInput'); if(un){un.value=state.settings.userName||'';}
@@ -910,7 +942,8 @@
   $('#viewVacationLogBtn')?.addEventListener('click',openVacationLog);
   $('#statusToggle')?.addEventListener('click',()=>{state.settings.statusRowOpen=!state.settings.statusRowOpen; localStorage.setItem(STORAGE,JSON.stringify(state)); updateStatus();});
   $('#onboardNext')?.addEventListener('click',()=>{if(onboardStep<ONBOARD_STEPS.length-1){onboardStep++; showOnboardStep();} else finishOnboarding();});
-  $('#onboardSkipStep')?.addEventListener('click',skipOnboardStep);
+  $('#onboardBack')?.addEventListener('click',()=>{if(onboardStep>0){onboardStep--; showOnboardStep();}});
+  $('#onboardSkip')?.addEventListener('click',finishOnboarding);
   $('#replayOnboardingBtn')?.addEventListener('click',()=>{state.settings.onboardingComplete=false; onboardStep=0; renderOnboarding();});
   $('#resetTodayBtn')?.addEventListener('click',resetTodayRecords);
   const wp=$('#weekPrev'); if(wp)wp.onclick=()=>{weekOffset--; renderWeekStrip();}; const wn=$('#weekNext'); if(wn)wn.onclick=()=>{weekOffset++; renderWeekStrip();}; const wt=$('#weekToday'); if(wt)wt.onclick=()=>{weekOffset=0; renderWeekStrip();};
@@ -920,7 +953,7 @@
   $('#reportPrev').onclick=()=>{reportCursor.setMonth(reportCursor.getMonth()-(reportMode==='month'?1:3)); renderCalendar();}; $('#reportNext').onclick=()=>{reportCursor.setMonth(reportCursor.getMonth()+(reportMode==='month'?1:3)); renderCalendar();};
   $('#autoSyncSwitch')?.addEventListener('click',async()=>{if(!fileHandle){state.settings.autoSync=false; toast('Connect a backup file first'); renderSettings(); return;} state.settings.autoSync=!state.settings.autoSync; await save();});
   $('#reminderSwitch')?.addEventListener('click',toggleReminders);
-  $('#resetAllBtn').onclick=()=>{if($('#confirmDeleteInput').value!=='Confirm'){toast('Type Confirm first');return;} if(!confirm('Erase all Habit Tracker data? This cannot be undone.'))return; state=defaults(); localStorage.setItem(STORAGE,JSON.stringify(state)); fileHandle=null; renderAll(); toast('Data erased');};
+  $('#resetAllBtn').onclick=async()=>{if($('#confirmDeleteInput').value!=='Confirm'){toast('Type Confirm first');return;} if(!confirm('Erase all data and reset to your selected data mode?'))return; const mode=state.settings.dataMode||'demo'; const keep={colorMode:state.settings.colorMode,styleTheme:state.settings.styleTheme,userName:state.settings.userName,profileIcon:state.settings.profileIcon,appIcon:state.settings.appIcon,appIconCustom:state.settings.appIconCustom}; state=stateForMode(mode,{onboardingComplete:true,keep}); fileHandle=null; localStorage.setItem(STORAGE,JSON.stringify(state)); normalizeState(); await save(true); renderAll(); toast('Data erased');};
   document.body.addEventListener('click',async e=>{
     const check=e.target.closest('button.check-btn[data-habit-id]:not(.done):not(:disabled)');
     if(check){

@@ -179,7 +179,8 @@
         <div class="card"><div class="card-head"><h3>Backup &amp; Sync</h3></div><div class="backup-status" id="backupStatus">No backup file connected.</div><div class="sync-grid" id="syncActionsGrid" style="margin-top:12px"></div><div class="switch-row" style="margin-top:14px"><div><strong>Auto Sync</strong><div class="small-note">Connect a JSON file in Google Drive (desktop) — Auto Sync writes every edit there.</div></div><button class="switch" id="autoSyncSwitch" aria-label="Auto sync toggle"></button></div></div>
         <div class="card"><div class="card-head"><h3>Reminders</h3></div><div class="switch-row"><div><strong>Enable Reminders</strong></div><button class="switch" id="reminderSwitch" aria-label="Reminder toggle"></button></div><div class="form-grid" id="reminderSettings" style="margin-top:12px"></div></div>
         <div class="card"><div class="card-head"><h3>Help</h3></div><button class="btn-secondary" id="replayOnboardingBtn">Replay onboarding tour</button></div>
-        <div class="card"><div class="card-head"><h3>Danger Zone</h3><span class="chip gray">Protected</span></div><p class="small-note">To erase all data, type <strong>Confirm</strong> exactly.</p><div class="field"><input id="confirmDeleteInput" placeholder="Type Confirm"></div><button class="btn-danger" id="resetAllBtn" style="margin-top:10px">Erase All Data</button></div>
+        <div class="card"><div class="card-head"><h3>Data Mode</h3><span class="chip" id="dataModeChip">Demo</span></div><p class="small-note">Demo loads sample habits and 40 days of history for testing reports. Real use starts clean so you can track from today.</p><div class="segmented data-mode-tabs" id="dataModeTabs"><button type="button" data-mode="demo">Demo data</button><button type="button" data-mode="real">Real use</button></div><button class="btn-secondary" id="applyDataModeBtn" type="button" style="margin-top:10px">Apply mode</button></div>
+        <div class="card"><div class="card-head"><h3>Danger Zone</h3><span class="chip gray">Protected</span></div><p class="small-note">Resets to your selected data mode. Type <strong>Confirm</strong> exactly.</p><div class="field"><input id="confirmDeleteInput" placeholder="Type Confirm"></div><button class="btn-danger" id="resetAllBtn" style="margin-top:10px">Erase All Data</button></div>
       </section>
     </main>
 
@@ -202,19 +203,23 @@
         <span>Rewards</span>
       </button>
     </nav>
+
+    <div class="onboard-backdrop" id="onboardBackdrop" aria-hidden="true">
+      <div class="onboard-card">
+        <div class="onboard-progress"><span id="onboardStepLabel">Step 1 of 6</span><div class="onboard-bar"><span id="onboardBarFill"></span></div></div>
+        <div id="onboardBody"></div>
+        <div class="onboard-actions">
+          <button class="btn-onboard btn-back" id="onboardBack" type="button">Back</button>
+          <button class="btn-onboard btn-skip" id="onboardSkip" type="button">Skip</button>
+          <button class="btn-onboard btn-next" id="onboardNext" type="button">Next</button>
+        </div>
+      </div>
+    </div>
   </div>
 
   <div class="modal-backdrop" id="modalBackdrop"><div class="modal" id="modalSheet"><div class="sheet-handle" id="sheetHandle"></div><div class="modal-head"><h3 id="modalTitle">Modal</h3><button class="close-x" id="modalClose" aria-label="Close">×</button></div><div id="modalBody"></div></div></div>
   <div class="toast" id="toast">Saved</div>
   <div class="celebrate-layer" id="celebrateLayer" aria-hidden="true"></div>
-
-  <div class="onboard-backdrop" id="onboardBackdrop" aria-hidden="true">
-    <div class="onboard-card">
-      <div class="onboard-progress"><span id="onboardStepLabel">Step 1 of 6</span><div class="onboard-bar"><span id="onboardBarFill"></span></div></div>
-      <div id="onboardBody"></div>
-      <div class="onboard-actions"><button class="btn-secondary" id="onboardSkipStep" type="button">Skip step</button><button class="btn-primary" id="onboardNext" type="button">Next</button></div>
-    </div>
-  </div>
 
   <script src="assets/js/app.js"></script>
   <script>
