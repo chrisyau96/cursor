@@ -43,14 +43,14 @@
 
   let manifestBlobUrl=null;
   const ONBOARD_STEPS=[
-    {title:'Welcome to Momentum',body:'Build habits, reflect daily, and grow your identity. Everything stays on this device unless you connect a backup file.',view:'homeView',layout:'center',label:'👋 Let\'s take a quick tour'},
-    {title:'Today\'s progress',body:'The ring shows how much of today\'s scheduled habits you\'ve completed.',view:'homeView',target:'#todayRing',placement:'below',label:'Completion ring'},
-    {title:'Log habits here',body:'Tap +1 on each habit. Swipe a row for undo or edit.',view:'homeView',target:'#todayHabitGroups',placement:'above',label:'Today\'s habits'},
-    {title:'Habits tab',body:'Manage groups, schedules, EXP rewards, and order.',view:'habitsView',target:'.tabbar .nav-item[data-view="habitsView"]',placement:'above',highlightNav:'habitsView',label:'Habits'},
-    {title:'Quick add',body:'Tap + anytime to create a new habit without leaving your current screen.',view:'homeView',target:'#fabAdd',placement:'above',highlightFab:true,label:'Add habit'},
-    {title:'Reports',body:'Review trends, compare periods, and browse your calendar history.',view:'reportView',target:'.tabbar .nav-item[data-view="reportView"]',placement:'above',highlightNav:'reportView',label:'Report'},
-    {title:'Rewards',body:'Earn credits and unlock gifts from your completion rules.',view:'rewardsView',target:'.tabbar .nav-item[data-view="rewardsView"]',placement:'above',highlightNav:'rewardsView',label:'Rewards'},
-    {title:'Settings',body:'Set your name, theme, reward rules, and optional backup. You\'re ready!',view:'homeView',target:'#topSettingsBtn',placement:'below',highlightSettings:true,label:'Settings',final:true}
+    {title:'Welcome to Momentum',body:'Build habits, reflect daily, and grow your identity. Everything stays on this device unless you connect a backup file.',view:'homeView',layout:'fullscreen',label:'👋 Let\'s take a quick tour'},
+    {title:'Today\'s progress',body:'The ring shows how much of today\'s scheduled habits you\'ve completed.',view:'homeView',target:'#todayRing',placement:'below',cardAnchor:'below',label:'Completion ring'},
+    {title:'Log habits here',body:'Tap +1 on each habit. Swipe a row for undo or edit.',view:'homeView',target:'#todayHabitGroups',placement:'spotlight',cardAnchor:'top',label:'Today\'s habits'},
+    {title:'Habits tab',body:'Manage groups, schedules, EXP rewards, and order.',view:'habitsView',target:'.tabbar .nav-item[data-view="habitsView"]',placement:'spotlight',cardAnchor:'above-tabbar',highlightNav:'habitsView',label:'Habits'},
+    {title:'Quick add',body:'Tap + anytime to create a new habit without leaving your current screen.',view:'homeView',target:'#fabAdd',placement:'spotlight',cardAnchor:'above-tabbar',highlightFab:true,label:'Add habit'},
+    {title:'Reports',body:'Review trends, compare periods, and browse your calendar history.',view:'reportView',target:'.tabbar .nav-item[data-view="reportView"]',placement:'spotlight',cardAnchor:'above-tabbar',highlightNav:'reportView',label:'Report'},
+    {title:'Rewards',body:'Earn credits and unlock gifts from your completion rules.',view:'rewardsView',target:'.tabbar .nav-item[data-view="rewardsView"]',placement:'spotlight',cardAnchor:'above-tabbar',highlightNav:'rewardsView',label:'Rewards'},
+    {title:'Settings',body:'Set your name, reward rules, and optional backup. You\'re ready!',view:'homeView',target:'#topSettingsBtn',placement:'spotlight',cardAnchor:'below-header',highlightSettings:true,label:'Settings',final:true}
   ];
 
   const ICON_EDIT='<svg viewBox="0 0 24 24" class="ai"><path fill="currentColor" d="M3 17.25V21h3.75L17.81 9.94l-3.75-3.75L3 17.25zM20.71 7.04a1 1 0 0 0 0-1.41l-2.34-2.34a1 1 0 0 0-1.41 0l-1.83 1.83 3.75 3.75 1.83-1.83z"/></svg>';
@@ -69,7 +69,7 @@
 
   const USER_NAME_MAX=12;
   function rewardDefaults(includeGifts=false){return{creditRules:[{id:uid(),pct:50,amount:2},{id:uid(),pct:100,amount:10}],giftRules:includeGifts?[{id:uid(),gift:'Buffet',icon:'🍽️',pct:80,days:30}]:[],penaltyCredit:5,penaltyXp:20,penaltyZeroDays:2};}
-  function pickSettings(overrides={}){const gifts=overrides.includeGifts===true; const {includeGifts,...rest}=overrides; return{autoSync:false,fileConnected:false,reminders:false,colorMode:'system',styleTheme:'vivid',globalReminderTime:'20:30',profileIcon:'',userName:'',onboardingComplete:false,statusRowOpen:false,lastExportAt:'',vacations:[],dataMode:'demo',appIcon:'default',appIconCustom:'',defaultReminderMessage:'Time for {habit}',rewards:rewardDefaults(gifts),...rest};}
+  function pickSettings(overrides={}){const gifts=overrides.includeGifts===true; const {includeGifts,...rest}=overrides; return{autoSync:false,fileConnected:false,reminders:false,colorMode:'system',styleTheme:'vivid',globalReminderTime:'20:30',profileIcon:'',userName:'',onboardingComplete:false,statusRowOpen:false,lastExportAt:'',vacations:[],dataMode:'real',appIcon:'default',appIconCustom:'',defaultReminderMessage:'Time for {habit}',rewards:rewardDefaults(gifts),...rest};}
   function freshState(opts={}){const keep=opts.keep||{}; return{habits:[],records:[],journals:{},redemptions:[],groups:[],settings:pickSettings({dataMode:'real',includeGifts:false,startDate:todayKey(),onboardingComplete:opts.onboardingComplete??true,colorMode:keep.colorMode||'system',styleTheme:keep.styleTheme||'vivid',userName:keep.userName||'',profileIcon:keep.profileIcon||'',appIcon:keep.appIcon||'default',appIconCustom:keep.appIconCustom||''})};}
   function demoState(opts={}){const keep=opts.keep||{};
     const habits=[
@@ -95,7 +95,7 @@
     }
     return{habits,records,journals,redemptions:[],groups,settings:pickSettings({dataMode:'demo',includeGifts:true,startDate:dateKey(startD),onboardingComplete:opts.onboardingComplete??false,colorMode:keep.colorMode||'system',styleTheme:keep.styleTheme||'vivid',userName:keep.userName||'',profileIcon:keep.profileIcon||'',appIcon:keep.appIcon||'default',appIconCustom:keep.appIconCustom||''})};
   }
-  function defaults(){const mode=localStorage.getItem('momentumDataMode')||'demo'; return mode==='real'?freshState({onboardingComplete:false}):demoState({onboardingComplete:false});}
+  function defaults(){return freshState({onboardingComplete:false});}
   function stateForMode(mode,opts={}){return mode==='real'?freshState(opts):demoState(opts);}
   function load(){try{const raw=localStorage.getItem(STORAGE);return raw?JSON.parse(raw):defaults()}catch(e){return defaults()}}
   function normalizeState(){
@@ -104,9 +104,10 @@
     if(state.settings.profileIcon===undefined) state.settings.profileIcon='';
     if(!state.settings.colorMode) state.settings.colorMode=state.settings.theme||'system';
     if(!state.settings.styleTheme) state.settings.styleTheme='vivid';
+    state.settings.styleTheme='vivid';
     if(state.settings.userName===undefined) state.settings.userName='';
     if(state.settings.onboardingComplete===undefined) state.settings.onboardingComplete=state.habits.length>2;
-    if(!state.settings.dataMode) state.settings.dataMode=state.records.length>20?'demo':'real';
+    if(!state.settings.dataMode) state.settings.dataMode='real';
     if(state.settings.statusRowOpen===undefined) state.settings.statusRowOpen=false;
     if(!Array.isArray(state.settings.vacations)) state.settings.vacations=[];
     state.groups=state.groups||[];
@@ -130,7 +131,7 @@
     const mode=state.settings.colorMode||'system';
     const dark=mode==='dark'||(mode==='system'&&window.matchMedia('(prefers-color-scheme:dark)').matches);
     document.documentElement.setAttribute('data-theme',dark?'dark':'light');
-    document.documentElement.setAttribute('data-style',state.settings.styleTheme||'vivid');
+    document.documentElement.setAttribute('data-style','vivid');
   }
   function applyTheme(){applyAppearance();}
   async function save(skipSync=false){
@@ -478,7 +479,7 @@
     box.innerHTML='';
     sortedGroups().forEach((g,gi)=>{
       const div=document.createElement('div'); div.className='group-manage-item';
-      div.innerHTML=`<button type="button" class="group-icon-btn" data-gicon title="Change icon">${g.emoji||'📋'}</button><input value="${escapeAttr(g.name)}" data-gname><div class="sort-btns"><button type="button" data-gup>↑</button><button type="button" data-gdown>↓</button></div><button class="btn-inline red" type="button" data-gdel>×</button>`;
+      div.innerHTML=`<div class="sort-btns group-sort"><button type="button" data-gup aria-label="Move up">↑</button><button type="button" data-gdown aria-label="Move down">↓</button></div><button type="button" class="group-icon-btn" data-gicon title="Change icon">${g.emoji||'📋'}</button><input value="${escapeAttr(g.name)}" data-gname aria-label="Group name"><button class="group-del-btn" type="button" data-gdel aria-label="Delete group">×</button>`;
       div.querySelector('[data-gname]').onchange=e=>{g.name=e.target.value.trim()||'Group'; save();};
       div.querySelector('[data-gicon]').onclick=()=>openGroupIconPicker(g);
       div.querySelector('[data-gup]').onclick=()=>{if(gi>0){const o=state.groups[gi-1]; g.sortOrder=(o.sortOrder||gi)-1; o.sortOrder=(g.sortOrder||gi)+1; save();}};
@@ -657,11 +658,6 @@
       const dow=now.getDay(); curEnd=now; curStart=new Date(now); curStart.setDate(now.getDate()-dow);
       prevEnd=new Date(curStart); prevEnd.setDate(prevEnd.getDate()-1); prevStart=new Date(prevEnd); prevStart.setDate(prevEnd.getDate()-6);
       curLabel='This week'; prevLabel='Last week';
-    }else if(comparePeriod==='quarter'){
-      const qi=Math.floor(now.getMonth()/3); curStart=new Date(now.getFullYear(),qi*3,1); curEnd=now;
-      prevStart=new Date(now.getFullYear(),(qi-1)*3,1); prevEnd=new Date(now.getFullYear(),qi*3,0);
-      if(qi===0){prevStart=new Date(now.getFullYear()-1,9,1); prevEnd=new Date(now.getFullYear()-1,11,31);}
-      curLabel=`Q${qi+1} ${now.getFullYear()}`; prevLabel=qi===0?`Q4 ${now.getFullYear()-1}`:`Q${qi} ${now.getFullYear()}`;
     }else{
       curStart=new Date(now.getFullYear(),now.getMonth(),1); curEnd=now;
       prevStart=new Date(now.getFullYear(),now.getMonth()-1,1); prevEnd=new Date(now.getFullYear(),now.getMonth(),0);
@@ -680,51 +676,54 @@
     $('#topSettingsBtn')?.classList.remove('onboard-highlight');
   }
   function positionOnboardCallout(step){
-    const shell=$('.app-shell'), card=$('#onboardCard'), spot=$('#onboardSpotlight');
+    const shell=$('.app-shell'), card=$('#onboardCard'), spot=$('#onboardSpotlight'), bd=$('#onboardBackdrop');
     if(!shell||!card)return;
-    card.classList.toggle('onboard-center',step.layout==='center');
-    if(step.layout==='center'||!step.target){
+    const shellRect=shell.getBoundingClientRect();
+    const cardW=Math.min(300,shellRect.width-28);
+    const tabbarH=parseInt(getComputedStyle(document.documentElement).getPropertyValue('--tabbar-h'))||62;
+    bd?.classList.toggle('onboard-fullscreen',step.layout==='fullscreen');
+    card.classList.toggle('onboard-center',step.layout==='fullscreen');
+    if(step.layout==='fullscreen'){
       if(spot){spot.hidden=true; spot.style.cssText='';}
-      card.style.cssText='';
+      card.style.top='50%'; card.style.left='50%'; card.style.width=Math.min(320,shellRect.width-32)+'px'; card.style.transform='translate(-50%,-50%)';
       return;
     }
-    const el=$(step.target);
-    if(!el){if(spot)spot.hidden=true; card.classList.add('onboard-center'); card.style.cssText=''; return;}
-    const shellRect=shell.getBoundingClientRect();
+    card.style.transform='none';
+    const el=step.target?$(step.target):null;
+    if(!el){if(spot)spot.hidden=true; card.classList.add('onboard-center'); card.style.top='50%'; card.style.left='50%'; card.style.width=cardW+'px'; card.style.transform='translate(-50%,-50%)'; return;}
     const rect=el.getBoundingClientRect();
-    const pad=6;
+    const pad=5;
     const top=rect.top-shellRect.top-pad;
     const left=rect.left-shellRect.left-pad;
     const width=rect.width+pad*2;
     const height=rect.height+pad*2;
     if(spot){
       spot.hidden=false;
-      spot.style.top=Math.max(8,top)+'px';
-      spot.style.left=Math.max(8,left)+'px';
-      spot.style.width=Math.min(width,shellRect.width-16)+'px';
-      spot.style.height=Math.min(height,shellRect.height-16)+'px';
+      spot.style.top=Math.max(6,top)+'px';
+      spot.style.left=Math.max(6,left)+'px';
+      spot.style.width=Math.min(width,shellRect.width-12)+'px';
+      spot.style.height=Math.min(height,shellRect.height-12)+'px';
     }
-    const cardW=Math.min(300,shellRect.width-28);
+    const anchor=step.cardAnchor||step.placement||'below';
     let cardTop,cardLeft;
-    const gap=12;
-    const placement=step.placement||'below';
-    if(placement==='above'){
-      cardTop=Math.max(12,top-gap-150);
-      cardLeft=Math.max(14,Math.min(left, shellRect.width-cardW-14));
-    }else if(placement==='left'){
-      cardTop=Math.max(12,top);
-      cardLeft=Math.max(14,left-gap-cardW);
-    }else if(placement==='right'){
-      cardTop=Math.max(12,top);
-      cardLeft=Math.min(shellRect.width-cardW-14,left+width+gap);
+    if(anchor==='top'){
+      cardTop=68; cardLeft=(shellRect.width-cardW)/2;
+    }else if(anchor==='above-tabbar'){
+      cardTop=shellRect.height-tabbarH-168;
+      cardLeft=(shellRect.width-cardW)/2;
+    }else if(anchor==='below-header'){
+      cardTop=Math.min(shellRect.height-180, top+height+14);
+      cardLeft=14;
+    }else if(anchor==='below'){
+      cardTop=Math.min(shellRect.height-170, top+height+12);
+      cardLeft=Math.max(14, Math.min(left, shellRect.width-cardW-14));
     }else{
-      cardTop=Math.min(shellRect.height-170,top+height+gap);
-      cardLeft=Math.max(14,Math.min(left, shellRect.width-cardW-14));
+      cardTop=Math.max(68, top-150);
+      cardLeft=Math.max(14, Math.min(left, shellRect.width-cardW-14));
     }
-    card.style.top=cardTop+'px';
-    card.style.left=cardLeft+'px';
+    card.style.top=Math.max(12,cardTop)+'px';
+    card.style.left=Math.max(14,cardLeft)+'px';
     card.style.width=cardW+'px';
-    card.style.transform='none';
   }
   function showOnboardStep(){
     const bd=$('#onboardBackdrop'), body=$('#onboardBody'); if(!bd)return;
@@ -747,9 +746,10 @@
     clearOnboardHighlights();
     state.settings.onboardingComplete=true;
     localStorage.setItem(STORAGE,JSON.stringify(state));
-    $('#onboardBackdrop')?.classList.remove('show');
+    $('#onboardBackdrop')?.classList.remove('show','onboard-fullscreen');
     $('#onboardBackdrop')?.setAttribute('aria-hidden','true');
     const spot=$('#onboardSpotlight'); if(spot) spot.hidden=true;
+    celebrate('You\'re all set! 🎉');
   }
   function giftProgress(rule){
     const target=Number(rule.days||30);
@@ -965,7 +965,6 @@
     const nameCount=$('#userNameCount'); if(nameCount) nameCount.textContent=String((un?.value||'').length);
     if(un && !un.dataset.bound){un.dataset.bound='1'; un.oninput=()=>{const c=$('#userNameCount'); if(c)c.textContent=String(un.value.length);}; un.onblur=async()=>{state.settings.userName=(un.value||'').trim().slice(0,USER_NAME_MAX); await save(); renderHome();};}
     const cms=$('#colorModeSelect'); if(cms){cms.value=state.settings.colorMode||'system'; cms.onchange=async()=>{state.settings.colorMode=cms.value; applyAppearance(); await save(); toast('Mode updated');};}
-    const sts=$('#styleThemeSelect'); if(sts){sts.value=state.settings.styleTheme||'vivid'; sts.onchange=async()=>{state.settings.styleTheme=sts.value; applyAppearance(); await save(); toast('Theme updated');};}
     renderTopProfile();
     const upload=$('#profileIconInput'); if(upload){upload.onchange=e=>{const file=e.target.files&&e.target.files[0]; if(!file)return; const reader=new FileReader(); reader.onload=async()=>{state.settings.profileIcon=reader.result; await save(); toast('Profile icon updated')}; reader.readAsDataURL(file);};}
     const appUpload=$('#appIconInput'); if(appUpload){appUpload.onchange=e=>{const file=e.target.files&&e.target.files[0]; if(!file)return; const reader=new FileReader(); reader.onload=async()=>{state.settings.appIcon='custom'; state.settings.appIconCustom=reader.result; await save(); applyAppIcon(); renderAppIconSettings(); toast('Custom icon saved — re-add to home screen if needed')}; reader.readAsDataURL(file);};}
@@ -1002,7 +1001,7 @@
     }
     await save(); setupReminderLoop();
   }
-  function setupReminderLoop(){if(reminderTimer)clearInterval(reminderTimer); if(!state.settings.reminders)return; reminderTimer=setInterval(()=>{const now=hkNow(); const hm=String(now.getHours()).padStart(2,"0")+":"+String(now.getMinutes()).padStart(2,"0"); state.habits.forEach(h=>{if(!h.reminder?.enabled||h.reminder.time!==hm||!isScheduledToday(h,now))return; const last=`${h.id}-${todayKey()}-${hm}`; if(sessionStorage.getItem(last))return; sessionStorage.setItem(last,'1'); const body=reminderBody(h); if('Notification' in window && Notification.permission==='granted') new Notification('Momentum',{body}); else toast(body);});},30000)}
+  function setupReminderLoop(){if(reminderTimer)clearInterval(reminderTimer); if(!state.settings.reminders)return; reminderTimer=setInterval(()=>{const now=hkNow(); const hm=String(now.getHours()).padStart(2,"0")+":"+String(now.getMinutes()).padStart(2,"0"); state.habits.forEach(h=>{if(!h.reminder?.enabled||h.reminder.time!==hm||!isScheduledToday(h,now)||h.paused||h.archived)return; if(completionOfHabit(h,now).done)return; const last=`${h.id}-${todayKey()}-${hm}`; if(sessionStorage.getItem(last))return; sessionStorage.setItem(last,'1'); const body=reminderBody(h); if('Notification' in window && Notification.permission==='granted') new Notification('Momentum',{body}); else toast(body);});},30000)}
 
   function exportJson(){state.settings.lastExportAt=todayKey(); localStorage.setItem(STORAGE,JSON.stringify(state)); const blob=new Blob([JSON.stringify(state,null,2)],{type:'application/json'}); const a=document.createElement('a'); a.href=URL.createObjectURL(blob); a.download='habit-tracker-backup.json'; a.click(); URL.revokeObjectURL(a.href); updateStatus();}
   function importJson(file){const r=new FileReader(); r.onload=async()=>{try{state=JSON.parse(r.result); normalizeState(); await save(true); renderAll(); toast('Imported'); if(!fileHandle) openImportConnectModal();}catch(e){toast('Invalid JSON')}}; r.readAsText(file)}
