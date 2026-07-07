@@ -41,15 +41,17 @@
   let lastLevel=1;
   let state=load(); normalizeState();
 
+  let manifestBlobUrl=null;
   const ONBOARD_STEPS=[
-    {title:'Welcome',body:'Momentum helps you build habits, reflect daily, and grow your identity over time.',view:'homeView',spotlight:{icon:'👋',text:'Your private tracker — data stays on this device.'}},
-    {title:'Home',body:'Log habits with +1, write your journal, and see today\'s progress at a glance.',view:'homeView',spotlight:{icon:'🏠',text:'Today\'s habits, journal, and completion ring'},nav:'homeView'},
-    {title:'Habits',body:'Create habits, set schedules, groups, and EXP rewards. Tap + to add your first one.',view:'habitsView',spotlight:{icon:'✅',text:'Habits tab · tap + to add'},nav:'habitsView'},
-    {title:'Report',body:'Review trends, compare weeks, and browse your calendar history.',view:'reportView',spotlight:{icon:'📈',text:'Charts, insights, and calendar'},nav:'reportView'},
-    {title:'Rewards',body:'Earn credits and unlock gifts from your completion rules. Redeem when you\'ve earned them.',view:'rewardsView',spotlight:{icon:'⭐',text:'Credits, gifts, and ledger'},nav:'rewardsView'},
-    {title:'Settings',body:'Set your name, theme, reward rules, and optional backup. You\'re ready to begin!',view:'settingsView',spotlight:{icon:'⚙️',text:'Appearance, rules, and data mode'},nav:'settingsView',final:true}
+    {title:'Welcome to Momentum',body:'Build habits, reflect daily, and grow your identity. Everything stays on this device unless you connect a backup file.',view:'homeView',layout:'center',label:'👋 Let\'s take a quick tour'},
+    {title:'Today\'s progress',body:'The ring shows how much of today\'s scheduled habits you\'ve completed.',view:'homeView',target:'#todayRing',placement:'below',label:'Completion ring'},
+    {title:'Log habits here',body:'Tap +1 on each habit. Swipe a row for undo or edit.',view:'homeView',target:'#todayHabitGroups',placement:'above',label:'Today\'s habits'},
+    {title:'Habits tab',body:'Manage groups, schedules, EXP rewards, and order.',view:'habitsView',target:'.tabbar .nav-item[data-view="habitsView"]',placement:'above',highlightNav:'habitsView',label:'Habits'},
+    {title:'Quick add',body:'Tap + anytime to create a new habit without leaving your current screen.',view:'homeView',target:'#fabAdd',placement:'above',highlightFab:true,label:'Add habit'},
+    {title:'Reports',body:'Review trends, compare periods, and browse your calendar history.',view:'reportView',target:'.tabbar .nav-item[data-view="reportView"]',placement:'above',highlightNav:'reportView',label:'Report'},
+    {title:'Rewards',body:'Earn credits and unlock gifts from your completion rules.',view:'rewardsView',target:'.tabbar .nav-item[data-view="rewardsView"]',placement:'above',highlightNav:'rewardsView',label:'Rewards'},
+    {title:'Settings',body:'Set your name, theme, reward rules, and optional backup. You\'re ready!',view:'homeView',target:'#topSettingsBtn',placement:'below',highlightSettings:true,label:'Settings',final:true}
   ];
-  const ONBOARD_NAV=[{id:'homeView',label:'Home'},{id:'habitsView',label:'Habits'},{id:'_fab',label:'+'},{id:'reportView',label:'Report'},{id:'rewardsView',label:'Rewards'}];
 
   const ICON_EDIT='<svg viewBox="0 0 24 24" class="ai"><path fill="currentColor" d="M3 17.25V21h3.75L17.81 9.94l-3.75-3.75L3 17.25zM20.71 7.04a1 1 0 0 0 0-1.41l-2.34-2.34a1 1 0 0 0-1.41 0l-1.83 1.83 3.75 3.75 1.83-1.83z"/></svg>';
   const ICON_DEL='<svg viewBox="0 0 24 24" class="ai"><path fill="currentColor" d="M6 7h12l-1 13.1A2 2 0 0 1 16 22H8a2 2 0 0 1-2-1.9L5 7h1zm3-3h6l1 2h4v2H2V6h4l1-2z"/></svg>';
@@ -292,7 +294,7 @@
   function zeroStreakAt(date){let s=0; const d=new Date(date); for(let i=0;i<366;i++){const k=dateKey(d); if(isVacationDay(k)){d.setDate(d.getDate()-1);continue;} const p=dayPct(d); if(p===0){s++; d.setDate(d.getDate()-1)} else break;} return s;}
 
   function pctClass(p){if(p>=100)return 'perfect'; if(p>=80)return 'good'; if(p>=50)return 'partial'; if(p>0)return 'low'; return 'zero';}
-  function updateStatus(){const sync=$('#syncStatus'), file=$('#fileStatus'), rem=$('#reminderStatus'); if(!sync)return; const connected=!!fileHandle; if(!connected && state.settings.autoSync){state.settings.autoSync=false; localStorage.setItem(STORAGE,JSON.stringify(state));} sync.className='status-pill '+(state.settings.autoSync&&connected?'on':''); sync.querySelector('span:last-child').textContent=(state.settings.autoSync&&connected)?'Auto Sync On':'Sync Off'; file.className='status-pill '+(connected?'on':(state.settings.fileConnected?'warn':'')); file.querySelector('span:last-child').textContent=connected?'File Connected':(state.settings.fileConnected?'Reconnect File':'No File'); rem.className='status-pill '+(state.settings.reminders?'on':''); rem.querySelector('span:last-child').textContent=state.settings.reminders?'Reminders On':'Reminders Off'; const wrap=$('#statusRowWrap'); if(wrap) wrap.classList.toggle('open',!!state.settings.statusRowOpen);}
+  function updateStatus(){const sync=$('#syncStatus'), file=$('#fileStatus'), rem=$('#reminderStatus'); if(!sync)return; const connected=!!fileHandle; if(!connected && state.settings.autoSync){state.settings.autoSync=false; localStorage.setItem(STORAGE,JSON.stringify(state));} sync.className='status-pill '+(state.settings.autoSync&&connected?'on':''); sync.querySelector('span:last-child').textContent=(state.settings.autoSync&&connected)?'Auto Sync On':'Sync Off'; file.className='status-pill '+(connected?'on':(state.settings.fileConnected?'warn':'')); file.querySelector('span:last-child').textContent=connected?'File Connected':(state.settings.fileConnected?'Reconnect File':'No File'); file.style.cursor=(!connected&&state.settings.fileConnected)?'pointer':''; rem.className='status-pill '+(state.settings.reminders?'on':''); rem.querySelector('span:last-child').textContent=state.settings.reminders?'Reminders On':'Reminders Off'; const wrap=$('#statusRowWrap'); if(wrap) wrap.classList.toggle('open',!!state.settings.statusRowOpen);}
 
   /* ---------- HOME ---------- */
   function renderHome(){
@@ -672,24 +674,83 @@
   function celebrate(msg){if(window.matchMedia('(prefers-reduced-motion: reduce)').matches){toast(msg);return;} const layer=$('#celebrateLayer'); if(!layer)return; layer.innerHTML=''; const banner=document.createElement('div'); banner.className='celebrate-banner'; banner.textContent=msg; layer.appendChild(banner); for(let i=0;i<24;i++){const p=document.createElement('div'); p.className='confetti'; p.style.left=Math.random()*100+'%'; p.style.background=['#4f46e5','#059669','#f59e0b','#ea580c','#7c3aed'][i%5]; p.style.animationDelay=(Math.random()*.4)+'s'; layer.appendChild(p);} setTimeout(()=>{layer.innerHTML='';},1600); haptic();}
   function checkCelebrations(){const li=levelInfo(); if(li.cur.level>lastLevel){lastLevel=li.cur.level; celebrate(`Level up! ${li.cur.icon} ${li.cur.name}`);} else lastLevel=li.cur.level;}
   function renderOnboarding(){if(state.settings.onboardingComplete)return; onboardStep=0; showOnboardStep();}
-  function onboardNavHtml(active){
-    return `<div class="onboard-nav-preview">${ONBOARD_NAV.map(n=>`<span class="${n.id===active?'active':''}">${n.label}</span>`).join('')}</div>`;
+  function clearOnboardHighlights(){
+    $$('.nav-item').forEach(n=>n.classList.remove('onboard-highlight'));
+    $('#fabAdd')?.classList.remove('onboard-highlight');
+    $('#topSettingsBtn')?.classList.remove('onboard-highlight');
+  }
+  function positionOnboardCallout(step){
+    const shell=$('.app-shell'), card=$('#onboardCard'), spot=$('#onboardSpotlight');
+    if(!shell||!card)return;
+    card.classList.toggle('onboard-center',step.layout==='center');
+    if(step.layout==='center'||!step.target){
+      if(spot){spot.hidden=true; spot.style.cssText='';}
+      card.style.cssText='';
+      return;
+    }
+    const el=$(step.target);
+    if(!el){if(spot)spot.hidden=true; card.classList.add('onboard-center'); card.style.cssText=''; return;}
+    const shellRect=shell.getBoundingClientRect();
+    const rect=el.getBoundingClientRect();
+    const pad=6;
+    const top=rect.top-shellRect.top-pad;
+    const left=rect.left-shellRect.left-pad;
+    const width=rect.width+pad*2;
+    const height=rect.height+pad*2;
+    if(spot){
+      spot.hidden=false;
+      spot.style.top=Math.max(8,top)+'px';
+      spot.style.left=Math.max(8,left)+'px';
+      spot.style.width=Math.min(width,shellRect.width-16)+'px';
+      spot.style.height=Math.min(height,shellRect.height-16)+'px';
+    }
+    const cardW=Math.min(300,shellRect.width-28);
+    let cardTop,cardLeft;
+    const gap=12;
+    const placement=step.placement||'below';
+    if(placement==='above'){
+      cardTop=Math.max(12,top-gap-150);
+      cardLeft=Math.max(14,Math.min(left, shellRect.width-cardW-14));
+    }else if(placement==='left'){
+      cardTop=Math.max(12,top);
+      cardLeft=Math.max(14,left-gap-cardW);
+    }else if(placement==='right'){
+      cardTop=Math.max(12,top);
+      cardLeft=Math.min(shellRect.width-cardW-14,left+width+gap);
+    }else{
+      cardTop=Math.min(shellRect.height-170,top+height+gap);
+      cardLeft=Math.max(14,Math.min(left, shellRect.width-cardW-14));
+    }
+    card.style.top=cardTop+'px';
+    card.style.left=cardLeft+'px';
+    card.style.width=cardW+'px';
+    card.style.transform='none';
   }
   function showOnboardStep(){
     const bd=$('#onboardBackdrop'), body=$('#onboardBody'); if(!bd)return;
     const step=ONBOARD_STEPS[onboardStep];
     $('#onboardStepLabel').textContent=`Step ${onboardStep+1} of ${ONBOARD_STEPS.length}`;
     $('#onboardBarFill').style.width=((onboardStep+1)/ONBOARD_STEPS.length*100)+'%';
-    const spot=step.spotlight?`<div class="onboard-spotlight"><span class="onboard-spotlight-icon">${step.spotlight.icon}</span><span>${step.spotlight.text}</span></div>`:'';
-    const nav=step.nav?onboardNavHtml(step.nav):'';
-    body.innerHTML=`<div class="onboard-body"><h3>${step.title}</h3><p>${step.body}</p>${spot}${nav}</div>`;
-    const back=$('#onboardBack'); if(back){back.disabled=onboardStep===0;}
+    const label=step.label?`<div class="onboard-spotlight-label">${escapeHtml(step.label)}</div>`:'';
+    body.innerHTML=`<div class="onboard-body"><h3>${step.title}</h3><p>${step.body}</p>${label}</div>`;
+    const back=$('#onboardBack'); if(back) back.disabled=onboardStep===0;
     const next=$('#onboardNext'); if(next) next.textContent=step.final?'Get started':'Next';
-    $$('.nav-item').forEach(n=>n.classList.toggle('onboard-highlight',!!step.nav&&n.dataset.view===step.nav));
+    clearOnboardHighlights();
+    if(step.highlightNav) $$(`.nav-item[data-view="${step.highlightNav}"]`).forEach(n=>n.classList.add('onboard-highlight'));
+    if(step.highlightFab) $('#fabAdd')?.classList.add('onboard-highlight');
+    if(step.highlightSettings) $('#topSettingsBtn')?.classList.add('onboard-highlight');
     if(step.view){showView(step.view); const host=$('.view-host'); if(host) host.scrollTop=0;}
+    requestAnimationFrame(()=>positionOnboardCallout(step));
     bd.classList.add('show'); bd.setAttribute('aria-hidden','false');
   }
-  function finishOnboarding(){$$('.nav-item').forEach(n=>n.classList.remove('onboard-highlight')); state.settings.onboardingComplete=true; localStorage.setItem(STORAGE,JSON.stringify(state)); $('#onboardBackdrop')?.classList.remove('show'); $('#onboardBackdrop')?.setAttribute('aria-hidden','true');}
+  function finishOnboarding(){
+    clearOnboardHighlights();
+    state.settings.onboardingComplete=true;
+    localStorage.setItem(STORAGE,JSON.stringify(state));
+    $('#onboardBackdrop')?.classList.remove('show');
+    $('#onboardBackdrop')?.setAttribute('aria-hidden','true');
+    const spot=$('#onboardSpotlight'); if(spot) spot.hidden=true;
+  }
   function giftProgress(rule){
     const target=Number(rule.days||30);
     const streak=streakAt(hkNow(),Number(rule.pct||80));
@@ -744,14 +805,28 @@
     const connected=!!fileHandle;
     grid.innerHTML='';
     if(connected){
-      grid.innerHTML='<button class="btn-secondary" id="disconnectFileBtn">Disconnect</button><button class="btn-secondary" id="exportBtn">Export JSON</button>';
+      grid.innerHTML='<button class="btn-secondary" id="exportBtn" type="button">Export a copy</button><button class="btn-inline gray" id="disconnectFileBtn" type="button">Disconnect file</button>';
       $('#disconnectFileBtn').onclick=async()=>{fileHandle=null; state.settings.fileConnected=false; state.settings.autoSync=false; await save(true); updateStatus(); renderSettings(); toast('Disconnected');};
       $('#exportBtn').onclick=exportJson;
     }else{
-      grid.innerHTML='<button class="btn-secondary" id="createFileBtn">Create New File</button><label class="btn-secondary" style="text-align:center;cursor:pointer;display:grid;place-items:center" id="importLabel">Import JSON<input type="file" id="importInput" accept="application/json" hidden></label>';
+      grid.innerHTML='<button class="btn-primary" id="createFileBtn" type="button">Create backup file</button><button class="btn-secondary" id="connectFileBtn" type="button">Connect existing file</button><label class="btn-secondary sync-import-label" id="importLabel">Import JSON<input type="file" id="importInput" accept="application/json" hidden></label>';
       $('#createFileBtn').onclick=createFile;
+      $('#connectFileBtn').onclick=connectFile;
       $('#importInput').onchange=e=>e.target.files[0]&&importJson(e.target.files[0]);
     }
+  }
+  function renderBackupStatus(){
+    const box=$('#backupStatus'); if(!box)return;
+    const connected=!!fileHandle;
+    box.className='sync-status-panel'+(connected?' connected':state.settings.fileConnected?' warn':'');
+    if(connected) box.innerHTML='<strong>Connected</strong><br>Edits sync to your backup file when auto sync is on.';
+    else if(state.settings.fileConnected) box.innerHTML='<strong>Reconnect needed</strong><br>Your previous backup was on another session. Connect the same JSON file to resume syncing.';
+    else box.innerHTML='<strong>Not connected</strong><br>Create or connect a JSON backup file, or import an existing backup to load data.';
+  }
+  function openImportConnectModal(){
+    if(!window.showOpenFilePicker){toast('Connect file needs Chrome/Edge on desktop');return;}
+    openModal('Keep syncing?',`<p class="sheet-text">Your data is loaded. Connect the backup file on this device so future edits sync automatically.</p><div class="modal-actions"><button class="btn-secondary" data-close>Not now</button><button class="btn-primary" id="connectAfterImportBtn">Connect file</button></div>`);
+    $('#connectAfterImportBtn').onclick=async()=>{closeModal(); await connectFile();};
   }
   function renderAppIconSettings(){
     const grid=$('#appIconGrid'); if(!grid)return;
@@ -760,7 +835,7 @@
       const btn=document.createElement('button'); btn.type='button'; btn.className='app-icon-opt'+(state.settings.appIcon===p.id?' active':'');
       if(p.src) btn.innerHTML=`<img src="${p.src}" alt=""><span>${p.label}</span>`;
       else btn.innerHTML=`<div class="app-icon-emoji" style="background:${p.bg};display:grid;place-items:center;font-size:24px">${p.emoji}</div><span>${p.label}</span>`;
-      btn.onclick=async()=>{state.settings.appIcon=p.id; state.settings.appIconCustom=''; await save(); applyAppIcon(); renderAppIconSettings(); toast('App icon updated');};
+      btn.onclick=async()=>{state.settings.appIcon=p.id; state.settings.appIconCustom=''; await save(); applyAppIcon(); renderAppIconSettings(); toast('App icon updated — re-add to home screen if needed');};
       grid.appendChild(btn);
     });
     const custom=document.createElement('button'); custom.type='button'; custom.className='app-icon-opt'+(state.settings.appIcon==='custom'?' active':'');
@@ -768,9 +843,8 @@
     custom.onclick=()=>$('#appIconInput')?.click();
     grid.appendChild(custom);
   }
-  function applyAppIcon(){
-    const fav=$('#appFavicon'), fav192=$('#appFavicon192'), apple=$('#appAppleIcon');
-    let href='assets/icon.svg';
+  function getAppIconHref(){
+    let href='assets/icon-192.png';
     if(state.settings.appIcon==='custom' && state.settings.appIconCustom) href=state.settings.appIconCustom;
     else {
       const preset=APP_ICON_PRESETS.find(p=>p.id===state.settings.appIcon)||APP_ICON_PRESETS[0];
@@ -781,9 +855,25 @@
         href=c.toDataURL('image/png');
       }
     }
-    if(fav) fav.href=href;
-    if(fav192) fav192.href=href;
-    if(apple) apple.href=href;
+    return href;
+  }
+  function updateDynamicManifest(iconHref){
+    const manifestLink=document.querySelector('link[rel="manifest"]'); if(!manifestLink)return;
+    const iconType=iconHref.startsWith('data:')?'image/png':'image/png';
+    const manifest={name:'Momentum · Habit Tracker',short_name:'Momentum',description:'Build habits, journal your mood, and track trends — with rewards and local file sync.',start_url:'.',scope:'.',display:'standalone',orientation:'portrait',background_color:'#f4f6fb',theme_color:'#4f46e5',icons:[
+      {src:iconHref,sizes:'192x192',type:iconType,purpose:'any'},
+      {src:iconHref,sizes:'512x512',type:iconType,purpose:'any'},
+      {src:iconHref,sizes:'512x512',type:iconType,purpose:'maskable'}
+    ]};
+    if(manifestBlobUrl) URL.revokeObjectURL(manifestBlobUrl);
+    manifestBlobUrl=URL.createObjectURL(new Blob([JSON.stringify(manifest)],{type:'application/json'}));
+    manifestLink.href=manifestBlobUrl;
+  }
+  function applyAppIcon(){
+    const href=getAppIconHref();
+    const cacheBust=href.startsWith('data:')?href:`${href}${href.includes('?')?'&':'?'}v=${encodeURIComponent(state.settings.appIcon||'default')}`;
+    ['#appFavicon','#appFavicon192','#appAppleIcon'].forEach(sel=>{const el=$(sel); if(el) el.href=cacheBust;});
+    updateDynamicManifest(href);
   }
   function renderVacationSettings(){
     const box=$('#vacationSummary'); if(!box)return;
@@ -858,11 +948,11 @@
       if(tab==='credit'){
         p.innerHTML=`<div class="field"><label>Credit Rules</label><div class="small-note">Each completion level can be used once. A 100% day also earns every lower level's reward.</div></div><div id="creditRulesBox"></div><button class="btn-secondary" id="addCreditRule" type="button">+ Add Credit Rule</button>`;
         const box=$('#creditRulesBox'); box.innerHTML='';
-        (r.creditRules||[]).forEach((rule,idx)=>{const div=document.createElement('div'); div.className='rule-card'; div.innerHTML=`<div class="rule-card-head"><div class="rule-card-title">Credit Rule</div><span class="gift-rule-chip">HK$${rule.amount||0}</span></div><div class="rule-grid"><div class="field"><label>Completion</label><select data-pct>${[50,60,70,80,90,100].map(n=>`<option value="${n}">${n}%+</option>`).join('')}</select></div><div class="field"><label>Credit Amount</label><select data-amount>${[1,2,5,10,20,30,50,100].map(n=>`<option value="${n}">HK$${n}</option>`).join('')}</select></div></div><div class="rule-actions"><button class="btn-secondary" data-save>Save</button><button class="btn-inline red" data-remove>Remove</button></div>`; div.querySelector('[data-pct]').value=rule.pct||100; div.querySelector('[data-amount]').value=rule.amount||10; div.querySelector('[data-save]').onclick=async()=>{const pct=Number(div.querySelector('[data-pct]').value); const dup=(r.creditRules||[]).some((x,i)=>i!==idx&&Number(x.pct)===pct); if(dup){toast('Duplicate completion %');return;} rule.pct=pct; rule.amount=Number(div.querySelector('[data-amount]').value); await save(); toast('Credit rule saved')}; div.querySelector('[data-remove]').onclick=async()=>{r.creditRules.splice(idx,1); await save(); toast('Credit rule removed')}; box.appendChild(div);});
+        (r.creditRules||[]).forEach((rule,idx)=>{const div=document.createElement('div'); div.className='rule-card'; div.innerHTML=`<div class="rule-card-head"><div class="rule-card-title">Credit rule</div><span class="gift-rule-chip">HK$${rule.amount||0}</span></div><div class="rule-grid"><div class="field"><label>Completion</label><select data-pct>${[50,60,70,80,90,100].map(n=>`<option value="${n}">${n}%+</option>`).join('')}</select></div><div class="field"><label>Credit amount</label><select data-amount>${[1,2,5,10,20,30,50,100].map(n=>`<option value="${n}">HK$${n}</option>`).join('')}</select></div></div><div class="rule-actions"><button class="btn-inline red" data-remove>Remove</button></div>`; div.querySelector('[data-pct]').value=rule.pct||100; div.querySelector('[data-amount]').value=rule.amount||10; const persist=async()=>{const pct=Number(div.querySelector('[data-pct]').value); const dup=(r.creditRules||[]).some((x,i)=>i!==idx&&Number(x.pct)===pct); if(dup){toast('Duplicate completion %'); return;} rule.pct=pct; rule.amount=Number(div.querySelector('[data-amount]').value); await save();}; div.querySelector('[data-pct]').onchange=persist; div.querySelector('[data-amount]').onchange=persist; div.querySelector('[data-remove]').onclick=async()=>{r.creditRules.splice(idx,1); await save(); toast('Credit rule removed')}; box.appendChild(div);});
       } else {
         p.innerHTML=`<div class="field"><label>Gift Rules</label><div class="small-note">Unlock a gift for keeping a streak. Earned gifts appear on the Gift page.</div></div><div id="giftRulesBox"></div><button class="btn-secondary" id="addGiftRule" type="button">+ Add Gift Rule</button>`;
         const box=$('#giftRulesBox'); box.innerHTML='';
-        (r.giftRules||[]).forEach((g,idx)=>{const div=document.createElement('div'); div.className='rule-card'; div.innerHTML=`<div class="rule-card-head"><div class="rule-card-title">Gift Rule</div><span class="gift-rule-chip">${g.icon||'🎁'} ${escapeHtml(g.gift||'Gift')}</span></div><div class="rule-grid"><div class="schedule-grid"><div class="field"><label>Icon</label><input data-icon value="${escapeAttr(g.icon||'🎁')}" maxlength="4" placeholder="🍽️"></div><div class="field"><label>Gift Name</label><input data-gift value="${escapeAttr(g.gift||'Buffet')}" placeholder="Buffet"></div></div><div class="schedule-grid"><div class="field"><label>Completion</label><select data-pct>${[50,60,70,80,90,100].map(n=>`<option value="${n}">${n}%+</option>`).join('')}</select></div><div class="field"><label>Consecutive Days</label><select data-days>${[7,14,21,30,45,60,90,120].map(n=>`<option value="${n}">${n} days</option>`).join('')}</select></div></div></div><div class="rule-actions"><button class="btn-secondary" data-save>Save</button><button class="btn-inline red" data-remove>Remove</button></div>`; div.querySelector('[data-pct]').value=g.pct||80; div.querySelector('[data-days]').value=g.days||30; div.querySelector('[data-save]').onclick=async()=>{g.icon=div.querySelector('[data-icon]').value.trim()||'🎁'; g.gift=div.querySelector('[data-gift]').value.trim()||'Gift'; g.pct=Number(div.querySelector('[data-pct]').value); g.days=Number(div.querySelector('[data-days]').value); await save(); toast('Gift rule saved')}; div.querySelector('[data-remove]').onclick=async()=>{r.giftRules.splice(idx,1); await save(); toast('Gift rule removed')}; box.appendChild(div);});
+        (r.giftRules||[]).forEach((g,idx)=>{const div=document.createElement('div'); div.className='rule-card'; div.innerHTML=`<div class="rule-card-head"><div class="rule-card-title">Gift rule</div><span class="gift-rule-chip">${g.icon||'🎁'} ${escapeHtml(g.gift||'Gift')}</span></div><div class="rule-grid"><div class="schedule-grid"><div class="field"><label>Icon</label><input data-icon value="${escapeAttr(g.icon||'🎁')}" maxlength="4" placeholder="🍽️"></div><div class="field"><label>Gift name</label><input data-gift value="${escapeAttr(g.gift||'Buffet')}" placeholder="Buffet"></div></div><div class="schedule-grid"><div class="field"><label>Completion</label><select data-pct>${[50,60,70,80,90,100].map(n=>`<option value="${n}">${n}%+</option>`).join('')}</select></div><div class="field"><label>Consecutive days</label><select data-days>${[7,14,21,30,45,60,90,120].map(n=>`<option value="${n}">${n} days</option>`).join('')}</select></div></div></div><div class="rule-actions"><button class="btn-inline red" data-remove>Remove</button></div>`; div.querySelector('[data-pct]').value=g.pct||80; div.querySelector('[data-days]').value=g.days||30; const persist=async()=>{g.icon=div.querySelector('[data-icon]').value.trim()||'🎁'; g.gift=div.querySelector('[data-gift]').value.trim()||'Gift'; g.pct=Number(div.querySelector('[data-pct]').value); g.days=Number(div.querySelector('[data-days]').value); await save();}; div.querySelector('[data-icon]').onchange=persist; div.querySelector('[data-gift]').onchange=persist; div.querySelector('[data-pct]').onchange=persist; div.querySelector('[data-days]').onchange=persist; div.querySelector('[data-remove]').onclick=async()=>{r.giftRules.splice(idx,1); await save(); toast('Gift rule removed')}; box.appendChild(div);});
       }
     }
     $('#rewardTabs').onclick=e=>{if(e.target.tagName!=='BUTTON')return; rewardActiveTab=e.target.dataset.tab; $$('#rewardTabs button').forEach(b=>b.classList.remove('active')); e.target.classList.add('active'); drawRewardPanel(rewardActiveTab);};
@@ -873,14 +963,13 @@
     $('#trackerStartDate').value=state.settings.startDate||todayKey(); $('#startDateDisplay').textContent=state.settings.startDate||todayKey(); $('#trackerStartDate').onchange=async()=>{state.settings.startDate=$('#trackerStartDate').value||todayKey(); await save(); toast('Start date updated')};
     const un=$('#userNameInput'); if(un){un.value=(state.settings.userName||'').slice(0,USER_NAME_MAX); un.maxLength=USER_NAME_MAX;}
     const nameCount=$('#userNameCount'); if(nameCount) nameCount.textContent=String((un?.value||'').length);
-    if(un && !un.dataset.bound){un.dataset.bound='1'; un.oninput=()=>{const c=$('#userNameCount'); if(c)c.textContent=String(un.value.length);};}
-    const saveName=$('#saveUserNameBtn'); if(saveName) saveName.onclick=async()=>{state.settings.userName=(un?.value||'').trim().slice(0,USER_NAME_MAX); await save(); toast('Name saved'); renderHome();};
+    if(un && !un.dataset.bound){un.dataset.bound='1'; un.oninput=()=>{const c=$('#userNameCount'); if(c)c.textContent=String(un.value.length);}; un.onblur=async()=>{state.settings.userName=(un.value||'').trim().slice(0,USER_NAME_MAX); await save(); renderHome();};}
     const cms=$('#colorModeSelect'); if(cms){cms.value=state.settings.colorMode||'system'; cms.onchange=async()=>{state.settings.colorMode=cms.value; applyAppearance(); await save(); toast('Mode updated');};}
     const sts=$('#styleThemeSelect'); if(sts){sts.value=state.settings.styleTheme||'vivid'; sts.onchange=async()=>{state.settings.styleTheme=sts.value; applyAppearance(); await save(); toast('Theme updated');};}
     renderTopProfile();
     const upload=$('#profileIconInput'); if(upload){upload.onchange=e=>{const file=e.target.files&&e.target.files[0]; if(!file)return; const reader=new FileReader(); reader.onload=async()=>{state.settings.profileIcon=reader.result; await save(); toast('Profile icon updated')}; reader.readAsDataURL(file);};}
-    const appUpload=$('#appIconInput'); if(appUpload){appUpload.onchange=e=>{const file=e.target.files&&e.target.files[0]; if(!file)return; const reader=new FileReader(); reader.onload=async()=>{state.settings.appIcon='custom'; state.settings.appIconCustom=reader.result; await save(); applyAppIcon(); renderAppIconSettings(); toast('Custom app icon saved')}; reader.readAsDataURL(file);};}
-    $('#backupStatus').textContent=fileHandle?'Backup file connected. Edits sync to your JSON file when Auto Sync is on.':(state.settings.fileConnected?'Previous backup found — create or import a file to reconnect.':'No backup file connected. Create a new file or import an existing backup.');
+    const appUpload=$('#appIconInput'); if(appUpload){appUpload.onchange=e=>{const file=e.target.files&&e.target.files[0]; if(!file)return; const reader=new FileReader(); reader.onload=async()=>{state.settings.appIcon='custom'; state.settings.appIconCustom=reader.result; await save(); applyAppIcon(); renderAppIconSettings(); toast('Custom icon saved — re-add to home screen if needed')}; reader.readAsDataURL(file);};}
+    renderBackupStatus();
     if(!fileHandle) state.settings.autoSync=false;
     $('#autoSyncSwitch').classList.toggle('on',state.settings.autoSync);
     $('#autoSyncSwitch').disabled=!fileHandle;
@@ -891,13 +980,14 @@
   }
   function renderPenaltySettings(){
     ensureRewardShape(); const r=state.settings.rewards; const box=$('#penaltySettings'); if(!box)return;
-    box.innerHTML=`<div class="field"><label>Trigger</label><select id="penaltyZeroDays">${[1,2,3,4,5,7].map(n=>`<option value="${n}">${n} missed day${n>1?'s':''} in a row</option>`).join('')}</select></div><div class="schedule-grid"><div class="field"><label>Deduct Credit</label><select id="penaltyCredit">${[0,2,5,10,20,30,50].map(n=>`<option value="${n}">HK$${n}</option>`).join('')}</select></div><div class="field"><label>Deduct EXP</label><select id="penaltyXp">${[0,10,20,30,50,100].map(n=>`<option value="${n}">${n} EXP</option>`).join('')}</select></div></div><div class="small-note">Charged once each time you hit that many 0% days in a row.</div><button class="btn-secondary settings-save" id="savePenaltyRules">Save penalty rules</button>`;
+    box.innerHTML=`<div class="field"><label>Penalty rules</label><div class="small-note">Charged once each time you hit consecutive 0% days.</div></div><div class="field"><label>Trigger</label><select id="penaltyZeroDays">${[1,2,3,4,5,7].map(n=>`<option value="${n}">${n} missed day${n>1?'s':''} in a row</option>`).join('')}</select></div><div class="schedule-grid"><div class="field"><label>Deduct credit</label><select id="penaltyCredit">${[0,2,5,10,20,30,50].map(n=>`<option value="${n}">HK$${n}</option>`).join('')}</select></div><div class="field"><label>Deduct EXP</label><select id="penaltyXp">${[0,10,20,30,50,100].map(n=>`<option value="${n}">${n} EXP</option>`).join('')}</select></div></div>`;
     $('#penaltyZeroDays').value=r.penaltyZeroDays||2; $('#penaltyCredit').value=r.penaltyCredit||5; $('#penaltyXp').value=r.penaltyXp||20;
-    $('#savePenaltyRules').onclick=async()=>{r.penaltyZeroDays=Number($('#penaltyZeroDays').value); r.penaltyCredit=Number($('#penaltyCredit').value); r.penaltyXp=Number($('#penaltyXp').value); await save(); toast('Penalty rules saved')};
+    const persist=async()=>{r.penaltyZeroDays=Number($('#penaltyZeroDays').value); r.penaltyCredit=Number($('#penaltyCredit').value); r.penaltyXp=Number($('#penaltyXp').value); await save();};
+    $('#penaltyZeroDays').onchange=persist; $('#penaltyCredit').onchange=persist; $('#penaltyXp').onchange=persist;
   }
 
   /* ---------- FILE SYNC ---------- */
-  async function connectFile(){if(!window.showOpenFilePicker){toast('File connection needs Chrome/Edge on desktop. Use Export/Import instead.');return;} try{[fileHandle]=await window.showOpenFilePicker({types:[{description:'JSON Backup',accept:{'application/json':['.json']}}]}); const file=await fileHandle.getFile(); const txt=await file.text(); if(txt.trim()){state=JSON.parse(txt); normalizeState();} state.settings.fileConnected=true; await save(true); updateStatus(); renderAll(); toast('File connected');}catch(e){}}
+  async function connectFile(){if(!window.showOpenFilePicker){toast('File connection needs Chrome/Edge on desktop. Use Export/Import instead.');return;} try{[fileHandle]=await window.showOpenFilePicker({types:[{description:'JSON Backup',accept:{'application/json':['.json']}}]}); const file=await fileHandle.getFile(); const txt=await file.text(); if(txt.trim()){state=JSON.parse(txt); normalizeState();} state.settings.fileConnected=true; state.settings.autoSync=true; await save(true); updateStatus(); renderAll(); toast('File connected');}catch(e){}}
   async function createFile(){if(!window.showSaveFilePicker){toast('Create file needs Chrome/Edge on desktop. Use Export instead.');return;} try{fileHandle=await window.showSaveFilePicker({suggestedName:'habit-tracker-backup.json',types:[{description:'JSON Backup',accept:{'application/json':['.json']}}]}); state.settings.fileConnected=true; state.settings.autoSync=true; await save(); renderSettings(); toast('Backup file created');}catch(e){}}
   function reminderBody(habit){const tpl=(habit.reminder?.message||state.settings.defaultReminderMessage||'Time for {habit}').slice(0,REMINDER_MSG_LIMIT); return tpl.replace(/\{habit\}/g,habit.name||'your habit');}
   async function toggleReminders(){
@@ -915,7 +1005,7 @@
   function setupReminderLoop(){if(reminderTimer)clearInterval(reminderTimer); if(!state.settings.reminders)return; reminderTimer=setInterval(()=>{const now=hkNow(); const hm=String(now.getHours()).padStart(2,"0")+":"+String(now.getMinutes()).padStart(2,"0"); state.habits.forEach(h=>{if(!h.reminder?.enabled||h.reminder.time!==hm||!isScheduledToday(h,now))return; const last=`${h.id}-${todayKey()}-${hm}`; if(sessionStorage.getItem(last))return; sessionStorage.setItem(last,'1'); const body=reminderBody(h); if('Notification' in window && Notification.permission==='granted') new Notification('Momentum',{body}); else toast(body);});},30000)}
 
   function exportJson(){state.settings.lastExportAt=todayKey(); localStorage.setItem(STORAGE,JSON.stringify(state)); const blob=new Blob([JSON.stringify(state,null,2)],{type:'application/json'}); const a=document.createElement('a'); a.href=URL.createObjectURL(blob); a.download='habit-tracker-backup.json'; a.click(); URL.revokeObjectURL(a.href); updateStatus();}
-  function importJson(file){const r=new FileReader(); r.onload=async()=>{try{state=JSON.parse(r.result); normalizeState(); await save(true); renderAll(); toast('Imported')}catch(e){toast('Invalid JSON')}}; r.readAsText(file)}
+  function importJson(file){const r=new FileReader(); r.onload=async()=>{try{state=JSON.parse(r.result); normalizeState(); await save(true); renderAll(); toast('Imported'); if(!fileHandle) openImportConnectModal();}catch(e){toast('Invalid JSON')}}; r.readAsText(file)}
 
   /* ---------- SHELL ---------- */
   function renderAll(){updateStatus(); applyAppearance(); applyAppIcon(); renderHome(); renderHabits(); renderReport(); renderRewards(); renderLevel(); renderSettings();}
@@ -955,6 +1045,8 @@
   {const tp=$('#trendPrev'); if(tp)tp.onclick=()=>{trendCursor.setMonth(trendCursor.getMonth()-1); drawTrend();}; const tn=$('#trendNext'); if(tn)tn.onclick=()=>{const now=hkNow(); const c=new Date(trendCursor); c.setMonth(c.getMonth()+1); if(c.getFullYear()>now.getFullYear()||(c.getFullYear()===now.getFullYear()&&c.getMonth()>now.getMonth())){toast('Already at the latest month');return;} trendCursor=c; drawTrend();};}
   $('#reportMode').onclick=e=>{if(e.target.tagName!=='BUTTON')return; reportMode=e.target.dataset.mode; $$('#reportMode button').forEach(b=>b.classList.remove('active')); e.target.classList.add('active'); renderCalendar();};
   $('#reportPrev').onclick=()=>{reportCursor.setMonth(reportCursor.getMonth()-(reportMode==='month'?1:3)); renderCalendar();}; $('#reportNext').onclick=()=>{reportCursor.setMonth(reportCursor.getMonth()+(reportMode==='month'?1:3)); renderCalendar();};
+  $('#fileStatus')?.addEventListener('click',()=>{if(!fileHandle&&state.settings.fileConnected){showView('settingsView'); connectFile();}});
+  window.addEventListener('resize',()=>{if($('#onboardBackdrop')?.classList.contains('show')) positionOnboardCallout(ONBOARD_STEPS[onboardStep]);});
   $('#autoSyncSwitch')?.addEventListener('click',async()=>{if(!fileHandle){state.settings.autoSync=false; toast('Connect a backup file first'); renderSettings(); return;} state.settings.autoSync=!state.settings.autoSync; await save();});
   $('#reminderSwitch')?.addEventListener('click',toggleReminders);
   $('#resetAllBtn').onclick=async()=>{if($('#confirmDeleteInput').value!=='Confirm'){toast('Type Confirm first');return;} if(!confirm('Erase all data and reset to your selected data mode?'))return; const mode=state.settings.dataMode||'demo'; const keep={colorMode:state.settings.colorMode,styleTheme:state.settings.styleTheme,userName:state.settings.userName,profileIcon:state.settings.profileIcon,appIcon:state.settings.appIcon,appIconCustom:state.settings.appIconCustom}; state=stateForMode(mode,{onboardingComplete:true,keep}); fileHandle=null; localStorage.setItem(STORAGE,JSON.stringify(state)); normalizeState(); await save(true); renderAll(); toast('Data erased');};
