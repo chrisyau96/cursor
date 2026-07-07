@@ -46,11 +46,11 @@
     {title:'Welcome to Momentum',body:'Build habits, reflect daily, and grow your identity. Everything stays on this device unless you connect a backup file.',view:'homeView',layout:'fullscreen',label:'👋 Let\'s take a quick tour'},
     {title:'Today\'s progress',body:'The ring shows how much of today\'s scheduled habits you\'ve completed.',view:'homeView',target:'#todayRing',placement:'below',cardAnchor:'below',label:'Completion ring'},
     {title:'Log habits here',body:'Tap +1 on each habit. Swipe a row for undo or edit.',view:'homeView',target:'#todayHabitGroups',placement:'spotlight',cardAnchor:'top',label:'Today\'s habits'},
-    {title:'Habits tab',body:'Open Habits to manage groups, schedules, EXP rewards, and order.',view:'homeView',layout:'preview',preview:'habits',label:'Habits'},
-    {title:'Quick add',body:'Tap the + button anytime to create a new habit from any screen.',view:'homeView',layout:'preview',preview:'fab',label:'Add habit'},
-    {title:'Reports',body:'Review trends, compare weeks vs months, and browse your calendar history.',view:'homeView',layout:'preview',preview:'report',label:'Report'},
-    {title:'Rewards',body:'Earn credits from daily completion and unlock gifts from streak rules.',view:'homeView',layout:'preview',preview:'rewards',label:'Rewards'},
-    {title:'Settings',body:'Set your name, reward rules, reminders, and optional backup. You\'re ready!',view:'homeView',layout:'preview',preview:'settings',label:'Settings',final:true}
+    {title:'Habits tab',body:'Manage groups, schedules, EXP rewards, and order.',view:'habitsView',target:'.tabbar .nav-item[data-view="habitsView"]',placement:'spotlight',cardAnchor:'above-tabbar',highlightNav:'habitsView',label:'Habits'},
+    {title:'Quick add',body:'Tap + anytime to create a new habit without leaving your current screen.',view:'homeView',target:'#fabAdd',placement:'spotlight',cardAnchor:'above-tabbar',highlightFab:true,label:'Add habit'},
+    {title:'Reports',body:'Review trends, compare periods, and browse your calendar history.',view:'reportView',target:'.tabbar .nav-item[data-view="reportView"]',placement:'spotlight',cardAnchor:'above-tabbar',highlightNav:'reportView',label:'Report'},
+    {title:'Rewards',body:'Earn credits and unlock gifts from your completion rules.',view:'rewardsView',target:'.tabbar .nav-item[data-view="rewardsView"]',placement:'spotlight',cardAnchor:'above-tabbar',highlightNav:'rewardsView',label:'Rewards'},
+    {title:'Settings',body:'Set your name, reward rules, and optional backup. You\'re ready!',view:'homeView',target:'#topSettingsBtn',placement:'spotlight',cardAnchor:'below-header',highlightSettings:true,label:'Settings',final:true}
   ];
 
   const ICON_EDIT='<svg viewBox="0 0 24 24" class="ai"><path fill="currentColor" d="M3 17.25V21h3.75L17.81 9.94l-3.75-3.75L3 17.25zM20.71 7.04a1 1 0 0 0 0-1.41l-2.34-2.34a1 1 0 0 0-1.41 0l-1.83 1.83 3.75 3.75 1.83-1.83z"/></svg>';
@@ -675,33 +675,17 @@
     $('#fabAdd')?.classList.remove('onboard-highlight');
     $('#topSettingsBtn')?.classList.remove('onboard-highlight');
   }
-  function onboardPreviewHtml(type){
-    const tab=(activeIdx,markFab=false)=>{
-      const labels=['Home','Habits','+','Report','Rewards'];
-      return `<div class="onboard-mock-tabbar">${labels.map((l,i)=>`<span class="${activeIdx===i?'active':''}${l==='+'?' onboard-mock-fab':''}${l==='+'&&markFab?' fab-mark':''}">${l}</span>`).join('')}</div>`;
-    };
-    const mocks={
-      habits:`<div class="onboard-mock">${tab(1)}<div class="onboard-mock-card"><div class="onboard-mock-row"><span class="ico">🌅</span><span>Morning block</span><span class="meta">3 habits</span></div><div class="onboard-mock-habit"><span class="ico">📖</span><span>Bible Time</span><span class="pill">Daily · 5 EXP</span></div><div class="onboard-mock-habit"><span class="ico">🏃</span><span>Morning Movement</span><span class="pill">Mon–Fri</span></div></div></div>`,
-      fab:`<div class="onboard-mock">${tab(2,true)}<div class="onboard-mock-card"><div class="onboard-mock-habit"><span class="ico">📖</span><span>Today's habits</span><span class="pill">+1</span></div><div class="onboard-mock-note">The + button opens the habit editor from any tab.</div></div></div>`,
-      report:`<div class="onboard-mock"><div class="onboard-mock-card"><div class="onboard-mock-row"><span>Compare</span><span class="pill">Week · Month</span></div><div class="onboard-mock-bars"><span style="height:42%"></span><span style="height:68%"></span><span style="height:55%"></span><span style="height:80%"></span><span style="height:72%"></span><span style="height:90%"></span><span style="height:100%"></span></div><div class="onboard-mock-cal">${Array.from({length:14},(_,i)=>`<i class="${['perfect','good','partial','low','zero','good','perfect','good','partial','perfect','good','low','good','perfect'][i]}"></i>`).join('')}</div></div></div>`,
-      rewards:`<div class="onboard-mock"><div class="onboard-mock-stats"><div><span class="lbl">Credits</span><strong>HK$12</strong></div><div><span class="lbl">Gifts</span><strong>🎁 1</strong></div></div><div class="onboard-mock-card"><div class="onboard-mock-row"><span>Credit redeem</span><span class="pill orange">HK$12</span></div><div class="onboard-mock-row"><span>🍽️ Buffet goal</span><span class="pill">18/30 days</span></div></div></div>`,
-      settings:`<div class="onboard-mock"><div class="onboard-mock-card"><div class="onboard-mock-row"><span>Profile</span><span class="meta">Name & photo</span></div><div class="onboard-mock-row"><span>Reward rules</span><span class="meta">Credit & gifts</span></div><div class="onboard-mock-row"><span>Backup & sync</span><span class="meta">JSON file</span></div><div class="onboard-mock-row"><span class="gear">⚙️</span><span>Top-right gear opens Settings</span></div></div></div>`
-    };
-    return mocks[type]||'';
-  }
   function positionOnboardCallout(step){
     const shell=$('.app-shell'), card=$('#onboardCard'), spot=$('#onboardSpotlight'), bd=$('#onboardBackdrop');
     if(!shell||!card)return;
     const shellRect=shell.getBoundingClientRect();
     const cardW=Math.min(300,shellRect.width-28);
-    const isOverlay=step.layout==='fullscreen'||step.layout==='preview';
+    const tabbarH=parseInt(getComputedStyle(document.documentElement).getPropertyValue('--tabbar-h'))||62;
     bd?.classList.toggle('onboard-fullscreen',step.layout==='fullscreen');
-    bd?.classList.toggle('onboard-preview',step.layout==='preview');
-    card.classList.toggle('onboard-center',isOverlay);
-    card.classList.toggle('onboard-with-preview',!!step.preview);
-    if(isOverlay){
+    card.classList.toggle('onboard-center',step.layout==='fullscreen');
+    if(step.layout==='fullscreen'){
       if(spot){spot.hidden=true; spot.style.cssText='';}
-      card.style.top='50%'; card.style.left='50%'; card.style.width=Math.min(step.preview?320:320,shellRect.width-32)+'px'; card.style.transform='translate(-50%,-50%)';
+      card.style.top='50%'; card.style.left='50%'; card.style.width=Math.min(320,shellRect.width-32)+'px'; card.style.transform='translate(-50%,-50%)';
       return;
     }
     card.style.transform='none';
@@ -747,8 +731,7 @@
     $('#onboardStepLabel').textContent=`Step ${onboardStep+1} of ${ONBOARD_STEPS.length}`;
     $('#onboardBarFill').style.width=((onboardStep+1)/ONBOARD_STEPS.length*100)+'%';
     const label=step.label?`<div class="onboard-spotlight-label">${escapeHtml(step.label)}</div>`:'';
-    const preview=step.preview?onboardPreviewHtml(step.preview):'';
-    body.innerHTML=`<div class="onboard-body"><h3>${step.title}</h3><p>${step.body}</p>${preview}${label}</div>`;
+    body.innerHTML=`<div class="onboard-body"><h3>${step.title}</h3><p>${step.body}</p>${label}</div>`;
     const back=$('#onboardBack'); if(back) back.disabled=onboardStep===0;
     const next=$('#onboardNext'); if(next) next.textContent=step.final?'Get started':'Next';
     clearOnboardHighlights();
@@ -763,7 +746,7 @@
     clearOnboardHighlights();
     state.settings.onboardingComplete=true;
     localStorage.setItem(STORAGE,JSON.stringify(state));
-    $('#onboardBackdrop')?.classList.remove('show','onboard-fullscreen','onboard-preview');
+    $('#onboardBackdrop')?.classList.remove('show','onboard-fullscreen');
     $('#onboardBackdrop')?.setAttribute('aria-hidden','true');
     const spot=$('#onboardSpotlight'); if(spot) spot.hidden=true;
     celebrate('You\'re all set! 🎉');
@@ -805,9 +788,9 @@
     const gp=active?giftProgress(active):{current:0,target:0,pct:0};
     const canRedeemGift=activeAvail>0;
     const canRedeemCredit=bal>0;
-    const giftCardHtml = active ? `<div class="gift-card gift-goal compact" style="grid-column:1/-1"><div class="redeem-head"><span class="gift-title">Gift · ${escapeHtml(active.gift||'Gift')}</span><span class="chip purple">${activeAvail}</span></div><div class="field compact-field"><select id="activeGiftSelect">${goalOptions}</select></div><div class="goal-hero compact"><div class="gift-icon">${active.icon||'🎁'}</div><div class="goal-copy"><div class="gift-sub">${active.days} days at ${active.pct}%+</div><div class="progress-mini"><span style="width:${gp.pct}%"></span></div><div class="gift-sub">${gp.current}/${gp.target} days</div></div></div><button class="btn-gold btn-compact ${canRedeemGift?'redeem-ready':'redeem-locked'}" id="redeemGiftBtn" ${canRedeemGift?'':'disabled'}">${canRedeemGift?'Redeem':'Locked'}</button></div>` : `<div class="gift-empty compact" style="grid-column:1/-1">No gift goal yet. Add one in Settings → Reward Rules.</div>`;
+    const giftCardHtml = active ? `<div class="gift-card gift-goal" style="grid-column:1/-1"><div class="card-head"><h3>Gift Rewards</h3><span class="chip purple">${activeAvail} available</span></div><div class="field"><label>Pursuing</label><select id="activeGiftSelect">${goalOptions}</select></div><div class="goal-hero"><div class="gift-icon">${active.icon||'🎁'}</div><div style="flex:1;min-width:0"><div class="gift-title">${escapeHtml(active.gift||'Gift')}</div><div class="gift-sub">${active.days} days at ${active.pct}%+</div><div class="progress-mini" style="margin-top:8px"><span style="width:${gp.pct}%"></span></div><div class="gift-sub">${gp.current}/${gp.target} days</div></div></div><button class="btn-gold ${canRedeemGift?'redeem-ready':'redeem-locked'}" style="margin-top:12px" id="redeemGiftBtn" ${canRedeemGift?'':'disabled'}">${canRedeemGift?'Redeem '+escapeHtml(active.gift||'Gift'):'Not unlocked yet'}</button></div>` : `<div class="gift-empty" style="grid-column:1/-1">No gift goal yet. Add one in Settings → Reward Rules.</div>`;
 
-    $('#redeemGrid').innerHTML=`<div class="gift-card credit-spend compact" style="grid-column:1/-1"><div class="redeem-head"><span class="gift-title">Credit</span><span class="chip orange">HK$${bal}</span></div><div class="redeem-inline"><input id="creditSpendText" placeholder="Redeemed for…"><input id="creditSpendAmount" type="number" min="0" max="${bal}" step="1" value="${Math.min(10,bal)}"></div><input id="creditSpendSlider" type="range" min="0" max="${bal}" step="1" value="${Math.min(10,bal)}"><button class="btn-primary btn-compact ${canRedeemCredit?'':'btn-dim'}" id="spendCreditBtn" ${canRedeemCredit?'':'disabled'}>Redeem credit</button></div>` + giftCardHtml;
+    $('#redeemGrid').innerHTML=`<div class="gift-card credit-spend" style="grid-column:1/-1"><div class="card-head"><h3>Credit Rewards</h3><span class="chip orange">HK$${bal} available</span></div><div class="redeem-form"><div class="field"><label>Redeemed For</label><input id="creditSpendText" placeholder="e.g. headphone, game, coffee"></div><div class="field"><label>Credit Amount</label><input id="creditSpendAmount" type="number" min="0" max="${bal}" step="1" value="${Math.min(10,bal)}"><input id="creditSpendSlider" type="range" min="0" max="${bal}" step="1" value="${Math.min(10,bal)}"><div class="inline-hint">Use the number box or slider, up to your balance.</div></div><button class="btn-primary ${canRedeemCredit?'':'btn-dim'}" id="spendCreditBtn" ${canRedeemCredit?'':'disabled'}>Redeem Credit</button></div></div>` + giftCardHtml;
 
     const slider=$('#creditSpendSlider'), amount=$('#creditSpendAmount'); if(slider&&amount){slider.oninput=()=>amount.value=slider.value; amount.oninput=()=>{let v=Math.max(0,Math.min(bal,Number(amount.value||0))); amount.value=v; slider.value=v;};}
     $('#spendCreditBtn').onclick=async()=>{if(bal<=0)return; const amt=Number($('#creditSpendAmount').value); const what=$('#creditSpendText').value.trim(); if(!what){toast('Enter what you redeemed');return;} if(amt<=0){toast('Enter credit amount');return;} if(creditTotal()<amt){toast('Not enough credits');return;} state.redemptions.push({id:uid(),date:todayKey(),type:'redeemCredit',desc:'Credit spend · '+what,credit:-amt,xp:0,what}); await save(); toast('Credit redeemed')};
