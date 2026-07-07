@@ -46,11 +46,11 @@
     {title:'Welcome to Momentum',body:'Build habits, reflect daily, and grow your identity. Everything stays on this device unless you connect a backup file.',view:'homeView',layout:'fullscreen',label:'👋 Let\'s take a quick tour'},
     {title:'Today\'s progress',body:'The ring shows how much of today\'s scheduled habits you\'ve completed.',view:'homeView',target:'#todayRing',placement:'below',cardAnchor:'below',label:'Completion ring'},
     {title:'Log habits here',body:'Tap +1 on each habit. Swipe a row for undo or edit.',view:'homeView',target:'#todayHabitGroups',placement:'spotlight',cardAnchor:'top',label:'Today\'s habits'},
-    {title:'Habits tab',body:'Manage groups, schedules, EXP rewards, and order.',view:'habitsView',target:'.tabbar .nav-item[data-view="habitsView"]',placement:'spotlight',cardAnchor:'top',highlightNav:'habitsView',label:'Habits'},
-    {title:'Quick add',body:'Tap + anytime to create a new habit without leaving your current screen.',view:'homeView',target:'#fabAdd',placement:'spotlight',cardAnchor:'top',highlightFab:true,label:'Add habit'},
-    {title:'Reports',body:'Review trends, compare periods, and browse your calendar history.',view:'reportView',target:'.tabbar .nav-item[data-view="reportView"]',placement:'spotlight',cardAnchor:'top',highlightNav:'reportView',label:'Report'},
-    {title:'Rewards',body:'Earn credits and unlock gifts from your completion rules.',view:'rewardsView',target:'.tabbar .nav-item[data-view="rewardsView"]',placement:'spotlight',cardAnchor:'top',highlightNav:'rewardsView',label:'Rewards'},
-    {title:'Settings',body:'Set your name, reward rules, and optional backup. You\'re ready!',view:'homeView',target:'#topSettingsBtn',placement:'spotlight',cardAnchor:'below-header',highlightSettings:true,label:'Settings',final:true}
+    {title:'Habits tab',body:'Manage groups, schedules, EXP rewards, and order.',view:'habitsView',target:'.tabbar .nav-item[data-view="habitsView"]',placement:'spotlight',cardAnchor:'near-bottom',highlightNav:'habitsView',label:'Habits'},
+    {title:'Quick add',body:'Tap + anytime to create a new habit without leaving your current screen.',view:'homeView',target:'#fabAdd .fab-plus',placement:'spotlight',cardAnchor:'near-bottom',highlightFab:true,spotlightRound:true,label:'Add habit'},
+    {title:'Reports',body:'Review trends, compare periods, and browse your calendar history.',view:'reportView',target:'.tabbar .nav-item[data-view="reportView"]',placement:'spotlight',cardAnchor:'near-bottom',highlightNav:'reportView',label:'Report'},
+    {title:'Rewards',body:'Earn credits and unlock gifts from your completion rules.',view:'rewardsView',target:'.tabbar .nav-item[data-view="rewardsView"]',placement:'spotlight',cardAnchor:'near-bottom',highlightNav:'rewardsView',label:'Rewards'},
+    {title:'Settings',body:'Set your name, reward rules, and optional backup. You\'re ready!',view:'homeView',target:'#topSettingsBtn',placement:'spotlight',cardAnchor:'near-bottom',highlightSettings:true,label:'Settings',final:true}
   ];
 
   const ICON_EDIT='<svg viewBox="0 0 24 24" class="ai"><path fill="currentColor" d="M3 17.25V21h3.75L17.81 9.94l-3.75-3.75L3 17.25zM20.71 7.04a1 1 0 0 0 0-1.41l-2.34-2.34a1 1 0 0 0-1.41 0l-1.83 1.83 3.75 3.75 1.83-1.83z"/></svg>';
@@ -675,12 +675,13 @@
     $('#fabAdd')?.classList.remove('onboard-highlight');
     $('#topSettingsBtn')?.classList.remove('onboard-highlight');
   }
-  function positionOnboardCallout(step){
+  function positionOnboardCallout(step, remeasure=false){
     const shell=$('.app-shell'), card=$('#onboardCard'), spot=$('#onboardSpotlight'), bd=$('#onboardBackdrop');
     if(!shell||!card)return;
     const shellRect=shell.getBoundingClientRect();
     const cardW=Math.min(300,shellRect.width-28);
     const tabbarH=parseInt(getComputedStyle(document.documentElement).getPropertyValue('--tabbar-h'))||62;
+    const bottomGap=14;
     bd?.classList.toggle('onboard-fullscreen',step.layout==='fullscreen');
     card.classList.toggle('onboard-center',step.layout==='fullscreen');
     if(step.layout==='fullscreen'){
@@ -692,41 +693,55 @@
     const el=step.target?$(step.target):null;
     if(!el){if(spot)spot.hidden=true; card.classList.add('onboard-center'); card.style.top='50%'; card.style.left='50%'; card.style.width=cardW+'px'; card.style.transform='translate(-50%,-50%)'; return;}
     const rect=el.getBoundingClientRect();
-    const pad=5;
+    const pad=step.spotlightRound?3:5;
     const top=rect.top-shellRect.top-pad;
     const left=rect.left-shellRect.left-pad;
     const width=rect.width+pad*2;
     const height=rect.height+pad*2;
     if(spot){
       spot.hidden=false;
-      spot.style.top=Math.max(6,top)+'px';
-      spot.style.left=Math.max(6,left)+'px';
-      spot.style.width=Math.min(width,shellRect.width-12)+'px';
-      spot.style.height=Math.min(height,shellRect.height-12)+'px';
+      if(step.spotlightRound){
+        const size=Math.max(width,height)+4;
+        const cx=left+width/2, cy=top+height/2;
+        spot.style.borderRadius='50%';
+        spot.style.top=Math.max(6,cy-size/2)+'px';
+        spot.style.left=Math.max(6,Math.min(cx-size/2,shellRect.width-size-6))+'px';
+        spot.style.width=Math.min(size,shellRect.width-12)+'px';
+        spot.style.height=Math.min(size,shellRect.height-12)+'px';
+      }else{
+        spot.style.borderRadius=step.highlightNav?'12px':'14px';
+        spot.style.top=Math.max(6,top)+'px';
+        spot.style.left=Math.max(6,left)+'px';
+        spot.style.width=Math.min(width,shellRect.width-12)+'px';
+        spot.style.height=Math.min(height,shellRect.height-12)+'px';
+      }
     }
     const anchor=step.cardAnchor||step.placement||'below';
     let cardTop,cardLeft;
-    if(anchor==='top'){
-      cardTop=68; cardLeft=(shellRect.width-cardW)/2;
-    }else if(anchor==='above-tabbar'){
-      cardTop=shellRect.height-tabbarH-168;
+    const cardH=card.offsetHeight||170;
+    if(anchor==='near-bottom'||anchor==='above-tabbar'){
+      cardTop=shellRect.height-tabbarH-cardH-bottomGap;
       cardLeft=(shellRect.width-cardW)/2;
+    }else if(anchor==='top'){
+      cardTop=68; cardLeft=(shellRect.width-cardW)/2;
     }else if(anchor==='below-header'){
-      cardTop=Math.min(shellRect.height-180, top+height+14);
+      cardTop=Math.min(shellRect.height-tabbarH-cardH-bottomGap, top+height+14);
       cardLeft=14;
     }else if(anchor==='below'){
-      cardTop=Math.min(shellRect.height-170, top+height+12);
+      cardTop=Math.min(shellRect.height-tabbarH-cardH-bottomGap, top+height+12);
       cardLeft=Math.max(14, Math.min(left, shellRect.width-cardW-14));
     }else{
       cardTop=Math.max(68, top-150);
       cardLeft=Math.max(14, Math.min(left, shellRect.width-cardW-14));
     }
-    const cardH=card.offsetHeight||180;
-    const maxTop=shellRect.height-tabbarH-cardH-12;
+    const maxTop=shellRect.height-tabbarH-cardH-bottomGap;
     cardTop=Math.min(cardTop, maxTop);
     card.style.top=Math.max(12,cardTop)+'px';
     card.style.left=Math.max(14,cardLeft)+'px';
     card.style.width=cardW+'px';
+    if(!remeasure && (anchor==='near-bottom'||anchor==='above-tabbar'||anchor==='below-header')){
+      requestAnimationFrame(()=>positionOnboardCallout(step,true));
+    }
   }
   function showOnboardStep(){
     const bd=$('#onboardBackdrop'), body=$('#onboardBody'); if(!bd)return;
@@ -838,7 +853,7 @@
       const btn=document.createElement('button'); btn.type='button'; btn.className='app-icon-opt'+(state.settings.appIcon===p.id?' active':'');
       if(p.src) btn.innerHTML=`<img src="${p.src}" alt=""><span>${p.label}</span>`;
       else btn.innerHTML=`<div class="app-icon-emoji" style="background:${p.bg};display:grid;place-items:center;font-size:24px">${p.emoji}</div><span>${p.label}</span>`;
-      btn.onclick=async()=>{state.settings.appIcon=p.id; state.settings.appIconCustom=''; await save(); applyAppIcon(); renderAppIconSettings(); toast('App icon updated — re-add to home screen if the installed icon does not change');};
+      btn.onclick=async()=>{state.settings.appIcon=p.id; state.settings.appIconCustom=''; await save(); applyAppIcon(); renderAppIconSettings(); toast('Icon saved. Re-add to home screen if it doesn\'t update.');};
       grid.appendChild(btn);
     });
     const custom=document.createElement('button'); custom.type='button'; custom.className='app-icon-opt'+(state.settings.appIcon==='custom'?' active':'');
@@ -945,7 +960,7 @@
   }
   function renderSettings(){
     ensureRewardShape(); if(!$('#rewardSettings'))return; const r=state.settings.rewards;
-    $('#rewardSettings').innerHTML=`<div class="segmented" id="rewardTabs" style="width:max-content"><button data-tab="credit" class="${rewardActiveTab==='credit'?'active':''}">Credit</button><button data-tab="gift" class="${rewardActiveTab==='gift'?'active':''}">Gift</button><button data-tab="penalty" class="${rewardActiveTab==='penalty'?'active':''}">Penalty</button></div><div id="rewardPanel" class="form-grid" style="margin-top:12px"></div>`;
+    $('#rewardSettings').innerHTML=`<div class="segmented reward-rule-tabs" id="rewardTabs"><button data-tab="credit" class="${rewardActiveTab==='credit'?'active':''}">Credit</button><button data-tab="gift" class="${rewardActiveTab==='gift'?'active':''}">Gift</button><button data-tab="penalty" class="${rewardActiveTab==='penalty'?'active':''}">Penalty</button></div><div id="rewardPanel" class="form-grid" style="margin-top:12px"></div>`;
     function drawRewardPanel(tab=rewardActiveTab){
       rewardActiveTab=tab; const p=$('#rewardPanel');
       if(tab==='credit'){
@@ -953,7 +968,7 @@
         const box=$('#creditRulesBox'); box.innerHTML='';
         (r.creditRules||[]).forEach((rule,idx)=>{const div=document.createElement('div'); div.className='rule-card'; div.innerHTML=`<div class="rule-card-head"><div class="rule-card-title">Credit rule</div><span class="gift-rule-chip">HK$${rule.amount||0}</span></div><div class="rule-grid"><div class="field"><label>Completion</label><select data-pct>${[50,60,70,80,90,100].map(n=>`<option value="${n}">${n}%+</option>`).join('')}</select></div><div class="field"><label>Credit amount</label><select data-amount>${[1,2,5,10,20,30,50,100].map(n=>`<option value="${n}">HK$${n}</option>`).join('')}</select></div></div><div class="rule-actions"><button class="btn-inline red" data-remove>Remove</button></div>`; div.querySelector('[data-pct]').value=rule.pct||100; div.querySelector('[data-amount]').value=rule.amount||10; const persist=async()=>{const pct=Number(div.querySelector('[data-pct]').value); const dup=(r.creditRules||[]).some((x,i)=>i!==idx&&Number(x.pct)===pct); if(dup){toast('Duplicate completion %'); return;} rule.pct=pct; rule.amount=Number(div.querySelector('[data-amount]').value); await save();}; div.querySelector('[data-pct]').onchange=persist; div.querySelector('[data-amount]').onchange=persist; div.querySelector('[data-remove]').onclick=async()=>{r.creditRules.splice(idx,1); await save(); toast('Credit rule removed')}; box.appendChild(div);});
       } else if(tab==='penalty'){
-        p.innerHTML=`<div class="field"><label>Penalty rules</label><div class="small-note">Charged once each time you hit consecutive 0% days.</div></div><div class="field"><label>Trigger</label><select id="penaltyZeroDays">${[1,2,3,4,5,7].map(n=>`<option value="${n}">${n} missed day${n>1?'s':''} in a row</option>`).join('')}</select></div><div class="schedule-grid"><div class="field"><label>Deduct credit</label><select id="penaltyCredit">${[0,2,5,10,20,30,50].map(n=>`<option value="${n}">HK$${n}</option>`).join('')}</select></div><div class="field"><label>Deduct EXP</label><select id="penaltyXp">${[0,10,20,30,50,100].map(n=>`<option value="${n}">${n} EXP</option>`).join('')}</select></div></div>`;
+        p.innerHTML=`<div class="field"><label>Penalty rules</label><div class="small-note">Charged once each time you hit consecutive 0% days.</div></div><div class="rule-card"><div class="rule-grid"><div class="field"><label>Trigger</label><select id="penaltyZeroDays">${[1,2,3,4,5,7].map(n=>`<option value="${n}">${n} missed day${n>1?'s':''} in a row</option>`).join('')}</select></div><div class="field"><label>Deduct credit</label><select id="penaltyCredit">${[0,2,5,10,20,30,50].map(n=>`<option value="${n}">HK$${n}</option>`).join('')}</select></div><div class="field"><label>Deduct EXP</label><select id="penaltyXp">${[0,10,20,30,50,100].map(n=>`<option value="${n}">${n} EXP</option>`).join('')}</select></div></div></div>`;
         $('#penaltyZeroDays').value=r.penaltyZeroDays||2; $('#penaltyCredit').value=r.penaltyCredit||5; $('#penaltyXp').value=r.penaltyXp||20;
         const persist=async()=>{r.penaltyZeroDays=Number($('#penaltyZeroDays').value); r.penaltyCredit=Number($('#penaltyCredit').value); r.penaltyXp=Number($('#penaltyXp').value); await save();};
         $('#penaltyZeroDays').onchange=persist; $('#penaltyCredit').onchange=persist; $('#penaltyXp').onchange=persist;
@@ -968,14 +983,14 @@
 
     renderVacationSettings(); renderSyncActions(); renderAppIconSettings(); renderDataModeSettings();
 
-    $('#trackerStartDate').value=state.settings.startDate||todayKey(); $('#startDateDisplay').textContent=state.settings.startDate||todayKey(); $('#trackerStartDate').onchange=async()=>{state.settings.startDate=$('#trackerStartDate').value||todayKey(); await save(); toast('Start date updated')};
+    $('#trackerStartDate').value=state.settings.startDate||todayKey(); $('#startDateDisplay').textContent=state.settings.startDate||todayKey(); $('#trackerStartDate').onchange=async()=>{state.settings.startDate=$('#trackerStartDate').value||todayKey(); await save(); toast('Start date saved')};
     const un=$('#userNameInput'); if(un){un.value=(state.settings.userName||'').slice(0,USER_NAME_MAX); un.maxLength=USER_NAME_MAX;}
     const nameCount=$('#userNameCount'); if(nameCount) nameCount.textContent=String((un?.value||'').length);
     if(un && !un.dataset.bound){un.dataset.bound='1'; un.oninput=()=>{const c=$('#userNameCount'); if(c)c.textContent=String(un.value.length);}; un.onblur=async()=>{state.settings.userName=(un.value||'').trim().slice(0,USER_NAME_MAX); await save(); renderHome();};}
-    const cms=$('#colorModeSelect'); if(cms){cms.value=state.settings.colorMode||'system'; cms.onchange=async()=>{state.settings.colorMode=cms.value; applyAppearance(); await save(); toast('Mode updated');};}
+    const cms=$('#colorModeSelect'); if(cms){cms.value=state.settings.colorMode||'system'; cms.onchange=async()=>{state.settings.colorMode=cms.value; applyAppearance(); await save(); toast('Theme saved');};}
     renderTopProfile();
-    const upload=$('#profileIconInput'); if(upload){upload.onchange=e=>{const file=e.target.files&&e.target.files[0]; if(!file)return; const reader=new FileReader(); reader.onload=async()=>{state.settings.profileIcon=reader.result; await save(); toast('Profile icon updated')}; reader.readAsDataURL(file);};}
-    const appUpload=$('#appIconInput'); if(appUpload){appUpload.onchange=e=>{const file=e.target.files&&e.target.files[0]; if(!file)return; const reader=new FileReader(); reader.onload=async()=>{state.settings.appIcon='custom'; state.settings.appIconCustom=reader.result; await save(); applyAppIcon(); renderAppIconSettings(); toast('Custom icon saved — re-add to home screen if the installed icon does not change')}; reader.readAsDataURL(file);};}
+    const upload=$('#profileIconInput'); if(upload){upload.onchange=e=>{const file=e.target.files&&e.target.files[0]; if(!file)return; const reader=new FileReader(); reader.onload=async()=>{state.settings.profileIcon=reader.result; await save(); toast('Profile photo saved')}; reader.readAsDataURL(file);};}
+    const appUpload=$('#appIconInput'); if(appUpload){appUpload.onchange=e=>{const file=e.target.files&&e.target.files[0]; if(!file)return; const reader=new FileReader(); reader.onload=async()=>{state.settings.appIcon='custom'; state.settings.appIconCustom=reader.result; await save(); applyAppIcon(); renderAppIconSettings(); toast('Icon saved. Re-add to home screen if it doesn\'t update.')}; reader.readAsDataURL(file);};}
     renderBackupStatus();
     if(!fileHandle) state.settings.autoSync=false;
     $('#autoSyncSwitch').classList.toggle('on',state.settings.autoSync);

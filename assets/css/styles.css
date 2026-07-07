@@ -415,7 +415,9 @@ input[type=range]::-moz-range-track{height:6px;border-radius:999px;background:va
 .rule-card{padding:12px;border:1px solid var(--line);border-radius:16px;background:#fbfbff;margin-bottom:10px}
 .rule-card-head{display:flex;align-items:center;justify-content:space-between;gap:10px;margin-bottom:10px}
 .rule-card-title{font-size:13px;font-weight:900}
-.rule-grid{display:grid;grid-template-columns:1fr;gap:8px}
+.rule-grid{display:grid;grid-template-columns:1fr;gap:10px}
+.reward-rule-tabs{width:100%}
+.reward-rule-tabs button{flex:1}
 .rule-actions{display:flex;gap:8px;justify-content:flex-end;margin-top:10px}
 
 /* Switch */
@@ -463,8 +465,9 @@ input[type=range]::-moz-range-track{height:6px;border-radius:999px;background:va
 
 /* Empty / toast / xp pop */
 .empty{padding:16px;text-align:center;color:var(--muted);font-size:13px;background:#fbfbff;border:1px dashed var(--line);border-radius:16px}
-.toast{position:fixed;left:50%;bottom:calc(var(--tabbar-h) + 16px + var(--safe-bottom));transform:translateX(-50%);background:var(--ink);color:#fff;padding:10px 14px;border-radius:999px;font-size:12.5px;font-weight:800;z-index:200;opacity:0;pointer-events:none;transition:.25s;box-shadow:var(--shadow-lg)}
+.toast{position:fixed;left:50%;bottom:calc(var(--tabbar-h) + 16px + var(--safe-bottom));transform:translateX(-50%);background:rgba(21,32,51,.94);color:#fff;padding:10px 16px;border-radius:999px;font-size:12.5px;font-weight:700;z-index:200;opacity:0;pointer-events:none;transition:.25s;box-shadow:var(--shadow-lg);max-width:min(92vw,340px);text-align:center;line-height:1.35}
 .toast.show{opacity:1}
+:root[data-theme="dark"] .toast{background:rgba(241,245,249,.96);color:#0f172a;border:1px solid var(--line-strong)}
 .xp-pop{background:linear-gradient(135deg,#f59e0b,#ea580c);color:#fff;padding:5px 11px;border-radius:999px;font-weight:900;box-shadow:0 6px 16px rgba(234,88,12,.28);animation:xp-pop .9s ease both;pointer-events:none;font-size:12px;line-height:1.2;white-space:nowrap}
 #expPopLayer{position:absolute;top:calc(8px + var(--safe-top));right:52px;left:auto;bottom:auto;z-index:55;display:flex;justify-content:flex-end;align-items:flex-start;pointer-events:none}
 @keyframes xp-pop{0%{transform:translateY(6px) scale(.94);opacity:0}18%{transform:translateY(0) scale(1);opacity:1}72%{transform:translateY(-3px) scale(1);opacity:1}100%{transform:translateY(-10px) scale(.97);opacity:0}}
@@ -540,8 +543,9 @@ input[type=range]::-moz-range-track{height:6px;border-radius:999px;background:va
 .onboard-backdrop{position:absolute;inset:0;z-index:300;display:none;pointer-events:none}
 .onboard-backdrop.show{display:block}
 .onboard-backdrop.onboard-fullscreen{background:rgba(9,14,26,.62);pointer-events:auto}
-.onboard-spotlight{position:absolute;border-radius:14px;box-shadow:0 0 0 9999px rgba(9,14,26,.58);border:2px solid var(--brand);pointer-events:none;z-index:301;transition:top .22s ease,left .22s ease,width .22s ease,height .22s ease}
-.onboard-card{position:absolute;z-index:302;width:min(300px,calc(100% - 28px));background:var(--card);border-radius:18px;padding:12px 14px;box-shadow:var(--shadow-lg);pointer-events:auto;display:flex;flex-direction:column;max-height:min(240px,42vh);overflow:hidden}
+.onboard-spotlight{position:absolute;border-radius:14px;box-shadow:0 0 0 9999px rgba(9,14,26,.58);border:2px solid var(--brand);pointer-events:none;z-index:301;transition:top .22s ease,left .22s ease,width .22s ease,height .22s ease,border-radius .22s ease}
+:root[data-theme="dark"] .onboard-spotlight{box-shadow:0 0 0 9999px rgba(0,0,0,.72)}
+.onboard-card{position:absolute;z-index:302;width:min(300px,calc(100% - 28px));background:var(--card);border-radius:18px;padding:12px 14px;box-shadow:var(--shadow-lg);pointer-events:auto;display:flex;flex-direction:column;max-height:min(260px,46vh);overflow:hidden;border:1px solid color-mix(in srgb,var(--line) 70%,transparent)}
 .onboard-card.onboard-center{max-height:min(320px,70vh)}
 .onboard-head{display:flex;align-items:flex-start;gap:8px;flex:0 0 auto;margin-bottom:8px}
 .onboard-progress{flex:1;min-width:0}
