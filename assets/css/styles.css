@@ -478,7 +478,7 @@ input[type=range]::-moz-range-track{height:6px;border-radius:999px;background:va
 .wnum.band-vacation{color:#fff}
 .day-cell.vacation{background:var(--vacation-bg)!important;color:var(--muted)!important;border:1px dashed var(--line)}
 
-.status-row-wrap{padding:0 14px 4px}
+.status-row-wrap{display:none;padding:0 14px 4px}
 .status-toggle{display:flex;align-items:center;gap:6px;font-size:11px;font-weight:800;color:var(--muted);padding:4px 2px}
 .status-toggle-caret{transition:.2s}
 .status-row-wrap.open .status-toggle-caret{transform:rotate(180deg)}

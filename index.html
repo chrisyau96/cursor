@@ -36,7 +36,7 @@
       </div>
     </header>
 
-    <div class="status-row-wrap" id="statusRowWrap">
+    <div class="status-row-wrap hidden" id="statusRowWrap" hidden>
       <button class="status-toggle" id="statusToggle" type="button" aria-expanded="false" aria-controls="statusRow">
         <span class="status-toggle-label">Status</span>
         <span class="status-toggle-caret">⌄</span>
@@ -108,7 +108,7 @@
       </section>
 
       <section class="view" id="habitsView">
-        <div class="section-title"><h2>Habits</h2><span>Groups, order and records</span></div>
+        <div class="section-title"><h2>Habits</h2></div>
         <div class="card">
           <div class="card-head"><h3>Groups</h3><button class="btn-inline pink" id="addGroupBtn" type="button">+ Group</button></div>
           <div id="groupManager"></div>
@@ -118,7 +118,7 @@
       </section>
 
       <section class="view" id="reportView">
-        <div class="section-title"><h2>Report</h2><span>Trends and calendar</span></div>
+        <div class="section-title"><h2>Report</h2></div>
         <div class="card">
           <div class="card-head"><h3>Compare Periods</h3><div class="segmented" id="comparePeriodTabs"><button data-period="week">Week</button><button data-period="month" class="active">Month</button></div></div>
           <div id="comparePeriodBox"></div>
@@ -136,7 +136,7 @@
       </section>
 
       <section class="view" id="rewardsView">
-        <div class="section-title"><h2>Rewards</h2><span>Credits and gifts</span></div>
+        <div class="section-title"><h2>Rewards</h2></div>
         <div class="cards reward-summary">
           <div class="stat-card reward-credit-card"><div class="stat-label">Credits</div><div class="stat-value" id="creditValue">HK$0</div><div class="stat-sub">Available</div></div>
           <div class="stat-card reward-gift-card"><div class="stat-label">Gifts</div><div class="stat-value" id="giftUnlockValue">0</div><div class="stat-sub" id="giftUnlockSub">available</div></div>
@@ -162,7 +162,7 @@
       </section>
 
       <section class="view" id="settingsView">
-        <div class="section-title"><h2>Settings</h2><span>Profile, rules &amp; backup</span></div>
+        <div class="section-title"><h2>Settings</h2></div>
 
         <p class="settings-section-label">Profile</p>
         <div class="card settings-card">
@@ -177,13 +177,13 @@
         <div class="card settings-card">
           <div class="field"><label>Color mode</label><select id="colorModeSelect"><option value="system">System</option><option value="light">Light</option><option value="dark">Dark</option></select></div>
           <div class="settings-divider"></div>
-          <div class="field"><label>Home screen icon</label><div class="small-note">Updates the browser tab and home-screen shortcut. Re-add to home screen if the installed icon does not change.</div></div>
+          <div class="field"><label>Home screen icon</label><div class="small-note">Re-add to home screen if the installed icon does not change.</div></div>
           <div class="app-icon-grid" id="appIconGrid"></div>
           <label class="upload-file-btn settings-upload-btn">Upload custom icon<input type="file" id="appIconInput" accept="image/*" hidden></label>
         </div>
 
-        <p class="settings-section-label">Rewards &amp; penalties</p>
-        <div class="card settings-card"><div class="form-grid" id="rewardSettings"></div><div class="settings-divider"></div><div class="form-grid" id="penaltySettings"></div></div>
+        <p class="settings-section-label">Reward rules</p>
+        <div class="card settings-card"><div class="form-grid" id="rewardSettings"></div></div>
 
         <p class="settings-section-label">Tracking</p>
         <div class="card settings-card">

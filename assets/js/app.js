@@ -46,10 +46,10 @@
     {title:'Welcome to Momentum',body:'Build habits, reflect daily, and grow your identity. Everything stays on this device unless you connect a backup file.',view:'homeView',layout:'fullscreen',label:'👋 Let\'s take a quick tour'},
     {title:'Today\'s progress',body:'The ring shows how much of today\'s scheduled habits you\'ve completed.',view:'homeView',target:'#todayRing',placement:'below',cardAnchor:'below',label:'Completion ring'},
     {title:'Log habits here',body:'Tap +1 on each habit. Swipe a row for undo or edit.',view:'homeView',target:'#todayHabitGroups',placement:'spotlight',cardAnchor:'top',label:'Today\'s habits'},
-    {title:'Habits tab',body:'Manage groups, schedules, EXP rewards, and order.',view:'habitsView',target:'.tabbar .nav-item[data-view="habitsView"]',placement:'spotlight',cardAnchor:'above-tabbar',highlightNav:'habitsView',label:'Habits'},
-    {title:'Quick add',body:'Tap + anytime to create a new habit without leaving your current screen.',view:'homeView',target:'#fabAdd',placement:'spotlight',cardAnchor:'above-tabbar',highlightFab:true,label:'Add habit'},
-    {title:'Reports',body:'Review trends, compare periods, and browse your calendar history.',view:'reportView',target:'.tabbar .nav-item[data-view="reportView"]',placement:'spotlight',cardAnchor:'above-tabbar',highlightNav:'reportView',label:'Report'},
-    {title:'Rewards',body:'Earn credits and unlock gifts from your completion rules.',view:'rewardsView',target:'.tabbar .nav-item[data-view="rewardsView"]',placement:'spotlight',cardAnchor:'above-tabbar',highlightNav:'rewardsView',label:'Rewards'},
+    {title:'Habits tab',body:'Manage groups, schedules, EXP rewards, and order.',view:'habitsView',target:'.tabbar .nav-item[data-view="habitsView"]',placement:'spotlight',cardAnchor:'top',highlightNav:'habitsView',label:'Habits'},
+    {title:'Quick add',body:'Tap + anytime to create a new habit without leaving your current screen.',view:'homeView',target:'#fabAdd',placement:'spotlight',cardAnchor:'top',highlightFab:true,label:'Add habit'},
+    {title:'Reports',body:'Review trends, compare periods, and browse your calendar history.',view:'reportView',target:'.tabbar .nav-item[data-view="reportView"]',placement:'spotlight',cardAnchor:'top',highlightNav:'reportView',label:'Report'},
+    {title:'Rewards',body:'Earn credits and unlock gifts from your completion rules.',view:'rewardsView',target:'.tabbar .nav-item[data-view="rewardsView"]',placement:'spotlight',cardAnchor:'top',highlightNav:'rewardsView',label:'Rewards'},
     {title:'Settings',body:'Set your name, reward rules, and optional backup. You\'re ready!',view:'homeView',target:'#topSettingsBtn',placement:'spotlight',cardAnchor:'below-header',highlightSettings:true,label:'Settings',final:true}
   ];
 
@@ -721,6 +721,9 @@
       cardTop=Math.max(68, top-150);
       cardLeft=Math.max(14, Math.min(left, shellRect.width-cardW-14));
     }
+    const cardH=card.offsetHeight||180;
+    const maxTop=shellRect.height-tabbarH-cardH-12;
+    cardTop=Math.min(cardTop, maxTop);
     card.style.top=Math.max(12,cardTop)+'px';
     card.style.left=Math.max(14,cardLeft)+'px';
     card.style.width=cardW+'px';
@@ -835,7 +838,7 @@
       const btn=document.createElement('button'); btn.type='button'; btn.className='app-icon-opt'+(state.settings.appIcon===p.id?' active':'');
       if(p.src) btn.innerHTML=`<img src="${p.src}" alt=""><span>${p.label}</span>`;
       else btn.innerHTML=`<div class="app-icon-emoji" style="background:${p.bg};display:grid;place-items:center;font-size:24px">${p.emoji}</div><span>${p.label}</span>`;
-      btn.onclick=async()=>{state.settings.appIcon=p.id; state.settings.appIconCustom=''; await save(); applyAppIcon(); renderAppIconSettings(); toast('App icon updated — re-add to home screen if needed');};
+      btn.onclick=async()=>{state.settings.appIcon=p.id; state.settings.appIconCustom=''; await save(); applyAppIcon(); renderAppIconSettings(); toast('App icon updated — re-add to home screen if the installed icon does not change');};
       grid.appendChild(btn);
     });
     const custom=document.createElement('button'); custom.type='button'; custom.className='app-icon-opt'+(state.settings.appIcon==='custom'?' active':'');
@@ -942,13 +945,18 @@
   }
   function renderSettings(){
     ensureRewardShape(); if(!$('#rewardSettings'))return; const r=state.settings.rewards;
-    $('#rewardSettings').innerHTML=`<div class="segmented" id="rewardTabs" style="width:max-content"><button data-tab="credit" class="${rewardActiveTab==='credit'?'active':''}">Credit</button><button data-tab="gift" class="${rewardActiveTab==='gift'?'active':''}">Gift</button></div><div id="rewardPanel" class="form-grid" style="margin-top:12px"></div>`;
+    $('#rewardSettings').innerHTML=`<div class="segmented" id="rewardTabs" style="width:max-content"><button data-tab="credit" class="${rewardActiveTab==='credit'?'active':''}">Credit</button><button data-tab="gift" class="${rewardActiveTab==='gift'?'active':''}">Gift</button><button data-tab="penalty" class="${rewardActiveTab==='penalty'?'active':''}">Penalty</button></div><div id="rewardPanel" class="form-grid" style="margin-top:12px"></div>`;
     function drawRewardPanel(tab=rewardActiveTab){
       rewardActiveTab=tab; const p=$('#rewardPanel');
       if(tab==='credit'){
         p.innerHTML=`<div class="field"><label>Credit Rules</label><div class="small-note">Each completion level can be used once. A 100% day also earns every lower level's reward.</div></div><div id="creditRulesBox"></div><button class="btn-secondary" id="addCreditRule" type="button">+ Add Credit Rule</button>`;
         const box=$('#creditRulesBox'); box.innerHTML='';
         (r.creditRules||[]).forEach((rule,idx)=>{const div=document.createElement('div'); div.className='rule-card'; div.innerHTML=`<div class="rule-card-head"><div class="rule-card-title">Credit rule</div><span class="gift-rule-chip">HK$${rule.amount||0}</span></div><div class="rule-grid"><div class="field"><label>Completion</label><select data-pct>${[50,60,70,80,90,100].map(n=>`<option value="${n}">${n}%+</option>`).join('')}</select></div><div class="field"><label>Credit amount</label><select data-amount>${[1,2,5,10,20,30,50,100].map(n=>`<option value="${n}">HK$${n}</option>`).join('')}</select></div></div><div class="rule-actions"><button class="btn-inline red" data-remove>Remove</button></div>`; div.querySelector('[data-pct]').value=rule.pct||100; div.querySelector('[data-amount]').value=rule.amount||10; const persist=async()=>{const pct=Number(div.querySelector('[data-pct]').value); const dup=(r.creditRules||[]).some((x,i)=>i!==idx&&Number(x.pct)===pct); if(dup){toast('Duplicate completion %'); return;} rule.pct=pct; rule.amount=Number(div.querySelector('[data-amount]').value); await save();}; div.querySelector('[data-pct]').onchange=persist; div.querySelector('[data-amount]').onchange=persist; div.querySelector('[data-remove]').onclick=async()=>{r.creditRules.splice(idx,1); await save(); toast('Credit rule removed')}; box.appendChild(div);});
+      } else if(tab==='penalty'){
+        p.innerHTML=`<div class="field"><label>Penalty rules</label><div class="small-note">Charged once each time you hit consecutive 0% days.</div></div><div class="field"><label>Trigger</label><select id="penaltyZeroDays">${[1,2,3,4,5,7].map(n=>`<option value="${n}">${n} missed day${n>1?'s':''} in a row</option>`).join('')}</select></div><div class="schedule-grid"><div class="field"><label>Deduct credit</label><select id="penaltyCredit">${[0,2,5,10,20,30,50].map(n=>`<option value="${n}">HK$${n}</option>`).join('')}</select></div><div class="field"><label>Deduct EXP</label><select id="penaltyXp">${[0,10,20,30,50,100].map(n=>`<option value="${n}">${n} EXP</option>`).join('')}</select></div></div>`;
+        $('#penaltyZeroDays').value=r.penaltyZeroDays||2; $('#penaltyCredit').value=r.penaltyCredit||5; $('#penaltyXp').value=r.penaltyXp||20;
+        const persist=async()=>{r.penaltyZeroDays=Number($('#penaltyZeroDays').value); r.penaltyCredit=Number($('#penaltyCredit').value); r.penaltyXp=Number($('#penaltyXp').value); await save();};
+        $('#penaltyZeroDays').onchange=persist; $('#penaltyCredit').onchange=persist; $('#penaltyXp').onchange=persist;
       } else {
         p.innerHTML=`<div class="field"><label>Gift Rules</label><div class="small-note">Unlock a gift for keeping a streak. Earned gifts appear on the Gift page.</div></div><div id="giftRulesBox"></div><button class="btn-secondary" id="addGiftRule" type="button">+ Add Gift Rule</button>`;
         const box=$('#giftRulesBox'); box.innerHTML='';
@@ -958,7 +966,7 @@
     $('#rewardTabs').onclick=e=>{if(e.target.tagName!=='BUTTON')return; rewardActiveTab=e.target.dataset.tab; $$('#rewardTabs button').forEach(b=>b.classList.remove('active')); e.target.classList.add('active'); drawRewardPanel(rewardActiveTab);};
     drawRewardPanel(rewardActiveTab);
 
-    renderPenaltySettings(); renderVacationSettings(); renderSyncActions(); renderAppIconSettings(); renderDataModeSettings();
+    renderVacationSettings(); renderSyncActions(); renderAppIconSettings(); renderDataModeSettings();
 
     $('#trackerStartDate').value=state.settings.startDate||todayKey(); $('#startDateDisplay').textContent=state.settings.startDate||todayKey(); $('#trackerStartDate').onchange=async()=>{state.settings.startDate=$('#trackerStartDate').value||todayKey(); await save(); toast('Start date updated')};
     const un=$('#userNameInput'); if(un){un.value=(state.settings.userName||'').slice(0,USER_NAME_MAX); un.maxLength=USER_NAME_MAX;}
@@ -967,7 +975,7 @@
     const cms=$('#colorModeSelect'); if(cms){cms.value=state.settings.colorMode||'system'; cms.onchange=async()=>{state.settings.colorMode=cms.value; applyAppearance(); await save(); toast('Mode updated');};}
     renderTopProfile();
     const upload=$('#profileIconInput'); if(upload){upload.onchange=e=>{const file=e.target.files&&e.target.files[0]; if(!file)return; const reader=new FileReader(); reader.onload=async()=>{state.settings.profileIcon=reader.result; await save(); toast('Profile icon updated')}; reader.readAsDataURL(file);};}
-    const appUpload=$('#appIconInput'); if(appUpload){appUpload.onchange=e=>{const file=e.target.files&&e.target.files[0]; if(!file)return; const reader=new FileReader(); reader.onload=async()=>{state.settings.appIcon='custom'; state.settings.appIconCustom=reader.result; await save(); applyAppIcon(); renderAppIconSettings(); toast('Custom icon saved — re-add to home screen if needed')}; reader.readAsDataURL(file);};}
+    const appUpload=$('#appIconInput'); if(appUpload){appUpload.onchange=e=>{const file=e.target.files&&e.target.files[0]; if(!file)return; const reader=new FileReader(); reader.onload=async()=>{state.settings.appIcon='custom'; state.settings.appIconCustom=reader.result; await save(); applyAppIcon(); renderAppIconSettings(); toast('Custom icon saved — re-add to home screen if the installed icon does not change')}; reader.readAsDataURL(file);};}
     renderBackupStatus();
     if(!fileHandle) state.settings.autoSync=false;
     $('#autoSyncSwitch').classList.toggle('on',state.settings.autoSync);
@@ -977,14 +985,6 @@
     $('#globalReminderTime').onchange=async()=>{state.settings.globalReminderTime=$('#globalReminderTime').value; await save(); setupReminderLoop();};
     $('#defaultReminderMessage').onchange=async()=>{state.settings.defaultReminderMessage=($('#defaultReminderMessage').value||'Time for {habit}').slice(0,REMINDER_MSG_LIMIT); await save();};
   }
-  function renderPenaltySettings(){
-    ensureRewardShape(); const r=state.settings.rewards; const box=$('#penaltySettings'); if(!box)return;
-    box.innerHTML=`<div class="field"><label>Penalty rules</label><div class="small-note">Charged once each time you hit consecutive 0% days.</div></div><div class="field"><label>Trigger</label><select id="penaltyZeroDays">${[1,2,3,4,5,7].map(n=>`<option value="${n}">${n} missed day${n>1?'s':''} in a row</option>`).join('')}</select></div><div class="schedule-grid"><div class="field"><label>Deduct credit</label><select id="penaltyCredit">${[0,2,5,10,20,30,50].map(n=>`<option value="${n}">HK$${n}</option>`).join('')}</select></div><div class="field"><label>Deduct EXP</label><select id="penaltyXp">${[0,10,20,30,50,100].map(n=>`<option value="${n}">${n} EXP</option>`).join('')}</select></div></div>`;
-    $('#penaltyZeroDays').value=r.penaltyZeroDays||2; $('#penaltyCredit').value=r.penaltyCredit||5; $('#penaltyXp').value=r.penaltyXp||20;
-    const persist=async()=>{r.penaltyZeroDays=Number($('#penaltyZeroDays').value); r.penaltyCredit=Number($('#penaltyCredit').value); r.penaltyXp=Number($('#penaltyXp').value); await save();};
-    $('#penaltyZeroDays').onchange=persist; $('#penaltyCredit').onchange=persist; $('#penaltyXp').onchange=persist;
-  }
-
   /* ---------- FILE SYNC ---------- */
   async function connectFile(){if(!window.showOpenFilePicker){toast('File connection needs Chrome/Edge on desktop. Use Export/Import instead.');return;} try{[fileHandle]=await window.showOpenFilePicker({types:[{description:'JSON Backup',accept:{'application/json':['.json']}}]}); const file=await fileHandle.getFile(); const txt=await file.text(); if(txt.trim()){state=JSON.parse(txt); normalizeState();} state.settings.fileConnected=true; state.settings.autoSync=true; await save(true); updateStatus(); renderAll(); toast('File connected');}catch(e){}}
   async function createFile(){if(!window.showSaveFilePicker){toast('Create file needs Chrome/Edge on desktop. Use Export instead.');return;} try{fileHandle=await window.showSaveFilePicker({suggestedName:'habit-tracker-backup.json',types:[{description:'JSON Backup',accept:{'application/json':['.json']}}]}); state.settings.fileConnected=true; state.settings.autoSync=true; await save(); renderSettings(); toast('Backup file created');}catch(e){}}
@@ -1074,6 +1074,7 @@
       if(!pct){toast('All completion rules already used');return;}
       r.creditRules.push({id:uid(),pct,amount:pct>=100?10:2});
       await save(); toast('Credit rule added');
+      if($('#rewardSettings')) renderSettings();
       return;
     }
     const addGift=e.target.closest('#addGiftRule');
@@ -1082,6 +1083,7 @@
       r.giftRules=r.giftRules||[];
       r.giftRules.push({id:uid(),gift:'Buffet',icon:'🍽️',pct:80,days:30});
       await save(); toast('Gift rule added');
+      if($('#rewardSettings')) renderSettings();
       return;
     }
     if(!e.target.closest('.swipe-wrap')) $$('.swipe-wrap.open').forEach(w=>w.classList.remove('open'));
