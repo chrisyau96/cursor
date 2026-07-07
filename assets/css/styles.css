@@ -422,7 +422,12 @@ input[type=range]::-moz-range-track{height:6px;border-radius:999px;background:va
 .rule-card-title{font-size:13px;font-weight:800;letter-spacing:-.01em}
 .rule-grid{display:flex;flex-direction:column;gap:12px}
 .rule-row{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px;align-items:start}
-.rule-row.icon-name{grid-template-columns:76px minmax(0,1fr)}
+.rule-row.icon-name{grid-template-columns:72px minmax(0,1fr);grid-template-rows:auto 44px;row-gap:6px;column-gap:12px;align-items:stretch}
+.rule-row.icon-name>.field{display:contents}
+.rule-row.icon-name>.field:nth-child(1) label,.rule-row.icon-name>.field:nth-child(1) input{grid-column:1}
+.rule-row.icon-name>.field:nth-child(2) label,.rule-row.icon-name>.field:nth-child(2) input{grid-column:2}
+.rule-row.icon-name>.field label{grid-row:1;align-self:end;margin-bottom:0;min-height:14px}
+.rule-row.icon-name>.field input{grid-row:2;align-self:stretch}
 .rule-row>.field,.rule-grid>.field.field-full{min-width:0;margin:0}
 .rule-card .field label{font-size:11px;font-weight:700;color:var(--muted);margin-bottom:6px;display:block;line-height:1.25;letter-spacing:.01em}
 .rule-card .field input,.rule-card .field select{width:100%;height:44px;padding:0 12px;border:1px solid var(--line-strong);border-radius:12px;background:color-mix(in srgb,var(--card) 92%,var(--line));outline:none;box-sizing:border-box;font-size:15px;transition:border-color .15s,box-shadow .15s}
