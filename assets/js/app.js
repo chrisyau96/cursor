@@ -29,6 +29,8 @@
     {level:10,xp:14000,icon:'🏆',name:'Freedom Operator',desc:'A one-year standard of strong completion.'}
   ];
   let fileHandle=null;
+  const FILE_HANDLE_DB='momentumFileHandles';
+  const FILE_HANDLE_KEY='backup';
   let reminderTimer=null;
   let reportCursor=hkNow();
   let reportMode='month';
@@ -39,9 +41,9 @@
   let calendarHabitFilter='';
   let onboardStep=0;
   let lastLevel=1;
+  let lastMainView='homeView';
+  const MAIN_VIEWS=new Set(['homeView','habitsView','reportView','rewardsView']);
   let state=load(); normalizeState();
-
-  let manifestBlobUrl=null;
   const ONBOARD_STEPS=[
     {title:'Welcome to Momentum',body:'Build habits, reflect daily, and grow your identity. Everything stays on this device unless you connect a backup file.',view:'homeView',layout:'fullscreen',label:'👋 Let\'s take a quick tour'},
     {title:'Today\'s progress',body:'The ring shows how much of today\'s scheduled habits you\'ve completed.',view:'homeView',target:'#todayRing',placement:'below',cardAnchor:'below',label:'Completion ring'},
@@ -59,18 +61,12 @@
   const PREVIEW=3;
   const LAZY_CHUNK=10;
   const REMINDER_MSG_LIMIT=80;
-  const APP_ICON_PRESETS=[
-    {id:'default',label:'Default',src:'assets/icon-192.png'},
-    {id:'brand',label:'Indigo',emoji:'🌱',bg:'#4f46e5'},
-    {id:'green',label:'Growth',emoji:'🌿',bg:'#059669'},
-    {id:'sunrise',label:'Sunrise',emoji:'🌅',bg:'#ea580c'}
-  ];
   const iconBtn=(cls,svg,title)=>{const b=document.createElement('button'); b.className='act-btn '+cls; b.innerHTML=svg; b.title=title; b.setAttribute('aria-label',title); return b;};
 
   const USER_NAME_MAX=12;
   function rewardDefaults(includeGifts=false){return{creditRules:[{id:uid(),pct:50,amount:2},{id:uid(),pct:100,amount:10}],giftRules:includeGifts?[{id:uid(),gift:'Buffet',icon:'🍽️',pct:80,days:30}]:[],penaltyCredit:5,penaltyXp:20,penaltyZeroDays:2};}
-  function pickSettings(overrides={}){const gifts=overrides.includeGifts===true; const {includeGifts,...rest}=overrides; return{autoSync:false,fileConnected:false,reminders:false,colorMode:'system',styleTheme:'vivid',globalReminderTime:'20:30',profileIcon:'',userName:'',onboardingComplete:false,statusRowOpen:false,lastExportAt:'',vacations:[],dataMode:'real',appIcon:'default',appIconCustom:'',defaultReminderMessage:'Time for {habit}',rewards:rewardDefaults(gifts),...rest};}
-  function freshState(opts={}){const keep=opts.keep||{}; return{habits:[],records:[],journals:{},redemptions:[],groups:[],settings:pickSettings({dataMode:'real',includeGifts:false,startDate:todayKey(),onboardingComplete:opts.onboardingComplete??true,colorMode:keep.colorMode||'system',styleTheme:keep.styleTheme||'vivid',userName:keep.userName||'',profileIcon:keep.profileIcon||'',appIcon:keep.appIcon||'default',appIconCustom:keep.appIconCustom||''})};}
+  function pickSettings(overrides={}){const gifts=overrides.includeGifts===true; const {includeGifts,...rest}=overrides; return{autoSync:false,fileConnected:false,reminders:false,colorMode:'system',styleTheme:'vivid',globalReminderTime:'20:30',profileIcon:'',userName:'',onboardingComplete:false,statusRowOpen:false,lastExportAt:'',vacations:[],dataMode:'real',defaultReminderMessage:'Time for {habit}',rewards:rewardDefaults(gifts),...rest};}
+  function freshState(opts={}){const keep=opts.keep||{}; return{habits:[],records:[],journals:{},redemptions:[],groups:[],settings:pickSettings({dataMode:'real',includeGifts:false,startDate:todayKey(),onboardingComplete:opts.onboardingComplete??true,colorMode:keep.colorMode||'system',styleTheme:keep.styleTheme||'vivid',userName:keep.userName||'',profileIcon:keep.profileIcon||''})};}
   function demoState(opts={}){const keep=opts.keep||{};
     const habits=[
       {id:uid(),name:'Bible Time & Prayer',emoji:'📖',color:'#7c3aed',target:1,xpReward:5,frequency:{mode:'daily',days:[0,1,2,3,4,5,6]},reminder:{enabled:false,time:'07:15',message:''}},
@@ -93,7 +89,7 @@
       });
       if(k!==todayKey() && Math.random()<0.6){ journals[k]={mood:MOODS[Math.floor(Math.random()*MOODS.length)],energy:4+Math.floor(Math.random()*7),text:'',updatedAt:new Date().toISOString()}; }
     }
-    return{habits,records,journals,redemptions:[],groups,settings:pickSettings({dataMode:'demo',includeGifts:true,startDate:dateKey(startD),onboardingComplete:opts.onboardingComplete??false,colorMode:keep.colorMode||'system',styleTheme:keep.styleTheme||'vivid',userName:keep.userName||'',profileIcon:keep.profileIcon||'',appIcon:keep.appIcon||'default',appIconCustom:keep.appIconCustom||''})};
+    return{habits,records,journals,redemptions:[],groups,settings:pickSettings({dataMode:'demo',includeGifts:true,startDate:dateKey(startD),onboardingComplete:opts.onboardingComplete??false,colorMode:keep.colorMode||'system',styleTheme:keep.styleTheme||'vivid',userName:keep.userName||'',profileIcon:keep.profileIcon||''})};
   }
   function defaults(){return freshState({onboardingComplete:false});}
   function stateForMode(mode,opts={}){return mode==='real'?freshState(opts):demoState(opts);}
@@ -114,8 +110,8 @@
     state.habits=state.habits||[]; state.records=state.records||[]; state.journals=state.journals||{}; state.redemptions=state.redemptions||[];
     state.habits.forEach((h,i)=>{h.target=Number(h.target||1); h.xpReward=Math.max(1,Math.round(Number(h.xpReward)||5)); h.frequency=h.frequency||{mode:'daily',days:[0,1,2,3,4,5,6]}; if(!h.frequency.schedule&&h.frequency.mode!=='daily') h.frequency.schedule={type:'any'}; if(h.sortOrder===undefined) h.sortOrder=i; if(h.paused===undefined) h.paused=false; if(h.archived===undefined) h.archived=false; if(h.groupId===undefined) h.groupId=null; h.reminder=h.reminder||{enabled:false,time:state.settings.globalReminderTime||'20:30',message:''}; if(h.reminder.message===undefined) h.reminder.message='';});
     if(!state.settings.defaultReminderMessage) state.settings.defaultReminderMessage='Time for {habit}';
-    if(state.settings.appIcon===undefined) state.settings.appIcon='default';
-    if(state.settings.appIconCustom===undefined) state.settings.appIconCustom='';
+    delete state.settings.appIcon;
+    delete state.settings.appIconCustom;
     state.groups.forEach((g,i)=>{if(!g.id)g.id=uid(); if(g.sortOrder===undefined) g.sortOrder=i; if(!g.emoji)g.emoji='📋'; if(!g.color)g.color='#4f46e5';});
     ensureRewardShape(); localStorage.setItem(STORAGE,JSON.stringify(state));
   }
@@ -134,12 +130,19 @@
     document.documentElement.setAttribute('data-style','vivid');
   }
   function applyTheme(){applyAppearance();}
+  function resetDefaultAppIcons(){
+    const manifestLink=document.querySelector('link[rel="manifest"]');
+    if(manifestLink && !manifestLink.getAttribute('href')?.includes('manifest.webmanifest')) manifestLink.href='manifest.webmanifest';
+    [['#appFavicon','assets/icon.svg'],['#appFavicon192','assets/icon-192.png'],['#appAppleIcon','assets/icon-180.png']].forEach(([sel,href])=>{const el=$(sel); if(el) el.href=href;});
+  }
   async function save(skipSync=false, options={}){
     localStorage.setItem(STORAGE,JSON.stringify(state));
     if(options.celebrate!==false) checkCelebrations();
-    const mode=options.render ?? 'active';
+    const mode=options.render ?? 'none';
     if(mode==='all') renderAll();
-    else if(mode!=='none') renderAfterSave(mode==='active'?null:mode);
+    else if(mode==='active') renderAfterSave(null);
+    else if(mode!=='none') renderAfterSave(mode);
+    else { updateStatus(); renderTopProfile(); }
     if(!skipSync) void autoSync();
   }
   function toast(msg){const t=$('#toast'); t.textContent=msg; t.classList.add('show'); setTimeout(()=>t.classList.remove('show'),1600)}
@@ -297,7 +300,7 @@
   function zeroStreakAt(date){let s=0; const d=new Date(date); for(let i=0;i<366;i++){const k=dateKey(d); if(isVacationDay(k)){d.setDate(d.getDate()-1);continue;} const p=dayPct(d); if(p===0){s++; d.setDate(d.getDate()-1)} else break;} return s;}
 
   function pctClass(p){if(p>=100)return 'perfect'; if(p>=80)return 'good'; if(p>=50)return 'partial'; if(p>0)return 'low'; return 'zero';}
-  function updateStatus(){const sync=$('#syncStatus'), file=$('#fileStatus'), rem=$('#reminderStatus'); if(!sync)return; const connected=!!fileHandle; if(!connected && state.settings.autoSync){state.settings.autoSync=false; localStorage.setItem(STORAGE,JSON.stringify(state));} sync.className='status-pill '+(state.settings.autoSync&&connected?'on':''); sync.querySelector('span:last-child').textContent=(state.settings.autoSync&&connected)?'Auto Sync On':'Sync Off'; file.className='status-pill '+(connected?'on':(state.settings.fileConnected?'warn':'')); file.querySelector('span:last-child').textContent=connected?'File Connected':(state.settings.fileConnected?'Reconnect File':'No File'); file.style.cursor=(!connected&&state.settings.fileConnected)?'pointer':''; rem.className='status-pill '+(state.settings.reminders?'on':''); rem.querySelector('span:last-child').textContent=state.settings.reminders?'Reminders On':'Reminders Off'; const wrap=$('#statusRowWrap'); if(wrap) wrap.classList.toggle('open',!!state.settings.statusRowOpen);}
+  function updateStatus(){const sync=$('#syncStatus'), file=$('#fileStatus'), rem=$('#reminderStatus'); if(!sync)return; const connected=!!fileHandle; const syncActive=state.settings.autoSync&&connected; const syncPending=state.settings.autoSync&&!connected; sync.className='status-pill '+(syncActive?'on':syncPending?'warn':''); sync.querySelector('span:last-child').textContent=syncActive?'Auto Sync On':syncPending?'Reconnect to sync':'Sync Off'; file.className='status-pill '+(connected?'on':(state.settings.fileConnected?'warn':'')); file.querySelector('span:last-child').textContent=connected?'File Connected':(state.settings.fileConnected?'Reconnect File':'No File'); file.style.cursor=(!connected&&state.settings.fileConnected)?'pointer':''; rem.className='status-pill '+(state.settings.reminders?'on':''); rem.querySelector('span:last-child').textContent=state.settings.reminders?'Reminders On':'Reminders Off'; const wrap=$('#statusRowWrap'); if(wrap) wrap.classList.toggle('open',!!state.settings.statusRowOpen);}
 
   function updateHomeSummary(now, scheduled){
     let completed=0,total=0; scheduled.forEach(h=>{const c=completionOfHabit(h,now); completed+=Math.min(c.count,c.target); total+=c.target;});
@@ -340,8 +343,13 @@
     $('#greeting').textContent=timeGreeting()+greetName();
     $('#todayEntryStamp').textContent=fmtDate(now);
     updateHomeSummary(now, scheduled);
-    renderTodayHabitGroups(now, scheduled);
-    renderWeekStrip(); renderFlexibleHabits(now); renderHomeJournal(); renderQuote(); renderTopProfile(); renderWeeklyReviewCard();
+    const box=$('#todayHabitGroups');
+    const sig=dateKey(now)+'|'+scheduled.map(h=>h.id+':'+completionOfHabit(h,now).count).join(',');
+    if(box && box.dataset.sig!==sig){box.dataset.sig=sig; renderTodayHabitGroups(now, scheduled);}
+    const strip=$('#weekStrip');
+    const weekSig=weekOffset+'|'+todayKey();
+    if(strip && strip.dataset.sig!==weekSig){strip.dataset.sig=weekSig; renderWeekStrip();}
+    renderFlexibleHabits(now); renderHomeJournal(); renderQuote(); renderTopProfile(); renderWeeklyReviewCard();
     const wt=$('#weekToday'); if(wt) wt.style.display=weekOffset===0?'none':'inline-grid';
   }
   function renderTodayHabitGroups(now, scheduled){
@@ -434,8 +442,8 @@
     if(pct===100) celebrate('Perfect day! 🎉');
     toast('Recorded');
   }
-  async function removeRecord(id){state.records=state.records.filter(r=>r.id!==id); await save(); toast('Record removed')}
-  async function removeRedemption(id){state.redemptions=state.redemptions.filter(r=>r.id!==id); await save(); toast('Redemption removed')}
+  async function removeRecord(id){state.records=state.records.filter(r=>r.id!==id); await save(false,{render:'none'}); toast('Record removed')}
+  async function removeRedemption(id){state.redemptions=state.redemptions.filter(r=>r.id!==id); await save(false,{render:'none'}); toast('Redemption removed')}
   async function resetTodayRecords(){if(!confirm('Reset all habit records for today?'))return; const k=todayKey(); state.records=state.records.filter(r=>r.date!==k); await save(false,{render:'homeView'}); toast('Today reset')}
   async function resetHabitForDate(habitId,k){state.records=state.records.filter(r=>!(r.date===k&&r.habitId===habitId)); await save(false,{render:'none'}); refreshHomeAfterRecord(habitId,k); toast('Habit reset')}
 
@@ -857,7 +865,7 @@
     grid.innerHTML='';
     if(connected){
       grid.innerHTML='<button class="btn-secondary" id="exportBtn" type="button">Export a copy</button><button class="btn-inline gray" id="disconnectFileBtn" type="button">Disconnect file</button>';
-      $('#disconnectFileBtn').onclick=async()=>{fileHandle=null; state.settings.fileConnected=false; state.settings.autoSync=false; await save(true); updateStatus(); renderSettings(); toast('Disconnected');};
+      $('#disconnectFileBtn').onclick=async()=>{fileHandle=null; state.settings.fileConnected=false; state.settings.autoSync=false; await clearStoredFileHandle(); await save(true,{render:'none'}); updateStatus(); refreshSettingsChrome(); toast('Disconnected');};
       $('#exportBtn').onclick=exportJson;
     }else{
       grid.innerHTML='<button class="btn-primary" id="createFileBtn" type="button">Create backup file</button><button class="btn-secondary" id="connectFileBtn" type="button">Connect existing file</button><label class="btn-secondary sync-import-label" id="importLabel">Import JSON<input type="file" id="importInput" accept="application/json" hidden></label>';
@@ -871,60 +879,13 @@
     const connected=!!fileHandle;
     box.className='sync-status-panel'+(connected?' connected':state.settings.fileConnected?' warn':'');
     if(connected) box.innerHTML='<strong>Connected</strong><br>Edits sync to your backup file when auto sync is on.';
-    else if(state.settings.fileConnected) box.innerHTML='<strong>Reconnect needed</strong><br>Your previous backup was on another session. Connect the same JSON file to resume syncing.';
+    else if(state.settings.fileConnected) box.innerHTML=state.settings.autoSync?'<strong>Reconnect needed</strong><br>Auto sync is on. Connect the same JSON file to resume syncing.':'<strong>Reconnect needed</strong><br>Your previous backup was on another session. Connect the same JSON file to resume syncing.';
     else box.innerHTML='<strong>Not connected</strong><br>Create or connect a JSON backup file, or import an existing backup to load data.';
   }
   function openImportConnectModal(){
     if(!window.showOpenFilePicker){toast('Connect file needs Chrome/Edge on desktop');return;}
     openModal('Keep syncing?',`<p class="sheet-text">Your data is loaded. Connect the backup file on this device so future edits sync automatically.</p><div class="modal-actions"><button class="btn-secondary" data-close>Not now</button><button class="btn-primary" id="connectAfterImportBtn">Connect file</button></div>`);
     $('#connectAfterImportBtn').onclick=async()=>{closeModal(); await connectFile();};
-  }
-  function renderAppIconSettings(){
-    const grid=$('#appIconGrid'); if(!grid)return;
-    grid.innerHTML='';
-    APP_ICON_PRESETS.forEach(p=>{
-      const btn=document.createElement('button'); btn.type='button'; btn.className='app-icon-opt'+(state.settings.appIcon===p.id?' active':'');
-      if(p.src) btn.innerHTML=`<img src="${p.src}" alt=""><span>${p.label}</span>`;
-      else btn.innerHTML=`<div class="app-icon-emoji" style="background:${p.bg};display:grid;place-items:center;font-size:24px">${p.emoji}</div><span>${p.label}</span>`;
-      btn.onclick=async()=>{state.settings.appIcon=p.id; state.settings.appIconCustom=''; await save(false,{render:'none'}); applyAppIcon(); renderAppIconSettings(); toast('Icon saved. Re-add to home screen if it doesn\'t update.');};
-      grid.appendChild(btn);
-    });
-    const custom=document.createElement('button'); custom.type='button'; custom.className='app-icon-opt'+(state.settings.appIcon==='custom'?' active':'');
-    custom.innerHTML=state.settings.appIconCustom?`<img src="${state.settings.appIconCustom}" alt=""><span>Custom</span>`:`<div class="app-icon-emoji" style="background:var(--line);display:grid;place-items:center;font-size:18px">+</div><span>Custom</span>`;
-    custom.onclick=()=>$('#appIconInput')?.click();
-    grid.appendChild(custom);
-  }
-  function getAppIconHref(){
-    let href='assets/icon-192.png';
-    if(state.settings.appIcon==='custom' && state.settings.appIconCustom) href=state.settings.appIconCustom;
-    else {
-      const preset=APP_ICON_PRESETS.find(p=>p.id===state.settings.appIcon)||APP_ICON_PRESETS[0];
-      if(preset.src) href=preset.src;
-      else if(preset.emoji){
-        const c=document.createElement('canvas'); c.width=192; c.height=192; const ctx=c.getContext('2d');
-        ctx.fillStyle=preset.bg; ctx.fillRect(0,0,192,192); ctx.font='96px serif'; ctx.textAlign='center'; ctx.textBaseline='middle'; ctx.fillText(preset.emoji,96,104);
-        href=c.toDataURL('image/png');
-      }
-    }
-    return href;
-  }
-  function updateDynamicManifest(iconHref){
-    const manifestLink=document.querySelector('link[rel="manifest"]'); if(!manifestLink)return;
-    const iconType=iconHref.startsWith('data:')?'image/png':'image/png';
-    const manifest={name:'Momentum · Habit Tracker',short_name:'Momentum',description:'Build habits, journal your mood, and track trends — with rewards and local file sync.',start_url:'.',scope:'.',display:'standalone',orientation:'portrait',background_color:'#f4f6fb',theme_color:'#4f46e5',icons:[
-      {src:iconHref,sizes:'192x192',type:iconType,purpose:'any'},
-      {src:iconHref,sizes:'512x512',type:iconType,purpose:'any'},
-      {src:iconHref,sizes:'512x512',type:iconType,purpose:'maskable'}
-    ]};
-    if(manifestBlobUrl) URL.revokeObjectURL(manifestBlobUrl);
-    manifestBlobUrl=URL.createObjectURL(new Blob([JSON.stringify(manifest)],{type:'application/json'}));
-    manifestLink.href=manifestBlobUrl;
-  }
-  function applyAppIcon(){
-    const href=getAppIconHref();
-    const cacheBust=href.startsWith('data:')?href:`${href}${href.includes('?')?'&':'?'}v=${encodeURIComponent(state.settings.appIcon||'default')}`;
-    ['#appFavicon','#appFavicon192','#appAppleIcon'].forEach(sel=>{const el=$(sel); if(el) el.href=cacheBust;});
-    updateDynamicManifest(href);
   }
   function renderVacationSettings(){
     const box=$('#vacationSummary'); if(!box)return;
@@ -981,61 +942,143 @@
     };
   }
   async function applyDataMode(mode){
-    const keep={colorMode:state.settings.colorMode,styleTheme:state.settings.styleTheme,userName:state.settings.userName,profileIcon:state.settings.profileIcon,appIcon:state.settings.appIcon,appIconCustom:state.settings.appIconCustom};
+    const keep={colorMode:state.settings.colorMode,styleTheme:state.settings.styleTheme,userName:state.settings.userName,profileIcon:state.settings.profileIcon};
     localStorage.setItem('momentumDataMode',mode);
     state=stateForMode(mode,{onboardingComplete:true,keep});
     normalizeState();
+    invalidateSettings();
     fileHandle=null;
     weekOffset=0; trendCursor=hkNow(); reportCursor=hkNow();
     await save(true,{render:'all'});
     toast(mode==='real'?'Real use mode — start adding habits':'Demo data loaded');
     renderDataModeSettings();
   }
-  function renderSettings(){
-    ensureRewardShape(); if(!$('#rewardSettings'))return; const r=state.settings.rewards;
-    $('#rewardSettings').innerHTML=`<div class="segmented reward-rule-tabs" id="rewardTabs"><button data-tab="credit" class="${rewardActiveTab==='credit'?'active':''}">Credit</button><button data-tab="gift" class="${rewardActiveTab==='gift'?'active':''}">Gift</button><button data-tab="penalty" class="${rewardActiveTab==='penalty'?'active':''}">Penalty</button></div><div id="rewardPanel" class="form-grid"></div>`;
-    function drawRewardPanel(tab=rewardActiveTab){
-      rewardActiveTab=tab; const p=$('#rewardPanel');
-      if(tab==='credit'){
-        p.innerHTML=`<div class="panel-intro"><div class="panel-intro-title">Credit rules</div><div class="small-note">Each completion level can be used once. A 100% day also earns every lower level's reward.</div></div><div id="creditRulesBox"></div><button class="btn-secondary add-rule-btn" id="addCreditRule" type="button">+ Add credit rule</button>`;
-        const box=$('#creditRulesBox'); box.innerHTML='';
-        (r.creditRules||[]).forEach((rule,idx)=>{const div=document.createElement('div'); div.className='rule-card'; div.innerHTML=`<div class="rule-card-head"><div class="rule-card-title">Credit rule</div><span class="gift-rule-chip">HK$${rule.amount||0}</span></div><div class="rule-grid"><div class="rule-row"><div class="field"><label>Completion</label><select data-pct>${[50,60,70,80,90,100].map(n=>`<option value="${n}">${n}%+</option>`).join('')}</select></div><div class="field"><label>Amount</label><select data-amount>${[1,2,5,10,20,30,50,100].map(n=>`<option value="${n}">HK$${n}</option>`).join('')}</select></div></div></div><div class="rule-actions"><button class="btn-text-danger" data-remove type="button">Remove</button></div>`; div.querySelector('[data-pct]').value=rule.pct||100; div.querySelector('[data-amount]').value=rule.amount||10; const persist=async()=>{const pct=Number(div.querySelector('[data-pct]').value); const dup=(r.creditRules||[]).some((x,i)=>i!==idx&&Number(x.pct)===pct); if(dup){toast('Duplicate completion %'); return;} rule.pct=pct; rule.amount=Number(div.querySelector('[data-amount]').value); await save(false,{render:'none'});}; div.querySelector('[data-pct]').onchange=persist; div.querySelector('[data-amount]').onchange=persist; div.querySelector('[data-remove]').onclick=async()=>{r.creditRules.splice(idx,1); await save(false,{render:'none'}); drawRewardPanel('credit'); toast('Credit rule removed')}; box.appendChild(div);});
-      } else if(tab==='penalty'){
-        p.innerHTML=`<div class="panel-intro"><div class="panel-intro-title">Penalty rules</div><div class="small-note">Charged once each time you hit consecutive 0% days.</div></div><div class="rule-card"><div class="rule-grid"><div class="field field-full"><label>Trigger</label><select id="penaltyZeroDays">${[1,2,3,4,5,7].map(n=>`<option value="${n}">${n} missed day${n>1?'s':''} in a row</option>`).join('')}</select></div><div class="rule-row"><div class="field"><label>Deduct credit</label><select id="penaltyCredit">${[0,2,5,10,20,30,50].map(n=>`<option value="${n}">HK$${n}</option>`).join('')}</select></div><div class="field"><label>Deduct EXP</label><select id="penaltyXp">${[0,10,20,30,50,100].map(n=>`<option value="${n}">${n} EXP</option>`).join('')}</select></div></div></div></div>`;
-        $('#penaltyZeroDays').value=r.penaltyZeroDays||2; $('#penaltyCredit').value=r.penaltyCredit||5; $('#penaltyXp').value=r.penaltyXp||20;
-        const persist=async()=>{r.penaltyZeroDays=Number($('#penaltyZeroDays').value); r.penaltyCredit=Number($('#penaltyCredit').value); r.penaltyXp=Number($('#penaltyXp').value); await save(false,{render:'none'});};
-        $('#penaltyZeroDays').onchange=persist; $('#penaltyCredit').onchange=persist; $('#penaltyXp').onchange=persist;
-      } else {
-        p.innerHTML=`<div class="panel-intro"><div class="panel-intro-title">Gift rules</div><div class="small-note">Unlock a gift for keeping a streak. Earned gifts appear on the Rewards page.</div></div><div id="giftRulesBox"></div><button class="btn-secondary add-rule-btn" id="addGiftRule" type="button">+ Add gift rule</button>`;
-        const box=$('#giftRulesBox'); box.innerHTML='';
-        (r.giftRules||[]).forEach((g,idx)=>{const div=document.createElement('div'); div.className='rule-card'; div.innerHTML=`<div class="rule-card-head"><div class="rule-card-title">Gift rule</div><span class="gift-rule-chip">${g.icon||'🎁'} ${escapeHtml(g.gift||'Gift')}</span></div><div class="rule-grid"><div class="rule-row icon-name"><div class="field"><label>Icon</label><input class="rule-input-icon" data-icon value="${escapeAttr(g.icon||'🎁')}" maxlength="4" placeholder="🍽️"></div><div class="field"><label>Gift name</label><input data-gift value="${escapeAttr(g.gift||'Buffet')}" placeholder="Buffet"></div></div><div class="rule-row"><div class="field"><label>Completion</label><select data-pct>${[50,60,70,80,90,100].map(n=>`<option value="${n}">${n}%+</option>`).join('')}</select></div><div class="field"><label>Streak days</label><select data-days>${[7,14,21,30,45,60,90,120].map(n=>`<option value="${n}">${n} days</option>`).join('')}</select></div></div></div><div class="rule-actions"><button class="btn-text-danger" data-remove type="button">Remove</button></div>`; div.querySelector('[data-pct]').value=g.pct||80; div.querySelector('[data-days]').value=g.days||30; const persist=async()=>{g.icon=div.querySelector('[data-icon]').value.trim()||'🎁'; g.gift=div.querySelector('[data-gift]').value.trim()||'Gift'; g.pct=Number(div.querySelector('[data-pct]').value); g.days=Number(div.querySelector('[data-days]').value); await save(false,{render:'none'});}; div.querySelector('[data-icon]').onchange=persist; div.querySelector('[data-gift]').onchange=persist; div.querySelector('[data-pct]').onchange=persist; div.querySelector('[data-days]').onchange=persist; div.querySelector('[data-remove]').onclick=async()=>{r.giftRules.splice(idx,1); await save(false,{render:'none'}); drawRewardPanel('gift'); toast('Gift rule removed')}; box.appendChild(div);});
-      }
+  function refreshSettingsChrome(){
+    renderVacationSettings(); renderSyncActions(); renderDataModeSettings(); renderBackupStatus();
+    const start=$('#trackerStartDate'); if(start) start.value=state.settings.startDate||todayKey();
+    const disp=$('#startDateDisplay'); if(disp) disp.textContent=state.settings.startDate||todayKey();
+    $('#autoSyncSwitch')?.classList.toggle('on',state.settings.autoSync);
+    $('#reminderSwitch')?.classList.toggle('on',state.settings.reminders);
+  }
+  function drawRewardPanel(tab=rewardActiveTab){
+    ensureRewardShape(); const r=state.settings.rewards;
+    rewardActiveTab=tab; const p=$('#rewardPanel'); if(!p)return;
+    if(tab==='credit'){
+      p.innerHTML=`<div class="panel-intro"><div class="panel-intro-title">Credit rules</div><div class="small-note">Each completion level can be used once. A 100% day also earns every lower level's reward.</div></div><div id="creditRulesBox"></div><button class="btn-secondary add-rule-btn" id="addCreditRule" type="button">+ Add credit rule</button>`;
+      const box=$('#creditRulesBox'); box.innerHTML='';
+      (r.creditRules||[]).forEach((rule,idx)=>{const div=document.createElement('div'); div.className='rule-card'; div.innerHTML=`<div class="rule-card-head"><div class="rule-card-title">Credit rule</div><span class="gift-rule-chip">HK$${rule.amount||0}</span></div><div class="rule-grid"><div class="rule-row"><div class="field"><label>Completion</label><select data-pct>${[50,60,70,80,90,100].map(n=>`<option value="${n}">${n}%+</option>`).join('')}</select></div><div class="field"><label>Amount</label><select data-amount>${[1,2,5,10,20,30,50,100].map(n=>`<option value="${n}">HK$${n}</option>`).join('')}</select></div></div></div><div class="rule-actions"><button class="btn-text-danger" data-remove type="button">Remove</button></div>`; div.querySelector('[data-pct]').value=rule.pct||100; div.querySelector('[data-amount]').value=rule.amount||10; const persist=async()=>{const pct=Number(div.querySelector('[data-pct]').value); const dup=(r.creditRules||[]).some((x,i)=>i!==idx&&Number(x.pct)===pct); if(dup){toast('Duplicate completion %'); return;} rule.pct=pct; rule.amount=Number(div.querySelector('[data-amount]').value); await save(false,{render:'none'});}; div.querySelector('[data-pct]').onchange=persist; div.querySelector('[data-amount]').onchange=persist; div.querySelector('[data-remove]').onclick=async()=>{r.creditRules.splice(idx,1); await save(false,{render:'none'}); drawRewardPanel('credit'); toast('Credit rule removed')}; box.appendChild(div);});
+    } else if(tab==='penalty'){
+      p.innerHTML=`<div class="panel-intro"><div class="panel-intro-title">Penalty rules</div><div class="small-note">Charged once each time you hit consecutive 0% days.</div></div><div class="rule-card"><div class="rule-grid"><div class="field field-full"><label>Trigger</label><select id="penaltyZeroDays">${[1,2,3,4,5,7].map(n=>`<option value="${n}">${n} missed day${n>1?'s':''} in a row</option>`).join('')}</select></div><div class="rule-row"><div class="field"><label>Deduct credit</label><select id="penaltyCredit">${[0,2,5,10,20,30,50].map(n=>`<option value="${n}">HK$${n}</option>`).join('')}</select></div><div class="field"><label>Deduct EXP</label><select id="penaltyXp">${[0,10,20,30,50,100].map(n=>`<option value="${n}">${n} EXP</option>`).join('')}</select></div></div></div></div>`;
+      $('#penaltyZeroDays').value=r.penaltyZeroDays||2; $('#penaltyCredit').value=r.penaltyCredit||5; $('#penaltyXp').value=r.penaltyXp||20;
+      const persist=async()=>{r.penaltyZeroDays=Number($('#penaltyZeroDays').value); r.penaltyCredit=Number($('#penaltyCredit').value); r.penaltyXp=Number($('#penaltyXp').value); await save(false,{render:'none'});};
+      $('#penaltyZeroDays').onchange=persist; $('#penaltyCredit').onchange=persist; $('#penaltyXp').onchange=persist;
+    } else {
+      p.innerHTML=`<div class="panel-intro"><div class="panel-intro-title">Gift rules</div><div class="small-note">Unlock a gift for keeping a streak. Earned gifts appear on the Rewards page.</div></div><div id="giftRulesBox"></div><button class="btn-secondary add-rule-btn" id="addGiftRule" type="button">+ Add gift rule</button>`;
+      const box=$('#giftRulesBox'); box.innerHTML='';
+      (r.giftRules||[]).forEach((g,idx)=>{const div=document.createElement('div'); div.className='rule-card'; div.innerHTML=`<div class="rule-card-head"><div class="rule-card-title">Gift rule</div><span class="gift-rule-chip">${g.icon||'🎁'} ${escapeHtml(g.gift||'Gift')}</span></div><div class="rule-grid"><div class="rule-row icon-name"><div class="field"><label>Icon</label><input class="rule-input-icon" data-icon value="${escapeAttr(g.icon||'🎁')}" maxlength="4" placeholder="🍽️"></div><div class="field"><label>Gift name</label><input data-gift value="${escapeAttr(g.gift||'Buffet')}" placeholder="Buffet"></div></div><div class="rule-row"><div class="field"><label>Completion</label><select data-pct>${[50,60,70,80,90,100].map(n=>`<option value="${n}">${n}%+</option>`).join('')}</select></div><div class="field"><label>Streak days</label><select data-days>${[7,14,21,30,45,60,90,120].map(n=>`<option value="${n}">${n} days</option>`).join('')}</select></div></div></div><div class="rule-actions"><button class="btn-text-danger" data-remove type="button">Remove</button></div>`; div.querySelector('[data-pct]').value=g.pct||80; div.querySelector('[data-days]').value=g.days||30; const persist=async()=>{g.icon=div.querySelector('[data-icon]').value.trim()||'🎁'; g.gift=div.querySelector('[data-gift]').value.trim()||'Gift'; g.pct=Number(div.querySelector('[data-pct]').value); g.days=Number(div.querySelector('[data-days]').value); await save(false,{render:'none'});}; div.querySelector('[data-icon]').onchange=persist; div.querySelector('[data-gift]').onchange=persist; div.querySelector('[data-pct]').onchange=persist; div.querySelector('[data-days]').onchange=persist; div.querySelector('[data-remove]').onclick=async()=>{r.giftRules.splice(idx,1); await save(false,{render:'none'}); drawRewardPanel('gift'); toast('Gift rule removed')}; box.appendChild(div);});
     }
-    $('#rewardTabs').onclick=e=>{if(e.target.tagName!=='BUTTON')return; rewardActiveTab=e.target.dataset.tab; $$('#rewardTabs button').forEach(b=>b.classList.remove('active')); e.target.classList.add('active'); drawRewardPanel(rewardActiveTab);};
-    drawRewardPanel(rewardActiveTab);
-
-    renderVacationSettings(); renderSyncActions(); renderAppIconSettings(); renderDataModeSettings();
-
-    $('#trackerStartDate').value=state.settings.startDate||todayKey(); $('#startDateDisplay').textContent=state.settings.startDate||todayKey(); $('#trackerStartDate').onchange=async()=>{state.settings.startDate=$('#trackerStartDate').value||todayKey(); await save(false,{render:'none'}); toast('Start date saved')};
-    const un=$('#userNameInput'); if(un){un.value=(state.settings.userName||'').slice(0,USER_NAME_MAX); un.maxLength=USER_NAME_MAX;}
-    const nameCount=$('#userNameCount'); if(nameCount) nameCount.textContent=String((un?.value||'').length);
-    if(un && !un.dataset.bound){un.dataset.bound='1'; un.oninput=()=>{const c=$('#userNameCount'); if(c)c.textContent=String(un.value.length);}; un.onblur=async()=>{state.settings.userName=(un.value||'').trim().slice(0,USER_NAME_MAX); await save(false,{render:'none'}); $('#greeting').textContent=timeGreeting()+greetName();};}
-    const cms=$('#colorModeSelect'); if(cms){cms.value=state.settings.colorMode||'system'; cms.onchange=async()=>{state.settings.colorMode=cms.value; applyAppearance(); await save(false,{render:'none'}); toast('Theme saved');};}
+  }
+  function renderSettings(force=false){
+    ensureRewardShape(); const rs=$('#rewardSettings'); if(!rs)return;
+    const built=!force && rs.dataset.built==='1' && rs.querySelector('#rewardTabs');
+    if(!built){
+      rs.dataset.built='1';
+      rs.innerHTML=`<div class="segmented reward-rule-tabs" id="rewardTabs"><button data-tab="credit" class="${rewardActiveTab==='credit'?'active':''}">Credit</button><button data-tab="gift" class="${rewardActiveTab==='gift'?'active':''}">Gift</button><button data-tab="penalty" class="${rewardActiveTab==='penalty'?'active':''}">Penalty</button></div><div id="rewardPanel" class="form-grid"></div>`;
+      $('#rewardTabs').onclick=e=>{if(e.target.tagName!=='BUTTON')return; rewardActiveTab=e.target.dataset.tab; $$('#rewardTabs button').forEach(b=>b.classList.remove('active')); e.target.classList.add('active'); drawRewardPanel(rewardActiveTab);};
+      drawRewardPanel(rewardActiveTab);
+      const un=$('#userNameInput'); if(un){un.value=(state.settings.userName||'').slice(0,USER_NAME_MAX); un.maxLength=USER_NAME_MAX;}
+      const nameCount=$('#userNameCount'); if(nameCount) nameCount.textContent=String((un?.value||'').length);
+      if(un && !un.dataset.bound){un.dataset.bound='1'; un.oninput=()=>{const c=$('#userNameCount'); if(c)c.textContent=String(un.value.length);}; un.onblur=async()=>{state.settings.userName=(un.value||'').trim().slice(0,USER_NAME_MAX); await save(false,{render:'none'}); $('#greeting').textContent=timeGreeting()+greetName();};}
+      const cms=$('#colorModeSelect'); if(cms){cms.value=state.settings.colorMode||'system'; cms.onchange=async()=>{state.settings.colorMode=cms.value; applyAppearance(); await save(false,{render:'none'}); toast('Theme saved');};}
+      const upload=$('#profileIconInput'); if(upload && !upload.dataset.bound){upload.dataset.bound='1'; upload.onchange=e=>{const file=e.target.files&&e.target.files[0]; if(!file)return; const reader=new FileReader(); reader.onload=async()=>{state.settings.profileIcon=reader.result; await save(false,{render:'none'}); toast('Profile photo saved')}; reader.readAsDataURL(file);};}
+      $('#trackerStartDate').onchange=async()=>{state.settings.startDate=$('#trackerStartDate').value||todayKey(); await save(false,{render:'none'}); toast('Start date saved')};
+      if(!$('#reminderSettings')?.dataset.bound){
+        const rem=$('#reminderSettings'); if(rem) rem.dataset.bound='1';
+        $('#globalReminderTime')?.addEventListener('change',async()=>{state.settings.globalReminderTime=$('#globalReminderTime').value; await save(false,{render:'none'}); setupReminderLoop();});
+        $('#defaultReminderMessage')?.addEventListener('change',async()=>{state.settings.defaultReminderMessage=($('#defaultReminderMessage').value||'Time for {habit}').slice(0,REMINDER_MSG_LIMIT); await save(false,{render:'none'});});
+      }
+    } else {
+      $$('#rewardTabs button').forEach(b=>b.classList.toggle('active',b.dataset.tab===rewardActiveTab));
+    }
+    const remBox=$('#reminderSettings');
+    if(remBox && !remBox.querySelector('#globalReminderTime')){
+      remBox.innerHTML=`<div class="field"><label>Default Reminder Time</label><input type="time" id="globalReminderTime" value="${state.settings.globalReminderTime||'20:30'}"></div><div class="field"><label>Default notification message</label><input id="defaultReminderMessage" maxlength="${REMINDER_MSG_LIMIT}" value="${escapeAttr(state.settings.defaultReminderMessage||'Time for {habit}')}"><div class="hint">${REMINDER_MSG_LIMIT} characters max · Use {habit} for the habit name</div></div>`;
+    } else if(remBox){
+      const grt=$('#globalReminderTime'); if(grt) grt.value=state.settings.globalReminderTime||'20:30';
+      const drm=$('#defaultReminderMessage'); if(drm) drm.value=state.settings.defaultReminderMessage||'Time for {habit}';
+    }
+    refreshSettingsChrome();
     renderTopProfile();
-    const upload=$('#profileIconInput'); if(upload){upload.onchange=e=>{const file=e.target.files&&e.target.files[0]; if(!file)return; const reader=new FileReader(); reader.onload=async()=>{state.settings.profileIcon=reader.result; await save(false,{render:'none'}); toast('Profile photo saved')}; reader.readAsDataURL(file);};}
-    const appUpload=$('#appIconInput'); if(appUpload){appUpload.onchange=e=>{const file=e.target.files&&e.target.files[0]; if(!file)return; const reader=new FileReader(); reader.onload=async()=>{state.settings.appIcon='custom'; state.settings.appIconCustom=reader.result; await save(false,{render:'none'}); applyAppIcon(); renderAppIconSettings(); toast('Icon saved. Re-add to home screen if it doesn\'t update.')}; reader.readAsDataURL(file);};}
-    renderBackupStatus();
-    if(!fileHandle) state.settings.autoSync=false;
-    $('#autoSyncSwitch').classList.toggle('on',state.settings.autoSync);
-    $('#autoSyncSwitch').disabled=!fileHandle;
-    $('#reminderSwitch').classList.toggle('on',state.settings.reminders);
-    $('#reminderSettings').innerHTML=`<div class="field"><label>Default Reminder Time</label><input type="time" id="globalReminderTime" value="${state.settings.globalReminderTime||'20:30'}"></div><div class="field"><label>Default notification message</label><input id="defaultReminderMessage" maxlength="${REMINDER_MSG_LIMIT}" value="${escapeAttr(state.settings.defaultReminderMessage||'Time for {habit}')}"><div class="hint">${REMINDER_MSG_LIMIT} characters max · Use {habit} for the habit name</div></div>`;
-    $('#globalReminderTime').onchange=async()=>{state.settings.globalReminderTime=$('#globalReminderTime').value; await save(false,{render:'none'}); setupReminderLoop();};
-    $('#defaultReminderMessage').onchange=async()=>{state.settings.defaultReminderMessage=($('#defaultReminderMessage').value||'Time for {habit}').slice(0,REMINDER_MSG_LIMIT); await save(false,{render:'none'});};
+    $('#autoSyncSwitch').disabled=false;
   }
   /* ---------- FILE SYNC ---------- */
-  async function connectFile(){if(!window.showOpenFilePicker){toast('File connection needs Chrome/Edge on desktop. Use Export/Import instead.');return;} try{[fileHandle]=await window.showOpenFilePicker({types:[{description:'JSON Backup',accept:{'application/json':['.json']}}]}); const file=await fileHandle.getFile(); const txt=await file.text(); if(txt.trim()){state=JSON.parse(txt); normalizeState();} state.settings.fileConnected=true; state.settings.autoSync=true; await save(true,{render:'all'}); toast('File connected');}catch(e){}}
-  async function createFile(){if(!window.showSaveFilePicker){toast('Create file needs Chrome/Edge on desktop. Use Export instead.');return;} try{fileHandle=await window.showSaveFilePicker({suggestedName:'habit-tracker-backup.json',types:[{description:'JSON Backup',accept:{'application/json':['.json']}}]}); state.settings.fileConnected=true; state.settings.autoSync=true; await save(false,{render:'none'}); renderSettings(); toast('Backup file created');}catch(e){}}
+  function openHandleDb(){
+    return new Promise((resolve,reject)=>{
+      const req=indexedDB.open(FILE_HANDLE_DB,1);
+      req.onupgradeneeded=()=>{req.result.createObjectStore('handles');};
+      req.onsuccess=()=>resolve(req.result);
+      req.onerror=()=>reject(req.error);
+    });
+  }
+  async function storeFileHandle(handle){
+    if(!handle)return;
+    try{
+      const db=await openHandleDb();
+      await new Promise((resolve,reject)=>{
+        const tx=db.transaction('handles','readwrite');
+        tx.objectStore('handles').put(handle,FILE_HANDLE_KEY);
+        tx.oncomplete=()=>resolve();
+        tx.onerror=()=>reject(tx.error);
+      });
+    }catch(e){}
+  }
+  async function loadStoredFileHandle(){
+    try{
+      const db=await openHandleDb();
+      return await new Promise((resolve,reject)=>{
+        const tx=db.transaction('handles','readonly');
+        const req=tx.objectStore('handles').get(FILE_HANDLE_KEY);
+        req.onsuccess=()=>resolve(req.result||null);
+        req.onerror=()=>reject(req.error);
+      });
+    }catch(e){return null;}
+  }
+  async function clearStoredFileHandle(){
+    try{
+      const db=await openHandleDb();
+      await new Promise((resolve,reject)=>{
+        const tx=db.transaction('handles','readwrite');
+        tx.objectStore('handles').delete(FILE_HANDLE_KEY);
+        tx.oncomplete=()=>resolve();
+        tx.onerror=()=>reject(tx.error);
+      });
+    }catch(e){}
+  }
+  async function restoreFileConnection(){
+    const stored=await loadStoredFileHandle();
+    if(!stored)return false;
+    try{
+      if(await stored.queryPermission({mode:'readwrite'})!=='granted')return false;
+      fileHandle=stored;
+      state.settings.fileConnected=true;
+      return true;
+    }catch(e){return false;}
+  }
+  async function reconnectStoredFile(){
+    const stored=await loadStoredFileHandle();
+    if(!stored)return false;
+    try{
+      const perm=await stored.requestPermission({mode:'readwrite'});
+      if(perm!=='granted')return false;
+      fileHandle=stored;
+      state.settings.fileConnected=true;
+      updateStatus();
+      renderSettings();
+      return true;
+    }catch(e){return false;}
+  }
+  async function connectFile(){if(!window.showOpenFilePicker){toast('File connection needs Chrome/Edge on desktop. Use Export/Import instead.');return;} if(await reconnectStoredFile()){toast('File reconnected'); if(state.settings.autoSync) await save(true,{render:'all'}); else await save(false,{render:'none'}); refreshSettingsChrome(); return;} try{[fileHandle]=await window.showOpenFilePicker({types:[{description:'JSON Backup',accept:{'application/json':['.json']}}]}); const file=await fileHandle.getFile(); const txt=await file.text(); if(txt.trim()){state=JSON.parse(txt); normalizeState(); invalidateSettings();} state.settings.fileConnected=true; state.settings.autoSync=true; await storeFileHandle(fileHandle); await save(true,{render:'all'}); toast('File connected');}catch(e){}}
+  async function createFile(){if(!window.showSaveFilePicker){toast('Create file needs Chrome/Edge on desktop. Use Export instead.');return;} try{fileHandle=await window.showSaveFilePicker({suggestedName:'habit-tracker-backup.json',types:[{description:'JSON Backup',accept:{'application/json':['.json']}}]}); state.settings.fileConnected=true; state.settings.autoSync=true; await storeFileHandle(fileHandle); await save(false,{render:'none'}); refreshSettingsChrome(); toast('Backup file created');}catch(e){}}
   function reminderBody(habit){const tpl=(habit.reminder?.message||state.settings.defaultReminderMessage||'Time for {habit}').slice(0,REMINDER_MSG_LIMIT); return tpl.replace(/\{habit\}/g,habit.name||'your habit');}
   async function toggleReminders(){
     const turningOn=!state.settings.reminders;
@@ -1053,7 +1096,7 @@
   function setupReminderLoop(){if(reminderTimer)clearInterval(reminderTimer); if(!state.settings.reminders)return; reminderTimer=setInterval(()=>{const now=hkNow(); const hm=String(now.getHours()).padStart(2,"0")+":"+String(now.getMinutes()).padStart(2,"0"); state.habits.forEach(h=>{if(!h.reminder?.enabled||h.reminder.time!==hm||!isScheduledToday(h,now)||h.paused||h.archived)return; if(completionOfHabit(h,now).done)return; const last=`${h.id}-${todayKey()}-${hm}`; if(sessionStorage.getItem(last))return; sessionStorage.setItem(last,'1'); const body=reminderBody(h); if('Notification' in window && Notification.permission==='granted') new Notification('Momentum',{body}); else toast(body);});},30000)}
 
   function exportJson(){state.settings.lastExportAt=todayKey(); localStorage.setItem(STORAGE,JSON.stringify(state)); const blob=new Blob([JSON.stringify(state,null,2)],{type:'application/json'}); const a=document.createElement('a'); a.href=URL.createObjectURL(blob); a.download='habit-tracker-backup.json'; a.click(); URL.revokeObjectURL(a.href); updateStatus();}
-  function importJson(file){const r=new FileReader(); r.onload=async()=>{try{state=JSON.parse(r.result); normalizeState(); await save(true,{render:'all'}); toast('Imported'); if(!fileHandle) openImportConnectModal();}catch(e){toast('Invalid JSON')}}; r.readAsText(file)}
+  function importJson(file){const r=new FileReader(); r.onload=async()=>{try{state=JSON.parse(r.result); normalizeState(); invalidateSettings(); await save(true,{render:'all'}); toast('Imported'); if(!fileHandle) openImportConnectModal();}catch(e){toast('Invalid JSON')}}; r.readAsText(file)}
 
   /* ---------- SHELL ---------- */
   function renderAfterSave(viewId){
@@ -1067,7 +1110,8 @@
     else if(v==='levelView') renderLevel();
     else if(v==='settingsView') renderSettings();
   }
-  function renderAll(){updateStatus(); applyAppearance(); applyAppIcon(); renderHome(); renderHabits(); renderReport(); renderRewards(); renderLevel(); renderSettings();}
+  function invalidateSettings(){const rs=$('#rewardSettings'); if(rs) delete rs.dataset.built;}
+  function renderAll(){updateStatus(); applyAppearance(); renderHome(); renderHabits(); renderReport(); renderRewards(); renderLevel(); renderSettings(true);}
   function showXpPop(t){
     const shell=$('.app-shell');
     let layer=$('#expPopLayer');
@@ -1084,7 +1128,27 @@
   function escapeHtml(s=''){return String(s).replace(/[&<>"]/g,m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[m]))}
   function escapeAttr(s=''){return escapeHtml(s).replace(/'/g,'&#39;')}
 
-  function showView(view){$$('.nav-item').forEach(x=>x.classList.toggle('active',x.dataset.view===view)); $$('.view').forEach(v=>v.classList.remove('active')); const el=$('#'+view); if(el)el.classList.add('active'); const host=$('.view-host'); if(host)host.scrollTop=0; if(view==='reportView')renderReport(); if(view==='rewardsView')renderRewards(); if(view==='levelView')renderLevel(); if(view==='settingsView')renderSettings();}
+  function showView(view){
+    const prev=$('.view.active')?.id;
+    if(MAIN_VIEWS.has(view)) lastMainView=view;
+    const navHighlight=MAIN_VIEWS.has(view)?view:lastMainView;
+    $$('.nav-item').forEach(x=>x.classList.toggle('active',x.dataset.view===navHighlight));
+    $$('.view').forEach(v=>v.classList.remove('active','view-enter'));
+    const el=$('#'+view);
+    if(el){
+      el.classList.add('active');
+      if(prev!==view){
+        el.classList.add('view-enter');
+        el.addEventListener('animationend',()=>el.classList.remove('view-enter'),{once:true});
+      }
+    }
+    const host=$('.view-host');
+    if(host && prev!==view) host.scrollTop=0;
+    if(view==='reportView')renderReport();
+    if(view==='rewardsView')renderRewards();
+    if(view==='levelView')renderLevel();
+    if(view==='settingsView') renderSettings();
+  }
   $$('.nav-item').forEach(b=>b.onclick=()=>showView(b.dataset.view));
   const fab=$('#fabAdd'); if(fab) fab.onclick=()=>openHabitModal();
   $('#profileQuick').onclick=()=>showView('levelView'); $('#topSettingsBtn').onclick=()=>showView('settingsView');
@@ -1106,9 +1170,31 @@
   $('#reportPrev').onclick=()=>{reportCursor.setMonth(reportCursor.getMonth()-(reportMode==='month'?1:3)); renderCalendar();}; $('#reportNext').onclick=()=>{reportCursor.setMonth(reportCursor.getMonth()+(reportMode==='month'?1:3)); renderCalendar();};
   $('#fileStatus')?.addEventListener('click',()=>{if(!fileHandle&&state.settings.fileConnected){showView('settingsView'); connectFile();}});
   window.addEventListener('resize',()=>{if($('#onboardBackdrop')?.classList.contains('show')) positionOnboardCallout(ONBOARD_STEPS[onboardStep]);});
-  $('#autoSyncSwitch')?.addEventListener('click',async()=>{if(!fileHandle){state.settings.autoSync=false; toast('Connect a backup file first'); renderSettings(); return;} state.settings.autoSync=!state.settings.autoSync; await save(false,{render:'none'}); $('#autoSyncSwitch')?.classList.toggle('on',state.settings.autoSync);});
+  $('#autoSyncSwitch')?.addEventListener('click',async()=>{
+    if(!fileHandle){
+      if(state.settings.autoSync){
+        state.settings.autoSync=false;
+        await save(false,{render:'none'});
+        $('#autoSyncSwitch')?.classList.toggle('on',false);
+        return;
+      }
+      if(state.settings.fileConnected && await reconnectStoredFile()){
+        state.settings.autoSync=true;
+        await save(false,{render:'none'});
+        $('#autoSyncSwitch')?.classList.toggle('on',true);
+        toast('Auto sync restored');
+        return;
+      }
+      toast('Connect a backup file first');
+      refreshSettingsChrome();
+      return;
+    }
+    state.settings.autoSync=!state.settings.autoSync;
+    await save(false,{render:'none'});
+    $('#autoSyncSwitch')?.classList.toggle('on',state.settings.autoSync);
+  });
   $('#reminderSwitch')?.addEventListener('click',toggleReminders);
-  $('#resetAllBtn').onclick=async()=>{if($('#confirmDeleteInput').value!=='Confirm'){toast('Type Confirm first');return;} if(!confirm('Erase all data and reset to your selected data mode?'))return; const mode=state.settings.dataMode||'demo'; const keep={colorMode:state.settings.colorMode,styleTheme:state.settings.styleTheme,userName:state.settings.userName,profileIcon:state.settings.profileIcon,appIcon:state.settings.appIcon,appIconCustom:state.settings.appIconCustom}; state=stateForMode(mode,{onboardingComplete:true,keep}); fileHandle=null; localStorage.setItem(STORAGE,JSON.stringify(state)); normalizeState(); await save(true,{render:'all'}); toast('Data erased');};
+  $('#resetAllBtn').onclick=async()=>{if($('#confirmDeleteInput').value!=='Confirm'){toast('Type Confirm first');return;} if(!confirm('Erase all data and reset to your selected data mode?'))return; const mode=state.settings.dataMode||'demo'; const keep={colorMode:state.settings.colorMode,styleTheme:state.settings.styleTheme,userName:state.settings.userName,profileIcon:state.settings.profileIcon}; state=stateForMode(mode,{onboardingComplete:true,keep}); fileHandle=null; localStorage.setItem(STORAGE,JSON.stringify(state)); normalizeState(); invalidateSettings(); await save(true,{render:'all'}); toast('Data erased');};
   document.body.addEventListener('click',async e=>{
     const check=e.target.closest('button.check-btn[data-habit-id]:not(.done):not(:disabled)');
     if(check){
@@ -1134,7 +1220,7 @@
       if(!pct){toast('All completion rules already used');return;}
       r.creditRules.push({id:uid(),pct,amount:pct>=100?10:2});
       await save(false,{render:'none'}); toast('Credit rule added');
-      if($('#rewardSettings')) renderSettings();
+      if($('#rewardPanel')) drawRewardPanel('credit');
       return;
     }
     const addGift=e.target.closest('#addGiftRule');
@@ -1143,13 +1229,18 @@
       r.giftRules=r.giftRules||[];
       r.giftRules.push({id:uid(),gift:'Buffet',icon:'🍽️',pct:80,days:30});
       await save(false,{render:'none'}); toast('Gift rule added');
-      if($('#rewardSettings')) renderSettings();
+      if($('#rewardPanel')) drawRewardPanel('gift');
       return;
     }
     if(!e.target.closest('.swipe-wrap')) $$('.swipe-wrap.open').forEach(w=>w.classList.remove('open'));
   });
   $('#comparePeriodTabs')?.addEventListener('click',e=>{if(e.target.tagName!=='BUTTON')return; comparePeriod=e.target.dataset.period; $$('#comparePeriodTabs button').forEach(b=>b.classList.remove('active')); e.target.classList.add('active'); renderComparePeriods();});
   window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change',()=>{if((state.settings.colorMode||'system')==='system') applyAppearance();});
+  resetDefaultAppIcons();
   lastLevel=levelInfo().cur.level;
-  applyAppearance(); setupReminderLoop(); renderAll(); renderOnboarding();
+  applyAppearance();
+  setupReminderLoop();
+  renderAll();
+  renderOnboarding();
+  void restoreFileConnection().then(connected=>{if(connected) refreshSettingsChrome();});
 })();
