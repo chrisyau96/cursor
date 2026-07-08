@@ -110,6 +110,8 @@
     state.habits=state.habits||[]; state.records=state.records||[]; state.journals=state.journals||{}; state.redemptions=state.redemptions||[];
     state.habits.forEach((h,i)=>{h.target=Number(h.target||1); h.xpReward=Math.max(1,Math.round(Number(h.xpReward)||5)); h.frequency=h.frequency||{mode:'daily',days:[0,1,2,3,4,5,6]}; if(!h.frequency.schedule&&h.frequency.mode!=='daily') h.frequency.schedule={type:'any'}; if(h.sortOrder===undefined) h.sortOrder=i; if(h.paused===undefined) h.paused=false; if(h.archived===undefined) h.archived=false; if(h.groupId===undefined) h.groupId=null; h.reminder=h.reminder||{enabled:false,time:state.settings.globalReminderTime||'20:30',message:''}; if(h.reminder.message===undefined) h.reminder.message='';});
     if(!state.settings.defaultReminderMessage) state.settings.defaultReminderMessage='Time for {habit}';
+    delete state.settings.appIcon;
+    delete state.settings.appIconCustom;
     state.groups.forEach((g,i)=>{if(!g.id)g.id=uid(); if(g.sortOrder===undefined) g.sortOrder=i; if(!g.emoji)g.emoji='📋'; if(!g.color)g.color='#4f46e5';});
     ensureRewardShape(); localStorage.setItem(STORAGE,JSON.stringify(state));
   }
@@ -128,12 +130,19 @@
     document.documentElement.setAttribute('data-style','vivid');
   }
   function applyTheme(){applyAppearance();}
+  function resetDefaultAppIcons(){
+    const manifestLink=document.querySelector('link[rel="manifest"]');
+    if(manifestLink && !manifestLink.getAttribute('href')?.includes('manifest.webmanifest')) manifestLink.href='manifest.webmanifest';
+    [['#appFavicon','assets/icon.svg'],['#appFavicon192','assets/icon-192.png'],['#appAppleIcon','assets/icon-180.png']].forEach(([sel,href])=>{const el=$(sel); if(el) el.href=href;});
+  }
   async function save(skipSync=false, options={}){
     localStorage.setItem(STORAGE,JSON.stringify(state));
     if(options.celebrate!==false) checkCelebrations();
-    const mode=options.render ?? 'active';
+    const mode=options.render ?? 'none';
     if(mode==='all') renderAll();
-    else if(mode!=='none') renderAfterSave(mode==='active'?null:mode);
+    else if(mode==='active') renderAfterSave(null);
+    else if(mode!=='none') renderAfterSave(mode);
+    else { updateStatus(); renderTopProfile(); }
     if(!skipSync) void autoSync();
   }
   function toast(msg){const t=$('#toast'); t.textContent=msg; t.classList.add('show'); setTimeout(()=>t.classList.remove('show'),1600)}
@@ -334,8 +343,13 @@
     $('#greeting').textContent=timeGreeting()+greetName();
     $('#todayEntryStamp').textContent=fmtDate(now);
     updateHomeSummary(now, scheduled);
-    renderTodayHabitGroups(now, scheduled);
-    renderWeekStrip(); renderFlexibleHabits(now); renderHomeJournal(); renderQuote(); renderTopProfile(); renderWeeklyReviewCard();
+    const box=$('#todayHabitGroups');
+    const sig=dateKey(now)+'|'+scheduled.map(h=>h.id+':'+completionOfHabit(h,now).count).join(',');
+    if(box && box.dataset.sig!==sig){box.dataset.sig=sig; renderTodayHabitGroups(now, scheduled);}
+    const strip=$('#weekStrip');
+    const weekSig=weekOffset+'|'+todayKey();
+    if(strip && strip.dataset.sig!==weekSig){strip.dataset.sig=weekSig; renderWeekStrip();}
+    renderFlexibleHabits(now); renderHomeJournal(); renderQuote(); renderTopProfile(); renderWeeklyReviewCard();
     const wt=$('#weekToday'); if(wt) wt.style.display=weekOffset===0?'none':'inline-grid';
   }
   function renderTodayHabitGroups(now, scheduled){
@@ -428,8 +442,8 @@
     if(pct===100) celebrate('Perfect day! 🎉');
     toast('Recorded');
   }
-  async function removeRecord(id){state.records=state.records.filter(r=>r.id!==id); await save(); toast('Record removed')}
-  async function removeRedemption(id){state.redemptions=state.redemptions.filter(r=>r.id!==id); await save(); toast('Redemption removed')}
+  async function removeRecord(id){state.records=state.records.filter(r=>r.id!==id); await save(false,{render:'none'}); toast('Record removed')}
+  async function removeRedemption(id){state.redemptions=state.redemptions.filter(r=>r.id!==id); await save(false,{render:'none'}); toast('Redemption removed')}
   async function resetTodayRecords(){if(!confirm('Reset all habit records for today?'))return; const k=todayKey(); state.records=state.records.filter(r=>r.date!==k); await save(false,{render:'homeView'}); toast('Today reset')}
   async function resetHabitForDate(habitId,k){state.records=state.records.filter(r=>!(r.date===k&&r.habitId===habitId)); await save(false,{render:'none'}); refreshHomeAfterRecord(habitId,k); toast('Habit reset')}
 
@@ -851,7 +865,7 @@
     grid.innerHTML='';
     if(connected){
       grid.innerHTML='<button class="btn-secondary" id="exportBtn" type="button">Export a copy</button><button class="btn-inline gray" id="disconnectFileBtn" type="button">Disconnect file</button>';
-      $('#disconnectFileBtn').onclick=async()=>{fileHandle=null; state.settings.fileConnected=false; state.settings.autoSync=false; await clearStoredFileHandle(); await save(true); updateStatus(); renderSettings(); toast('Disconnected');};
+      $('#disconnectFileBtn').onclick=async()=>{fileHandle=null; state.settings.fileConnected=false; state.settings.autoSync=false; await clearStoredFileHandle(); await save(true,{render:'none'}); updateStatus(); refreshSettingsChrome(); toast('Disconnected');};
       $('#exportBtn').onclick=exportJson;
     }else{
       grid.innerHTML='<button class="btn-primary" id="createFileBtn" type="button">Create backup file</button><button class="btn-secondary" id="connectFileBtn" type="button">Connect existing file</button><label class="btn-secondary sync-import-label" id="importLabel">Import JSON<input type="file" id="importInput" accept="application/json" hidden></label>';
@@ -932,51 +946,70 @@
     localStorage.setItem('momentumDataMode',mode);
     state=stateForMode(mode,{onboardingComplete:true,keep});
     normalizeState();
+    invalidateSettings();
     fileHandle=null;
     weekOffset=0; trendCursor=hkNow(); reportCursor=hkNow();
     await save(true,{render:'all'});
     toast(mode==='real'?'Real use mode — start adding habits':'Demo data loaded');
     renderDataModeSettings();
   }
-  function renderSettings(){
-    ensureRewardShape(); if(!$('#rewardSettings'))return; const r=state.settings.rewards;
-    $('#rewardSettings').innerHTML=`<div class="segmented reward-rule-tabs" id="rewardTabs"><button data-tab="credit" class="${rewardActiveTab==='credit'?'active':''}">Credit</button><button data-tab="gift" class="${rewardActiveTab==='gift'?'active':''}">Gift</button><button data-tab="penalty" class="${rewardActiveTab==='penalty'?'active':''}">Penalty</button></div><div id="rewardPanel" class="form-grid"></div>`;
-    function drawRewardPanel(tab=rewardActiveTab){
-      rewardActiveTab=tab; const p=$('#rewardPanel');
-      if(tab==='credit'){
-        p.innerHTML=`<div class="panel-intro"><div class="panel-intro-title">Credit rules</div><div class="small-note">Each completion level can be used once. A 100% day also earns every lower level's reward.</div></div><div id="creditRulesBox"></div><button class="btn-secondary add-rule-btn" id="addCreditRule" type="button">+ Add credit rule</button>`;
-        const box=$('#creditRulesBox'); box.innerHTML='';
-        (r.creditRules||[]).forEach((rule,idx)=>{const div=document.createElement('div'); div.className='rule-card'; div.innerHTML=`<div class="rule-card-head"><div class="rule-card-title">Credit rule</div><span class="gift-rule-chip">HK$${rule.amount||0}</span></div><div class="rule-grid"><div class="rule-row"><div class="field"><label>Completion</label><select data-pct>${[50,60,70,80,90,100].map(n=>`<option value="${n}">${n}%+</option>`).join('')}</select></div><div class="field"><label>Amount</label><select data-amount>${[1,2,5,10,20,30,50,100].map(n=>`<option value="${n}">HK$${n}</option>`).join('')}</select></div></div></div><div class="rule-actions"><button class="btn-text-danger" data-remove type="button">Remove</button></div>`; div.querySelector('[data-pct]').value=rule.pct||100; div.querySelector('[data-amount]').value=rule.amount||10; const persist=async()=>{const pct=Number(div.querySelector('[data-pct]').value); const dup=(r.creditRules||[]).some((x,i)=>i!==idx&&Number(x.pct)===pct); if(dup){toast('Duplicate completion %'); return;} rule.pct=pct; rule.amount=Number(div.querySelector('[data-amount]').value); await save(false,{render:'none'});}; div.querySelector('[data-pct]').onchange=persist; div.querySelector('[data-amount]').onchange=persist; div.querySelector('[data-remove]').onclick=async()=>{r.creditRules.splice(idx,1); await save(false,{render:'none'}); drawRewardPanel('credit'); toast('Credit rule removed')}; box.appendChild(div);});
-      } else if(tab==='penalty'){
-        p.innerHTML=`<div class="panel-intro"><div class="panel-intro-title">Penalty rules</div><div class="small-note">Charged once each time you hit consecutive 0% days.</div></div><div class="rule-card"><div class="rule-grid"><div class="field field-full"><label>Trigger</label><select id="penaltyZeroDays">${[1,2,3,4,5,7].map(n=>`<option value="${n}">${n} missed day${n>1?'s':''} in a row</option>`).join('')}</select></div><div class="rule-row"><div class="field"><label>Deduct credit</label><select id="penaltyCredit">${[0,2,5,10,20,30,50].map(n=>`<option value="${n}">HK$${n}</option>`).join('')}</select></div><div class="field"><label>Deduct EXP</label><select id="penaltyXp">${[0,10,20,30,50,100].map(n=>`<option value="${n}">${n} EXP</option>`).join('')}</select></div></div></div></div>`;
-        $('#penaltyZeroDays').value=r.penaltyZeroDays||2; $('#penaltyCredit').value=r.penaltyCredit||5; $('#penaltyXp').value=r.penaltyXp||20;
-        const persist=async()=>{r.penaltyZeroDays=Number($('#penaltyZeroDays').value); r.penaltyCredit=Number($('#penaltyCredit').value); r.penaltyXp=Number($('#penaltyXp').value); await save(false,{render:'none'});};
-        $('#penaltyZeroDays').onchange=persist; $('#penaltyCredit').onchange=persist; $('#penaltyXp').onchange=persist;
-      } else {
-        p.innerHTML=`<div class="panel-intro"><div class="panel-intro-title">Gift rules</div><div class="small-note">Unlock a gift for keeping a streak. Earned gifts appear on the Rewards page.</div></div><div id="giftRulesBox"></div><button class="btn-secondary add-rule-btn" id="addGiftRule" type="button">+ Add gift rule</button>`;
-        const box=$('#giftRulesBox'); box.innerHTML='';
-        (r.giftRules||[]).forEach((g,idx)=>{const div=document.createElement('div'); div.className='rule-card'; div.innerHTML=`<div class="rule-card-head"><div class="rule-card-title">Gift rule</div><span class="gift-rule-chip">${g.icon||'🎁'} ${escapeHtml(g.gift||'Gift')}</span></div><div class="rule-grid"><div class="rule-row icon-name"><div class="field"><label>Icon</label><input class="rule-input-icon" data-icon value="${escapeAttr(g.icon||'🎁')}" maxlength="4" placeholder="🍽️"></div><div class="field"><label>Gift name</label><input data-gift value="${escapeAttr(g.gift||'Buffet')}" placeholder="Buffet"></div></div><div class="rule-row"><div class="field"><label>Completion</label><select data-pct>${[50,60,70,80,90,100].map(n=>`<option value="${n}">${n}%+</option>`).join('')}</select></div><div class="field"><label>Streak days</label><select data-days>${[7,14,21,30,45,60,90,120].map(n=>`<option value="${n}">${n} days</option>`).join('')}</select></div></div></div><div class="rule-actions"><button class="btn-text-danger" data-remove type="button">Remove</button></div>`; div.querySelector('[data-pct]').value=g.pct||80; div.querySelector('[data-days]').value=g.days||30; const persist=async()=>{g.icon=div.querySelector('[data-icon]').value.trim()||'🎁'; g.gift=div.querySelector('[data-gift]').value.trim()||'Gift'; g.pct=Number(div.querySelector('[data-pct]').value); g.days=Number(div.querySelector('[data-days]').value); await save(false,{render:'none'});}; div.querySelector('[data-icon]').onchange=persist; div.querySelector('[data-gift]').onchange=persist; div.querySelector('[data-pct]').onchange=persist; div.querySelector('[data-days]').onchange=persist; div.querySelector('[data-remove]').onclick=async()=>{r.giftRules.splice(idx,1); await save(false,{render:'none'}); drawRewardPanel('gift'); toast('Gift rule removed')}; box.appendChild(div);});
-      }
+  function refreshSettingsChrome(){
+    renderVacationSettings(); renderSyncActions(); renderDataModeSettings(); renderBackupStatus();
+    const start=$('#trackerStartDate'); if(start) start.value=state.settings.startDate||todayKey();
+    const disp=$('#startDateDisplay'); if(disp) disp.textContent=state.settings.startDate||todayKey();
+    $('#autoSyncSwitch')?.classList.toggle('on',state.settings.autoSync);
+    $('#reminderSwitch')?.classList.toggle('on',state.settings.reminders);
+  }
+  function drawRewardPanel(tab=rewardActiveTab){
+    ensureRewardShape(); const r=state.settings.rewards;
+    rewardActiveTab=tab; const p=$('#rewardPanel'); if(!p)return;
+    if(tab==='credit'){
+      p.innerHTML=`<div class="panel-intro"><div class="panel-intro-title">Credit rules</div><div class="small-note">Each completion level can be used once. A 100% day also earns every lower level's reward.</div></div><div id="creditRulesBox"></div><button class="btn-secondary add-rule-btn" id="addCreditRule" type="button">+ Add credit rule</button>`;
+      const box=$('#creditRulesBox'); box.innerHTML='';
+      (r.creditRules||[]).forEach((rule,idx)=>{const div=document.createElement('div'); div.className='rule-card'; div.innerHTML=`<div class="rule-card-head"><div class="rule-card-title">Credit rule</div><span class="gift-rule-chip">HK$${rule.amount||0}</span></div><div class="rule-grid"><div class="rule-row"><div class="field"><label>Completion</label><select data-pct>${[50,60,70,80,90,100].map(n=>`<option value="${n}">${n}%+</option>`).join('')}</select></div><div class="field"><label>Amount</label><select data-amount>${[1,2,5,10,20,30,50,100].map(n=>`<option value="${n}">HK$${n}</option>`).join('')}</select></div></div></div><div class="rule-actions"><button class="btn-text-danger" data-remove type="button">Remove</button></div>`; div.querySelector('[data-pct]').value=rule.pct||100; div.querySelector('[data-amount]').value=rule.amount||10; const persist=async()=>{const pct=Number(div.querySelector('[data-pct]').value); const dup=(r.creditRules||[]).some((x,i)=>i!==idx&&Number(x.pct)===pct); if(dup){toast('Duplicate completion %'); return;} rule.pct=pct; rule.amount=Number(div.querySelector('[data-amount]').value); await save(false,{render:'none'});}; div.querySelector('[data-pct]').onchange=persist; div.querySelector('[data-amount]').onchange=persist; div.querySelector('[data-remove]').onclick=async()=>{r.creditRules.splice(idx,1); await save(false,{render:'none'}); drawRewardPanel('credit'); toast('Credit rule removed')}; box.appendChild(div);});
+    } else if(tab==='penalty'){
+      p.innerHTML=`<div class="panel-intro"><div class="panel-intro-title">Penalty rules</div><div class="small-note">Charged once each time you hit consecutive 0% days.</div></div><div class="rule-card"><div class="rule-grid"><div class="field field-full"><label>Trigger</label><select id="penaltyZeroDays">${[1,2,3,4,5,7].map(n=>`<option value="${n}">${n} missed day${n>1?'s':''} in a row</option>`).join('')}</select></div><div class="rule-row"><div class="field"><label>Deduct credit</label><select id="penaltyCredit">${[0,2,5,10,20,30,50].map(n=>`<option value="${n}">HK$${n}</option>`).join('')}</select></div><div class="field"><label>Deduct EXP</label><select id="penaltyXp">${[0,10,20,30,50,100].map(n=>`<option value="${n}">${n} EXP</option>`).join('')}</select></div></div></div></div>`;
+      $('#penaltyZeroDays').value=r.penaltyZeroDays||2; $('#penaltyCredit').value=r.penaltyCredit||5; $('#penaltyXp').value=r.penaltyXp||20;
+      const persist=async()=>{r.penaltyZeroDays=Number($('#penaltyZeroDays').value); r.penaltyCredit=Number($('#penaltyCredit').value); r.penaltyXp=Number($('#penaltyXp').value); await save(false,{render:'none'});};
+      $('#penaltyZeroDays').onchange=persist; $('#penaltyCredit').onchange=persist; $('#penaltyXp').onchange=persist;
+    } else {
+      p.innerHTML=`<div class="panel-intro"><div class="panel-intro-title">Gift rules</div><div class="small-note">Unlock a gift for keeping a streak. Earned gifts appear on the Rewards page.</div></div><div id="giftRulesBox"></div><button class="btn-secondary add-rule-btn" id="addGiftRule" type="button">+ Add gift rule</button>`;
+      const box=$('#giftRulesBox'); box.innerHTML='';
+      (r.giftRules||[]).forEach((g,idx)=>{const div=document.createElement('div'); div.className='rule-card'; div.innerHTML=`<div class="rule-card-head"><div class="rule-card-title">Gift rule</div><span class="gift-rule-chip">${g.icon||'🎁'} ${escapeHtml(g.gift||'Gift')}</span></div><div class="rule-grid"><div class="rule-row icon-name"><div class="field"><label>Icon</label><input class="rule-input-icon" data-icon value="${escapeAttr(g.icon||'🎁')}" maxlength="4" placeholder="🍽️"></div><div class="field"><label>Gift name</label><input data-gift value="${escapeAttr(g.gift||'Buffet')}" placeholder="Buffet"></div></div><div class="rule-row"><div class="field"><label>Completion</label><select data-pct>${[50,60,70,80,90,100].map(n=>`<option value="${n}">${n}%+</option>`).join('')}</select></div><div class="field"><label>Streak days</label><select data-days>${[7,14,21,30,45,60,90,120].map(n=>`<option value="${n}">${n} days</option>`).join('')}</select></div></div></div><div class="rule-actions"><button class="btn-text-danger" data-remove type="button">Remove</button></div>`; div.querySelector('[data-pct]').value=g.pct||80; div.querySelector('[data-days]').value=g.days||30; const persist=async()=>{g.icon=div.querySelector('[data-icon]').value.trim()||'🎁'; g.gift=div.querySelector('[data-gift]').value.trim()||'Gift'; g.pct=Number(div.querySelector('[data-pct]').value); g.days=Number(div.querySelector('[data-days]').value); await save(false,{render:'none'});}; div.querySelector('[data-icon]').onchange=persist; div.querySelector('[data-gift]').onchange=persist; div.querySelector('[data-pct]').onchange=persist; div.querySelector('[data-days]').onchange=persist; div.querySelector('[data-remove]').onclick=async()=>{r.giftRules.splice(idx,1); await save(false,{render:'none'}); drawRewardPanel('gift'); toast('Gift rule removed')}; box.appendChild(div);});
     }
-    $('#rewardTabs').onclick=e=>{if(e.target.tagName!=='BUTTON')return; rewardActiveTab=e.target.dataset.tab; $$('#rewardTabs button').forEach(b=>b.classList.remove('active')); e.target.classList.add('active'); drawRewardPanel(rewardActiveTab);};
-    drawRewardPanel(rewardActiveTab);
-
-    renderVacationSettings(); renderSyncActions(); renderDataModeSettings();
-
-    $('#trackerStartDate').value=state.settings.startDate||todayKey(); $('#startDateDisplay').textContent=state.settings.startDate||todayKey(); $('#trackerStartDate').onchange=async()=>{state.settings.startDate=$('#trackerStartDate').value||todayKey(); await save(false,{render:'none'}); toast('Start date saved')};
-    const un=$('#userNameInput'); if(un){un.value=(state.settings.userName||'').slice(0,USER_NAME_MAX); un.maxLength=USER_NAME_MAX;}
-    const nameCount=$('#userNameCount'); if(nameCount) nameCount.textContent=String((un?.value||'').length);
-    if(un && !un.dataset.bound){un.dataset.bound='1'; un.oninput=()=>{const c=$('#userNameCount'); if(c)c.textContent=String(un.value.length);}; un.onblur=async()=>{state.settings.userName=(un.value||'').trim().slice(0,USER_NAME_MAX); await save(false,{render:'none'}); $('#greeting').textContent=timeGreeting()+greetName();};}
-    const cms=$('#colorModeSelect'); if(cms){cms.value=state.settings.colorMode||'system'; cms.onchange=async()=>{state.settings.colorMode=cms.value; applyAppearance(); await save(false,{render:'none'}); toast('Theme saved');};}
+  }
+  function renderSettings(force=false){
+    ensureRewardShape(); const rs=$('#rewardSettings'); if(!rs)return;
+    const built=!force && rs.dataset.built==='1' && rs.querySelector('#rewardTabs');
+    if(!built){
+      rs.dataset.built='1';
+      rs.innerHTML=`<div class="segmented reward-rule-tabs" id="rewardTabs"><button data-tab="credit" class="${rewardActiveTab==='credit'?'active':''}">Credit</button><button data-tab="gift" class="${rewardActiveTab==='gift'?'active':''}">Gift</button><button data-tab="penalty" class="${rewardActiveTab==='penalty'?'active':''}">Penalty</button></div><div id="rewardPanel" class="form-grid"></div>`;
+      $('#rewardTabs').onclick=e=>{if(e.target.tagName!=='BUTTON')return; rewardActiveTab=e.target.dataset.tab; $$('#rewardTabs button').forEach(b=>b.classList.remove('active')); e.target.classList.add('active'); drawRewardPanel(rewardActiveTab);};
+      drawRewardPanel(rewardActiveTab);
+      const un=$('#userNameInput'); if(un){un.value=(state.settings.userName||'').slice(0,USER_NAME_MAX); un.maxLength=USER_NAME_MAX;}
+      const nameCount=$('#userNameCount'); if(nameCount) nameCount.textContent=String((un?.value||'').length);
+      if(un && !un.dataset.bound){un.dataset.bound='1'; un.oninput=()=>{const c=$('#userNameCount'); if(c)c.textContent=String(un.value.length);}; un.onblur=async()=>{state.settings.userName=(un.value||'').trim().slice(0,USER_NAME_MAX); await save(false,{render:'none'}); $('#greeting').textContent=timeGreeting()+greetName();};}
+      const cms=$('#colorModeSelect'); if(cms){cms.value=state.settings.colorMode||'system'; cms.onchange=async()=>{state.settings.colorMode=cms.value; applyAppearance(); await save(false,{render:'none'}); toast('Theme saved');};}
+      const upload=$('#profileIconInput'); if(upload && !upload.dataset.bound){upload.dataset.bound='1'; upload.onchange=e=>{const file=e.target.files&&e.target.files[0]; if(!file)return; const reader=new FileReader(); reader.onload=async()=>{state.settings.profileIcon=reader.result; await save(false,{render:'none'}); toast('Profile photo saved')}; reader.readAsDataURL(file);};}
+      $('#trackerStartDate').onchange=async()=>{state.settings.startDate=$('#trackerStartDate').value||todayKey(); await save(false,{render:'none'}); toast('Start date saved')};
+      if(!$('#reminderSettings')?.dataset.bound){
+        const rem=$('#reminderSettings'); if(rem) rem.dataset.bound='1';
+        $('#globalReminderTime')?.addEventListener('change',async()=>{state.settings.globalReminderTime=$('#globalReminderTime').value; await save(false,{render:'none'}); setupReminderLoop();});
+        $('#defaultReminderMessage')?.addEventListener('change',async()=>{state.settings.defaultReminderMessage=($('#defaultReminderMessage').value||'Time for {habit}').slice(0,REMINDER_MSG_LIMIT); await save(false,{render:'none'});});
+      }
+    } else {
+      $$('#rewardTabs button').forEach(b=>b.classList.toggle('active',b.dataset.tab===rewardActiveTab));
+    }
+    const remBox=$('#reminderSettings');
+    if(remBox && !remBox.querySelector('#globalReminderTime')){
+      remBox.innerHTML=`<div class="field"><label>Default Reminder Time</label><input type="time" id="globalReminderTime" value="${state.settings.globalReminderTime||'20:30'}"></div><div class="field"><label>Default notification message</label><input id="defaultReminderMessage" maxlength="${REMINDER_MSG_LIMIT}" value="${escapeAttr(state.settings.defaultReminderMessage||'Time for {habit}')}"><div class="hint">${REMINDER_MSG_LIMIT} characters max · Use {habit} for the habit name</div></div>`;
+    } else if(remBox){
+      const grt=$('#globalReminderTime'); if(grt) grt.value=state.settings.globalReminderTime||'20:30';
+      const drm=$('#defaultReminderMessage'); if(drm) drm.value=state.settings.defaultReminderMessage||'Time for {habit}';
+    }
+    refreshSettingsChrome();
     renderTopProfile();
-    const upload=$('#profileIconInput'); if(upload){upload.onchange=e=>{const file=e.target.files&&e.target.files[0]; if(!file)return; const reader=new FileReader(); reader.onload=async()=>{state.settings.profileIcon=reader.result; await save(false,{render:'none'}); toast('Profile photo saved')}; reader.readAsDataURL(file);};}
-    renderBackupStatus();
-    $('#autoSyncSwitch').classList.toggle('on',state.settings.autoSync);
     $('#autoSyncSwitch').disabled=false;
-    $('#reminderSwitch').classList.toggle('on',state.settings.reminders);
-    $('#reminderSettings').innerHTML=`<div class="field"><label>Default Reminder Time</label><input type="time" id="globalReminderTime" value="${state.settings.globalReminderTime||'20:30'}"></div><div class="field"><label>Default notification message</label><input id="defaultReminderMessage" maxlength="${REMINDER_MSG_LIMIT}" value="${escapeAttr(state.settings.defaultReminderMessage||'Time for {habit}')}"><div class="hint">${REMINDER_MSG_LIMIT} characters max · Use {habit} for the habit name</div></div>`;
-    $('#globalReminderTime').onchange=async()=>{state.settings.globalReminderTime=$('#globalReminderTime').value; await save(false,{render:'none'}); setupReminderLoop();};
-    $('#defaultReminderMessage').onchange=async()=>{state.settings.defaultReminderMessage=($('#defaultReminderMessage').value||'Time for {habit}').slice(0,REMINDER_MSG_LIMIT); await save(false,{render:'none'});};
   }
   /* ---------- FILE SYNC ---------- */
   function openHandleDb(){
@@ -1044,8 +1077,8 @@
       return true;
     }catch(e){return false;}
   }
-  async function connectFile(){if(!window.showOpenFilePicker){toast('File connection needs Chrome/Edge on desktop. Use Export/Import instead.');return;} if(await reconnectStoredFile()){toast('File reconnected'); if(state.settings.autoSync) await save(true,{render:'all'}); else await save(false,{render:'none'}); return;} try{[fileHandle]=await window.showOpenFilePicker({types:[{description:'JSON Backup',accept:{'application/json':['.json']}}]}); const file=await fileHandle.getFile(); const txt=await file.text(); if(txt.trim()){state=JSON.parse(txt); normalizeState();} state.settings.fileConnected=true; state.settings.autoSync=true; await storeFileHandle(fileHandle); await save(true,{render:'all'}); toast('File connected');}catch(e){}}
-  async function createFile(){if(!window.showSaveFilePicker){toast('Create file needs Chrome/Edge on desktop. Use Export instead.');return;} try{fileHandle=await window.showSaveFilePicker({suggestedName:'habit-tracker-backup.json',types:[{description:'JSON Backup',accept:{'application/json':['.json']}}]}); state.settings.fileConnected=true; state.settings.autoSync=true; await storeFileHandle(fileHandle); await save(false,{render:'none'}); renderSettings(); toast('Backup file created');}catch(e){}}
+  async function connectFile(){if(!window.showOpenFilePicker){toast('File connection needs Chrome/Edge on desktop. Use Export/Import instead.');return;} if(await reconnectStoredFile()){toast('File reconnected'); if(state.settings.autoSync) await save(true,{render:'all'}); else await save(false,{render:'none'}); refreshSettingsChrome(); return;} try{[fileHandle]=await window.showOpenFilePicker({types:[{description:'JSON Backup',accept:{'application/json':['.json']}}]}); const file=await fileHandle.getFile(); const txt=await file.text(); if(txt.trim()){state=JSON.parse(txt); normalizeState(); invalidateSettings();} state.settings.fileConnected=true; state.settings.autoSync=true; await storeFileHandle(fileHandle); await save(true,{render:'all'}); toast('File connected');}catch(e){}}
+  async function createFile(){if(!window.showSaveFilePicker){toast('Create file needs Chrome/Edge on desktop. Use Export instead.');return;} try{fileHandle=await window.showSaveFilePicker({suggestedName:'habit-tracker-backup.json',types:[{description:'JSON Backup',accept:{'application/json':['.json']}}]}); state.settings.fileConnected=true; state.settings.autoSync=true; await storeFileHandle(fileHandle); await save(false,{render:'none'}); refreshSettingsChrome(); toast('Backup file created');}catch(e){}}
   function reminderBody(habit){const tpl=(habit.reminder?.message||state.settings.defaultReminderMessage||'Time for {habit}').slice(0,REMINDER_MSG_LIMIT); return tpl.replace(/\{habit\}/g,habit.name||'your habit');}
   async function toggleReminders(){
     const turningOn=!state.settings.reminders;
@@ -1063,7 +1096,7 @@
   function setupReminderLoop(){if(reminderTimer)clearInterval(reminderTimer); if(!state.settings.reminders)return; reminderTimer=setInterval(()=>{const now=hkNow(); const hm=String(now.getHours()).padStart(2,"0")+":"+String(now.getMinutes()).padStart(2,"0"); state.habits.forEach(h=>{if(!h.reminder?.enabled||h.reminder.time!==hm||!isScheduledToday(h,now)||h.paused||h.archived)return; if(completionOfHabit(h,now).done)return; const last=`${h.id}-${todayKey()}-${hm}`; if(sessionStorage.getItem(last))return; sessionStorage.setItem(last,'1'); const body=reminderBody(h); if('Notification' in window && Notification.permission==='granted') new Notification('Momentum',{body}); else toast(body);});},30000)}
 
   function exportJson(){state.settings.lastExportAt=todayKey(); localStorage.setItem(STORAGE,JSON.stringify(state)); const blob=new Blob([JSON.stringify(state,null,2)],{type:'application/json'}); const a=document.createElement('a'); a.href=URL.createObjectURL(blob); a.download='habit-tracker-backup.json'; a.click(); URL.revokeObjectURL(a.href); updateStatus();}
-  function importJson(file){const r=new FileReader(); r.onload=async()=>{try{state=JSON.parse(r.result); normalizeState(); await save(true,{render:'all'}); toast('Imported'); if(!fileHandle) openImportConnectModal();}catch(e){toast('Invalid JSON')}}; r.readAsText(file)}
+  function importJson(file){const r=new FileReader(); r.onload=async()=>{try{state=JSON.parse(r.result); normalizeState(); invalidateSettings(); await save(true,{render:'all'}); toast('Imported'); if(!fileHandle) openImportConnectModal();}catch(e){toast('Invalid JSON')}}; r.readAsText(file)}
 
   /* ---------- SHELL ---------- */
   function renderAfterSave(viewId){
@@ -1077,7 +1110,8 @@
     else if(v==='levelView') renderLevel();
     else if(v==='settingsView') renderSettings();
   }
-  function renderAll(){updateStatus(); applyAppearance(); renderHome(); renderHabits(); renderReport(); renderRewards(); renderLevel(); renderSettings();}
+  function invalidateSettings(){const rs=$('#rewardSettings'); if(rs) delete rs.dataset.built;}
+  function renderAll(){updateStatus(); applyAppearance(); renderHome(); renderHabits(); renderReport(); renderRewards(); renderLevel(); renderSettings(true);}
   function showXpPop(t){
     const shell=$('.app-shell');
     let layer=$('#expPopLayer');
@@ -1095,16 +1129,25 @@
   function escapeAttr(s=''){return escapeHtml(s).replace(/'/g,'&#39;')}
 
   function showView(view){
+    const prev=$('.view.active')?.id;
     if(MAIN_VIEWS.has(view)) lastMainView=view;
     const navHighlight=MAIN_VIEWS.has(view)?view:lastMainView;
     $$('.nav-item').forEach(x=>x.classList.toggle('active',x.dataset.view===navHighlight));
-    $$('.view').forEach(v=>v.classList.remove('active'));
-    const el=$('#'+view); if(el)el.classList.add('active');
-    const host=$('.view-host'); if(host)host.scrollTop=0;
+    $$('.view').forEach(v=>v.classList.remove('active','view-enter'));
+    const el=$('#'+view);
+    if(el){
+      el.classList.add('active');
+      if(prev!==view){
+        el.classList.add('view-enter');
+        el.addEventListener('animationend',()=>el.classList.remove('view-enter'),{once:true});
+      }
+    }
+    const host=$('.view-host');
+    if(host && prev!==view) host.scrollTop=0;
     if(view==='reportView')renderReport();
     if(view==='rewardsView')renderRewards();
     if(view==='levelView')renderLevel();
-    if(view==='settingsView')renderSettings();
+    if(view==='settingsView') renderSettings();
   }
   $$('.nav-item').forEach(b=>b.onclick=()=>showView(b.dataset.view));
   const fab=$('#fabAdd'); if(fab) fab.onclick=()=>openHabitModal();
@@ -1143,7 +1186,7 @@
         return;
       }
       toast('Connect a backup file first');
-      renderSettings();
+      refreshSettingsChrome();
       return;
     }
     state.settings.autoSync=!state.settings.autoSync;
@@ -1151,7 +1194,7 @@
     $('#autoSyncSwitch')?.classList.toggle('on',state.settings.autoSync);
   });
   $('#reminderSwitch')?.addEventListener('click',toggleReminders);
-  $('#resetAllBtn').onclick=async()=>{if($('#confirmDeleteInput').value!=='Confirm'){toast('Type Confirm first');return;} if(!confirm('Erase all data and reset to your selected data mode?'))return; const mode=state.settings.dataMode||'demo'; const keep={colorMode:state.settings.colorMode,styleTheme:state.settings.styleTheme,userName:state.settings.userName,profileIcon:state.settings.profileIcon}; state=stateForMode(mode,{onboardingComplete:true,keep}); fileHandle=null; localStorage.setItem(STORAGE,JSON.stringify(state)); normalizeState(); await save(true,{render:'all'}); toast('Data erased');};
+  $('#resetAllBtn').onclick=async()=>{if($('#confirmDeleteInput').value!=='Confirm'){toast('Type Confirm first');return;} if(!confirm('Erase all data and reset to your selected data mode?'))return; const mode=state.settings.dataMode||'demo'; const keep={colorMode:state.settings.colorMode,styleTheme:state.settings.styleTheme,userName:state.settings.userName,profileIcon:state.settings.profileIcon}; state=stateForMode(mode,{onboardingComplete:true,keep}); fileHandle=null; localStorage.setItem(STORAGE,JSON.stringify(state)); normalizeState(); invalidateSettings(); await save(true,{render:'all'}); toast('Data erased');};
   document.body.addEventListener('click',async e=>{
     const check=e.target.closest('button.check-btn[data-habit-id]:not(.done):not(:disabled)');
     if(check){
@@ -1177,7 +1220,7 @@
       if(!pct){toast('All completion rules already used');return;}
       r.creditRules.push({id:uid(),pct,amount:pct>=100?10:2});
       await save(false,{render:'none'}); toast('Credit rule added');
-      if($('#rewardSettings')) renderSettings();
+      if($('#rewardPanel')) drawRewardPanel('credit');
       return;
     }
     const addGift=e.target.closest('#addGiftRule');
@@ -1186,19 +1229,18 @@
       r.giftRules=r.giftRules||[];
       r.giftRules.push({id:uid(),gift:'Buffet',icon:'🍽️',pct:80,days:30});
       await save(false,{render:'none'}); toast('Gift rule added');
-      if($('#rewardSettings')) renderSettings();
+      if($('#rewardPanel')) drawRewardPanel('gift');
       return;
     }
     if(!e.target.closest('.swipe-wrap')) $$('.swipe-wrap.open').forEach(w=>w.classList.remove('open'));
   });
   $('#comparePeriodTabs')?.addEventListener('click',e=>{if(e.target.tagName!=='BUTTON')return; comparePeriod=e.target.dataset.period; $$('#comparePeriodTabs button').forEach(b=>b.classList.remove('active')); e.target.classList.add('active'); renderComparePeriods();});
   window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change',()=>{if((state.settings.colorMode||'system')==='system') applyAppearance();});
+  resetDefaultAppIcons();
   lastLevel=levelInfo().cur.level;
-  (async()=>{
-    await restoreFileConnection();
-    applyAppearance();
-    setupReminderLoop();
-    renderAll();
-    renderOnboarding();
-  })();
+  applyAppearance();
+  setupReminderLoop();
+  renderAll();
+  renderOnboarding();
+  void restoreFileConnection().then(connected=>{if(connected) refreshSettingsChrome();});
 })();
