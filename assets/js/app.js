@@ -39,9 +39,9 @@
   let calendarHabitFilter='';
   let onboardStep=0;
   let lastLevel=1;
+  let lastMainView='homeView';
+  const MAIN_VIEWS=new Set(['homeView','habitsView','reportView','rewardsView']);
   let state=load(); normalizeState();
-
-  let manifestBlobUrl=null;
   const ONBOARD_STEPS=[
     {title:'Welcome to Momentum',body:'Build habits, reflect daily, and grow your identity. Everything stays on this device unless you connect a backup file.',view:'homeView',layout:'fullscreen',label:'👋 Let\'s take a quick tour'},
     {title:'Today\'s progress',body:'The ring shows how much of today\'s scheduled habits you\'ve completed.',view:'homeView',target:'#todayRing',placement:'below',cardAnchor:'below',label:'Completion ring'},
@@ -59,18 +59,12 @@
   const PREVIEW=3;
   const LAZY_CHUNK=10;
   const REMINDER_MSG_LIMIT=80;
-  const APP_ICON_PRESETS=[
-    {id:'default',label:'Default',src:'assets/icon-192.png'},
-    {id:'brand',label:'Indigo',emoji:'🌱',bg:'#4f46e5'},
-    {id:'green',label:'Growth',emoji:'🌿',bg:'#059669'},
-    {id:'sunrise',label:'Sunrise',emoji:'🌅',bg:'#ea580c'}
-  ];
   const iconBtn=(cls,svg,title)=>{const b=document.createElement('button'); b.className='act-btn '+cls; b.innerHTML=svg; b.title=title; b.setAttribute('aria-label',title); return b;};
 
   const USER_NAME_MAX=12;
   function rewardDefaults(includeGifts=false){return{creditRules:[{id:uid(),pct:50,amount:2},{id:uid(),pct:100,amount:10}],giftRules:includeGifts?[{id:uid(),gift:'Buffet',icon:'🍽️',pct:80,days:30}]:[],penaltyCredit:5,penaltyXp:20,penaltyZeroDays:2};}
-  function pickSettings(overrides={}){const gifts=overrides.includeGifts===true; const {includeGifts,...rest}=overrides; return{autoSync:false,fileConnected:false,reminders:false,colorMode:'system',styleTheme:'vivid',globalReminderTime:'20:30',profileIcon:'',userName:'',onboardingComplete:false,statusRowOpen:false,lastExportAt:'',vacations:[],dataMode:'real',appIcon:'default',appIconCustom:'',defaultReminderMessage:'Time for {habit}',rewards:rewardDefaults(gifts),...rest};}
-  function freshState(opts={}){const keep=opts.keep||{}; return{habits:[],records:[],journals:{},redemptions:[],groups:[],settings:pickSettings({dataMode:'real',includeGifts:false,startDate:todayKey(),onboardingComplete:opts.onboardingComplete??true,colorMode:keep.colorMode||'system',styleTheme:keep.styleTheme||'vivid',userName:keep.userName||'',profileIcon:keep.profileIcon||'',appIcon:keep.appIcon||'default',appIconCustom:keep.appIconCustom||''})};}
+  function pickSettings(overrides={}){const gifts=overrides.includeGifts===true; const {includeGifts,...rest}=overrides; return{autoSync:false,fileConnected:false,reminders:false,colorMode:'system',styleTheme:'vivid',globalReminderTime:'20:30',profileIcon:'',userName:'',onboardingComplete:false,statusRowOpen:false,lastExportAt:'',vacations:[],dataMode:'real',defaultReminderMessage:'Time for {habit}',rewards:rewardDefaults(gifts),...rest};}
+  function freshState(opts={}){const keep=opts.keep||{}; return{habits:[],records:[],journals:{},redemptions:[],groups:[],settings:pickSettings({dataMode:'real',includeGifts:false,startDate:todayKey(),onboardingComplete:opts.onboardingComplete??true,colorMode:keep.colorMode||'system',styleTheme:keep.styleTheme||'vivid',userName:keep.userName||'',profileIcon:keep.profileIcon||''})};}
   function demoState(opts={}){const keep=opts.keep||{};
     const habits=[
       {id:uid(),name:'Bible Time & Prayer',emoji:'📖',color:'#7c3aed',target:1,xpReward:5,frequency:{mode:'daily',days:[0,1,2,3,4,5,6]},reminder:{enabled:false,time:'07:15',message:''}},
@@ -93,7 +87,7 @@
       });
       if(k!==todayKey() && Math.random()<0.6){ journals[k]={mood:MOODS[Math.floor(Math.random()*MOODS.length)],energy:4+Math.floor(Math.random()*7),text:'',updatedAt:new Date().toISOString()}; }
     }
-    return{habits,records,journals,redemptions:[],groups,settings:pickSettings({dataMode:'demo',includeGifts:true,startDate:dateKey(startD),onboardingComplete:opts.onboardingComplete??false,colorMode:keep.colorMode||'system',styleTheme:keep.styleTheme||'vivid',userName:keep.userName||'',profileIcon:keep.profileIcon||'',appIcon:keep.appIcon||'default',appIconCustom:keep.appIconCustom||''})};
+    return{habits,records,journals,redemptions:[],groups,settings:pickSettings({dataMode:'demo',includeGifts:true,startDate:dateKey(startD),onboardingComplete:opts.onboardingComplete??false,colorMode:keep.colorMode||'system',styleTheme:keep.styleTheme||'vivid',userName:keep.userName||'',profileIcon:keep.profileIcon||''})};
   }
   function defaults(){return freshState({onboardingComplete:false});}
   function stateForMode(mode,opts={}){return mode==='real'?freshState(opts):demoState(opts);}
@@ -114,8 +108,6 @@
     state.habits=state.habits||[]; state.records=state.records||[]; state.journals=state.journals||{}; state.redemptions=state.redemptions||[];
     state.habits.forEach((h,i)=>{h.target=Number(h.target||1); h.xpReward=Math.max(1,Math.round(Number(h.xpReward)||5)); h.frequency=h.frequency||{mode:'daily',days:[0,1,2,3,4,5,6]}; if(!h.frequency.schedule&&h.frequency.mode!=='daily') h.frequency.schedule={type:'any'}; if(h.sortOrder===undefined) h.sortOrder=i; if(h.paused===undefined) h.paused=false; if(h.archived===undefined) h.archived=false; if(h.groupId===undefined) h.groupId=null; h.reminder=h.reminder||{enabled:false,time:state.settings.globalReminderTime||'20:30',message:''}; if(h.reminder.message===undefined) h.reminder.message='';});
     if(!state.settings.defaultReminderMessage) state.settings.defaultReminderMessage='Time for {habit}';
-    if(state.settings.appIcon===undefined) state.settings.appIcon='default';
-    if(state.settings.appIconCustom===undefined) state.settings.appIconCustom='';
     state.groups.forEach((g,i)=>{if(!g.id)g.id=uid(); if(g.sortOrder===undefined) g.sortOrder=i; if(!g.emoji)g.emoji='📋'; if(!g.color)g.color='#4f46e5';});
     ensureRewardShape(); localStorage.setItem(STORAGE,JSON.stringify(state));
   }
@@ -879,53 +871,6 @@
     openModal('Keep syncing?',`<p class="sheet-text">Your data is loaded. Connect the backup file on this device so future edits sync automatically.</p><div class="modal-actions"><button class="btn-secondary" data-close>Not now</button><button class="btn-primary" id="connectAfterImportBtn">Connect file</button></div>`);
     $('#connectAfterImportBtn').onclick=async()=>{closeModal(); await connectFile();};
   }
-  function renderAppIconSettings(){
-    const grid=$('#appIconGrid'); if(!grid)return;
-    grid.innerHTML='';
-    APP_ICON_PRESETS.forEach(p=>{
-      const btn=document.createElement('button'); btn.type='button'; btn.className='app-icon-opt'+(state.settings.appIcon===p.id?' active':'');
-      if(p.src) btn.innerHTML=`<img src="${p.src}" alt=""><span>${p.label}</span>`;
-      else btn.innerHTML=`<div class="app-icon-emoji" style="background:${p.bg};display:grid;place-items:center;font-size:24px">${p.emoji}</div><span>${p.label}</span>`;
-      btn.onclick=async()=>{state.settings.appIcon=p.id; state.settings.appIconCustom=''; await save(false,{render:'none'}); applyAppIcon(); renderAppIconSettings(); toast('Icon saved. Re-add to home screen if it doesn\'t update.');};
-      grid.appendChild(btn);
-    });
-    const custom=document.createElement('button'); custom.type='button'; custom.className='app-icon-opt'+(state.settings.appIcon==='custom'?' active':'');
-    custom.innerHTML=state.settings.appIconCustom?`<img src="${state.settings.appIconCustom}" alt=""><span>Custom</span>`:`<div class="app-icon-emoji" style="background:var(--line);display:grid;place-items:center;font-size:18px">+</div><span>Custom</span>`;
-    custom.onclick=()=>$('#appIconInput')?.click();
-    grid.appendChild(custom);
-  }
-  function getAppIconHref(){
-    let href='assets/icon-192.png';
-    if(state.settings.appIcon==='custom' && state.settings.appIconCustom) href=state.settings.appIconCustom;
-    else {
-      const preset=APP_ICON_PRESETS.find(p=>p.id===state.settings.appIcon)||APP_ICON_PRESETS[0];
-      if(preset.src) href=preset.src;
-      else if(preset.emoji){
-        const c=document.createElement('canvas'); c.width=192; c.height=192; const ctx=c.getContext('2d');
-        ctx.fillStyle=preset.bg; ctx.fillRect(0,0,192,192); ctx.font='96px serif'; ctx.textAlign='center'; ctx.textBaseline='middle'; ctx.fillText(preset.emoji,96,104);
-        href=c.toDataURL('image/png');
-      }
-    }
-    return href;
-  }
-  function updateDynamicManifest(iconHref){
-    const manifestLink=document.querySelector('link[rel="manifest"]'); if(!manifestLink)return;
-    const iconType=iconHref.startsWith('data:')?'image/png':'image/png';
-    const manifest={name:'Momentum · Habit Tracker',short_name:'Momentum',description:'Build habits, journal your mood, and track trends — with rewards and local file sync.',start_url:'.',scope:'.',display:'standalone',orientation:'portrait',background_color:'#f4f6fb',theme_color:'#4f46e5',icons:[
-      {src:iconHref,sizes:'192x192',type:iconType,purpose:'any'},
-      {src:iconHref,sizes:'512x512',type:iconType,purpose:'any'},
-      {src:iconHref,sizes:'512x512',type:iconType,purpose:'maskable'}
-    ]};
-    if(manifestBlobUrl) URL.revokeObjectURL(manifestBlobUrl);
-    manifestBlobUrl=URL.createObjectURL(new Blob([JSON.stringify(manifest)],{type:'application/json'}));
-    manifestLink.href=manifestBlobUrl;
-  }
-  function applyAppIcon(){
-    const href=getAppIconHref();
-    const cacheBust=href.startsWith('data:')?href:`${href}${href.includes('?')?'&':'?'}v=${encodeURIComponent(state.settings.appIcon||'default')}`;
-    ['#appFavicon','#appFavicon192','#appAppleIcon'].forEach(sel=>{const el=$(sel); if(el) el.href=cacheBust;});
-    updateDynamicManifest(href);
-  }
   function renderVacationSettings(){
     const box=$('#vacationSummary'); if(!box)return;
     const list=state.settings.vacations||[];
@@ -981,7 +926,7 @@
     };
   }
   async function applyDataMode(mode){
-    const keep={colorMode:state.settings.colorMode,styleTheme:state.settings.styleTheme,userName:state.settings.userName,profileIcon:state.settings.profileIcon,appIcon:state.settings.appIcon,appIconCustom:state.settings.appIconCustom};
+    const keep={colorMode:state.settings.colorMode,styleTheme:state.settings.styleTheme,userName:state.settings.userName,profileIcon:state.settings.profileIcon};
     localStorage.setItem('momentumDataMode',mode);
     state=stateForMode(mode,{onboardingComplete:true,keep});
     normalizeState();
@@ -1014,7 +959,7 @@
     $('#rewardTabs').onclick=e=>{if(e.target.tagName!=='BUTTON')return; rewardActiveTab=e.target.dataset.tab; $$('#rewardTabs button').forEach(b=>b.classList.remove('active')); e.target.classList.add('active'); drawRewardPanel(rewardActiveTab);};
     drawRewardPanel(rewardActiveTab);
 
-    renderVacationSettings(); renderSyncActions(); renderAppIconSettings(); renderDataModeSettings();
+    renderVacationSettings(); renderSyncActions(); renderDataModeSettings();
 
     $('#trackerStartDate').value=state.settings.startDate||todayKey(); $('#startDateDisplay').textContent=state.settings.startDate||todayKey(); $('#trackerStartDate').onchange=async()=>{state.settings.startDate=$('#trackerStartDate').value||todayKey(); await save(false,{render:'none'}); toast('Start date saved')};
     const un=$('#userNameInput'); if(un){un.value=(state.settings.userName||'').slice(0,USER_NAME_MAX); un.maxLength=USER_NAME_MAX;}
@@ -1023,7 +968,6 @@
     const cms=$('#colorModeSelect'); if(cms){cms.value=state.settings.colorMode||'system'; cms.onchange=async()=>{state.settings.colorMode=cms.value; applyAppearance(); await save(false,{render:'none'}); toast('Theme saved');};}
     renderTopProfile();
     const upload=$('#profileIconInput'); if(upload){upload.onchange=e=>{const file=e.target.files&&e.target.files[0]; if(!file)return; const reader=new FileReader(); reader.onload=async()=>{state.settings.profileIcon=reader.result; await save(false,{render:'none'}); toast('Profile photo saved')}; reader.readAsDataURL(file);};}
-    const appUpload=$('#appIconInput'); if(appUpload){appUpload.onchange=e=>{const file=e.target.files&&e.target.files[0]; if(!file)return; const reader=new FileReader(); reader.onload=async()=>{state.settings.appIcon='custom'; state.settings.appIconCustom=reader.result; await save(false,{render:'none'}); applyAppIcon(); renderAppIconSettings(); toast('Icon saved. Re-add to home screen if it doesn\'t update.')}; reader.readAsDataURL(file);};}
     renderBackupStatus();
     if(!fileHandle) state.settings.autoSync=false;
     $('#autoSyncSwitch').classList.toggle('on',state.settings.autoSync);
@@ -1067,7 +1011,7 @@
     else if(v==='levelView') renderLevel();
     else if(v==='settingsView') renderSettings();
   }
-  function renderAll(){updateStatus(); applyAppearance(); applyAppIcon(); renderHome(); renderHabits(); renderReport(); renderRewards(); renderLevel(); renderSettings();}
+  function renderAll(){updateStatus(); applyAppearance(); renderHome(); renderHabits(); renderReport(); renderRewards(); renderLevel(); renderSettings();}
   function showXpPop(t){
     const shell=$('.app-shell');
     let layer=$('#expPopLayer');
@@ -1084,7 +1028,18 @@
   function escapeHtml(s=''){return String(s).replace(/[&<>"]/g,m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[m]))}
   function escapeAttr(s=''){return escapeHtml(s).replace(/'/g,'&#39;')}
 
-  function showView(view){$$('.nav-item').forEach(x=>x.classList.toggle('active',x.dataset.view===view)); $$('.view').forEach(v=>v.classList.remove('active')); const el=$('#'+view); if(el)el.classList.add('active'); const host=$('.view-host'); if(host)host.scrollTop=0; if(view==='reportView')renderReport(); if(view==='rewardsView')renderRewards(); if(view==='levelView')renderLevel(); if(view==='settingsView')renderSettings();}
+  function showView(view){
+    if(MAIN_VIEWS.has(view)) lastMainView=view;
+    const navHighlight=MAIN_VIEWS.has(view)?view:lastMainView;
+    $$('.nav-item').forEach(x=>x.classList.toggle('active',x.dataset.view===navHighlight));
+    $$('.view').forEach(v=>v.classList.remove('active'));
+    const el=$('#'+view); if(el)el.classList.add('active');
+    const host=$('.view-host'); if(host)host.scrollTop=0;
+    if(view==='reportView')renderReport();
+    if(view==='rewardsView')renderRewards();
+    if(view==='levelView')renderLevel();
+    if(view==='settingsView')renderSettings();
+  }
   $$('.nav-item').forEach(b=>b.onclick=()=>showView(b.dataset.view));
   const fab=$('#fabAdd'); if(fab) fab.onclick=()=>openHabitModal();
   $('#profileQuick').onclick=()=>showView('levelView'); $('#topSettingsBtn').onclick=()=>showView('settingsView');
@@ -1108,7 +1063,7 @@
   window.addEventListener('resize',()=>{if($('#onboardBackdrop')?.classList.contains('show')) positionOnboardCallout(ONBOARD_STEPS[onboardStep]);});
   $('#autoSyncSwitch')?.addEventListener('click',async()=>{if(!fileHandle){state.settings.autoSync=false; toast('Connect a backup file first'); renderSettings(); return;} state.settings.autoSync=!state.settings.autoSync; await save(false,{render:'none'}); $('#autoSyncSwitch')?.classList.toggle('on',state.settings.autoSync);});
   $('#reminderSwitch')?.addEventListener('click',toggleReminders);
-  $('#resetAllBtn').onclick=async()=>{if($('#confirmDeleteInput').value!=='Confirm'){toast('Type Confirm first');return;} if(!confirm('Erase all data and reset to your selected data mode?'))return; const mode=state.settings.dataMode||'demo'; const keep={colorMode:state.settings.colorMode,styleTheme:state.settings.styleTheme,userName:state.settings.userName,profileIcon:state.settings.profileIcon,appIcon:state.settings.appIcon,appIconCustom:state.settings.appIconCustom}; state=stateForMode(mode,{onboardingComplete:true,keep}); fileHandle=null; localStorage.setItem(STORAGE,JSON.stringify(state)); normalizeState(); await save(true,{render:'all'}); toast('Data erased');};
+  $('#resetAllBtn').onclick=async()=>{if($('#confirmDeleteInput').value!=='Confirm'){toast('Type Confirm first');return;} if(!confirm('Erase all data and reset to your selected data mode?'))return; const mode=state.settings.dataMode||'demo'; const keep={colorMode:state.settings.colorMode,styleTheme:state.settings.styleTheme,userName:state.settings.userName,profileIcon:state.settings.profileIcon}; state=stateForMode(mode,{onboardingComplete:true,keep}); fileHandle=null; localStorage.setItem(STORAGE,JSON.stringify(state)); normalizeState(); await save(true,{render:'all'}); toast('Data erased');};
   document.body.addEventListener('click',async e=>{
     const check=e.target.closest('button.check-btn[data-habit-id]:not(.done):not(:disabled)');
     if(check){
