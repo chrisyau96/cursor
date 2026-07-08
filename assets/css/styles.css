@@ -122,8 +122,8 @@ h1,h2,h3,h4{margin:0}
 
 /* View host */
 .view-host{flex:1;min-height:0;overflow-y:auto;overflow-x:hidden;-webkit-overflow-scrolling:touch;padding:6px 14px calc(var(--tabbar-h) + 26px + var(--safe-bottom))}
-.view{display:none;animation:fade-up .3s ease both}
-.view.active{display:block}
+.view{display:none}
+.view.active{display:block;animation:fade-up .28s ease both}
 @keyframes fade-up{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:none}}
 
 /* Section + cards */
