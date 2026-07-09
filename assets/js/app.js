@@ -32,6 +32,8 @@
   const FILE_HANDLE_DB='momentumFileHandles';
   const FILE_HANDLE_KEY='backup';
   let reminderTimer=null;
+  let dailyBackupTimer=null;
+  const DAILY_BACKUP_HOUR=3;
   let reportCursor=hkNow();
   let reportMode='month';
   let trendDays=7;
@@ -67,7 +69,7 @@
 
   const USER_NAME_MAX=12;
   function rewardDefaults(includeGifts=false){return{creditRules:[{id:uid(),pct:50,amount:2},{id:uid(),pct:100,amount:10}],giftRules:includeGifts?[{id:uid(),gift:'Buffet',icon:'🍽️',pct:80,days:30}]:[],penaltyCredit:5,penaltyXp:20,penaltyZeroDays:2};}
-  function pickSettings(overrides={}){const gifts=overrides.includeGifts===true; const {includeGifts,...rest}=overrides; return{autoSync:false,fileConnected:false,reminders:false,colorMode:'system',styleTheme:'vivid',globalReminderTime:'20:30',profileIcon:'',userName:'',onboardingComplete:false,statusRowOpen:false,lastExportAt:'',lastBackupAt:'',vacations:[],dataMode:'real',defaultReminderMessage:'Time for {habit}!',rewards:rewardDefaults(gifts),...rest};}
+  function pickSettings(overrides={}){const gifts=overrides.includeGifts===true; const {includeGifts,...rest}=overrides; return{autoSync:false,dailyBackup:true,fileConnected:false,reminders:false,colorMode:'system',styleTheme:'vivid',globalReminderTime:'20:30',profileIcon:'',userName:'',onboardingComplete:false,statusRowOpen:false,lastExportAt:'',lastBackupAt:'',lastScheduledBackupAt:'',vacations:[],dataMode:'real',defaultReminderMessage:'Time for {habit}!',rewards:rewardDefaults(gifts),...rest};}
   function defaultGroups(){return[{id:uid(),name:'Morning',emoji:'🌅',color:'#ea580c',sortOrder:0},{id:uid(),name:'Afternoon',emoji:'☀️',color:'#ca8a04',sortOrder:1},{id:uid(),name:'Evening',emoji:'🌙',color:'#4f46e5',sortOrder:2}];}
   function freshState(opts={}){const keep=opts.keep||{}; return{habits:[],records:[],journals:{},redemptions:[],groups:defaultGroups(),settings:pickSettings({dataMode:'real',includeGifts:false,startDate:todayKey(),onboardingComplete:opts.onboardingComplete??true,colorMode:keep.colorMode||'system',styleTheme:keep.styleTheme||'vivid',userName:keep.userName||'',profileIcon:keep.profileIcon||''})};}
   function demoState(opts={}){const keep=opts.keep||{};
@@ -109,6 +111,11 @@
     if(!state.settings.dataMode) state.settings.dataMode='real';
     state.settings.dataMode='real';
     if(state.settings.lastBackupAt===undefined) state.settings.lastBackupAt='';
+    if(state.settings.lastScheduledBackupAt===undefined) state.settings.lastScheduledBackupAt='';
+    if(state.settings.dailyBackup===undefined){
+      state.settings.dailyBackup=!!state.settings.fileConnected;
+      if(state.settings.autoSync){ state.settings.dailyBackup=true; state.settings.autoSync=false; }
+    }
     if(state.settings.statusRowOpen===undefined) state.settings.statusRowOpen=false;
     if(!Array.isArray(state.settings.vacations)) state.settings.vacations=[];
     state.groups=state.groups||[];
@@ -149,10 +156,44 @@
     else if(mode==='active') renderAfterSave(null);
     else if(mode!=='none') renderAfterSave(mode);
     else { updateStatus(); renderTopProfile(); if($('#backupStatus')) renderBackupStatus(); }
-    if(!skipSync) void autoSync();
+    if(!skipSync) void runDailyBackupIfDue();
   }
   function toast(msg){const t=$('#toast'); t.textContent=msg; t.classList.add('show'); setTimeout(()=>t.classList.remove('show'),1600)}
-  async function autoSync(){ updateStatus(); if(!state.settings.autoSync||!fileHandle) return; try{const w=await fileHandle.createWritable(); await w.write(JSON.stringify(state,null,2)); await w.close(); state.settings.fileConnected=true; touchBackupTimestamp(); localStorage.setItem(STORAGE,JSON.stringify(state)); updateStatus(); refreshSettingsChrome();}catch(e){toast('Backup sync needs reconnection'); state.settings.fileConnected=false; updateStatus();}}
+  function dailyBackupSlotStart(now=hkNow()){
+    const slot=new Date(now); slot.setHours(DAILY_BACKUP_HOUR,0,0,0);
+    if(now<slot) slot.setDate(slot.getDate()-1);
+    return slot;
+  }
+  function dailyBackupDue(){
+    if(!state.settings.dailyBackup||!fileHandle) return false;
+    const slot=dailyBackupSlotStart();
+    const last=state.settings.lastScheduledBackupAt?new Date(state.settings.lastScheduledBackupAt):null;
+    return !last||last<slot;
+  }
+  async function writeBackupFile(silent=true){
+    if(!fileHandle) return false;
+    try{
+      const w=await fileHandle.createWritable();
+      await w.write(JSON.stringify(state,null,2));
+      await w.close();
+      state.settings.fileConnected=true;
+      state.settings.lastScheduledBackupAt=new Date().toISOString();
+      touchBackupTimestamp();
+      localStorage.setItem(STORAGE,JSON.stringify(state));
+      if(silent){ if($('#backupStatus')) renderBackupStatus(); updateStatus(); }
+      else { updateStatus(); refreshSettingsChrome(); }
+      return true;
+    }catch(e){
+      if(!silent){ toast('Backup sync needs reconnection'); state.settings.fileConnected=false; updateStatus(); }
+      return false;
+    }
+  }
+  async function runDailyBackupIfDue(){ if(!dailyBackupDue()) return; await writeBackupFile(true); }
+  function setupDailyBackupLoop(){
+    if(dailyBackupTimer) clearInterval(dailyBackupTimer);
+    void runDailyBackupIfDue();
+    dailyBackupTimer=setInterval(()=>{ void runDailyBackupIfDue(); },60000);
+  }
 
   function weekStart(date){const d=new Date(date); d.setHours(0,0,0,0); d.setDate(d.getDate()-d.getDay()); return d;}
   function fmtDueShort(k){const d=parseDate(k); return d.toLocaleDateString(undefined,{month:'short',day:'numeric'});}
@@ -428,7 +469,7 @@
   function zeroStreakAt(date){let s=0; const d=new Date(date); for(let i=0;i<366;i++){const k=dateKey(d); if(isVacationDay(k)){d.setDate(d.getDate()-1);continue;} const p=dayPct(d); if(p===0){s++; d.setDate(d.getDate()-1)} else break;} return s;}
 
   function pctClass(p){if(p>=100)return 'perfect'; if(p>=80)return 'good'; if(p>=50)return 'partial'; if(p>0)return 'low'; return 'zero';}
-  function updateStatus(){const sync=$('#syncStatus'), file=$('#fileStatus'), rem=$('#reminderStatus'); if(!sync)return; const connected=!!fileHandle; const syncActive=state.settings.autoSync&&connected; const syncPending=state.settings.autoSync&&!connected; sync.className='status-pill '+(syncActive?'on':syncPending?'warn':''); sync.querySelector('span:last-child').textContent=syncActive?'Auto Sync On':syncPending?'Reconnect to sync':'Sync Off'; file.className='status-pill '+(connected?'on':(state.settings.fileConnected?'warn':'')); file.querySelector('span:last-child').textContent=connected?'File Connected':(state.settings.fileConnected?'Reconnect File':'No File'); file.style.cursor=(!connected&&state.settings.fileConnected)?'pointer':''; rem.className='status-pill '+(state.settings.reminders?'on':''); rem.querySelector('span:last-child').textContent=state.settings.reminders?'Reminders On':'Reminders Off'; const wrap=$('#statusRowWrap'); if(wrap) wrap.classList.toggle('open',!!state.settings.statusRowOpen);}
+  function updateStatus(){const sync=$('#syncStatus'), file=$('#fileStatus'), rem=$('#reminderStatus'); if(!sync)return; const connected=!!fileHandle; const backupOn=!!state.settings.dailyBackup; const syncActive=backupOn&&connected; const syncPending=backupOn&&!connected; sync.className='status-pill '+(syncActive?'on':syncPending?'warn':''); sync.querySelector('span:last-child').textContent=syncActive?'Daily Backup On':syncPending?'Reconnect backup':'Daily Backup Off'; file.className='status-pill '+(connected?'on':(state.settings.fileConnected?'warn':'')); file.querySelector('span:last-child').textContent=connected?'File Connected':(state.settings.fileConnected?'Reconnect File':'No File'); file.style.cursor=(!connected&&state.settings.fileConnected)?'pointer':''; rem.className='status-pill '+(state.settings.reminders?'on':''); rem.querySelector('span:last-child').textContent=state.settings.reminders?'Reminders On':'Reminders Off'; const wrap=$('#statusRowWrap'); if(wrap) wrap.classList.toggle('open',!!state.settings.statusRowOpen);}
 
   function updateHomeSummary(now, scheduled){
     let completed=0,total=0; scheduled.forEach(h=>{const c=completionOfHabit(h,now); completed+=Math.min(c.count,c.target); total+=c.target;});
@@ -1067,7 +1108,7 @@
     grid.innerHTML='';
     if(connected){
       grid.innerHTML='<button class="btn-secondary" id="exportBtn" type="button">Export a copy</button><button class="btn-inline gray" id="disconnectFileBtn" type="button">Disconnect file</button>';
-      $('#disconnectFileBtn').onclick=async()=>{fileHandle=null; state.settings.fileConnected=false; state.settings.autoSync=false; await clearStoredFileHandle(); await save(true,{render:'none'}); updateStatus(); refreshSettingsChrome(); toast('Disconnected');};
+      $('#disconnectFileBtn').onclick=async()=>{fileHandle=null; state.settings.fileConnected=false; state.settings.dailyBackup=false; await clearStoredFileHandle(); await save(true,{render:'none'}); updateStatus(); refreshSettingsChrome(); toast('Disconnected');};
       $('#exportBtn').onclick=exportJson;
     }else{
       grid.innerHTML='<button class="btn-primary" id="createFileBtn" type="button">Create backup file</button><button class="btn-secondary" id="connectFileBtn" type="button">Connect existing file</button><label class="btn-secondary sync-import-label" id="importLabel">Import JSON<input type="file" id="importInput" accept="application/json" hidden></label>';
@@ -1082,8 +1123,8 @@
     const updated=formatBackupTime(state.settings.lastBackupAt);
     box.className='sync-status-panel'+(connected?' connected':state.settings.fileConnected?' warn':'');
     const stamp=`<div class="small-note" style="margin-top:6px">Last updated: <strong>${updated}</strong></div>`;
-    if(connected) box.innerHTML=`<strong>Connected</strong><br>Edits sync to your backup file when auto sync is on.${stamp}`;
-    else if(state.settings.fileConnected) box.innerHTML=(state.settings.autoSync?'<strong>Reconnect needed</strong><br>Auto sync is on. Connect the same JSON file to resume syncing.':'<strong>Reconnect needed</strong><br>Your previous backup was on another session. Connect the same JSON file to resume syncing.')+stamp;
+    if(connected) box.innerHTML=`<strong>Connected</strong><br>Daily backup at ${DAILY_BACKUP_HOUR}:00 AM (Hong Kong time) when enabled.${stamp}`;
+    else if(state.settings.fileConnected) box.innerHTML=(state.settings.dailyBackup?'<strong>Reconnect needed</strong><br>Daily backup is on. Connect the same JSON file to resume.':'<strong>Reconnect needed</strong><br>Your previous backup was on another session. Connect the same JSON file to resume syncing.')+stamp;
     else box.innerHTML=`<strong>Not connected</strong><br>Create or connect a JSON backup file, or import an existing backup to load data.${stamp}`;
   }
   function openImportConnectModal(){
@@ -1147,7 +1188,7 @@
     renderVacationSettings(); renderSyncActions(); renderDataModeSettings(); renderBackupStatus();
     const start=$('#trackerStartDate'); if(start) start.value=state.settings.startDate||todayKey();
     const disp=$('#startDateDisplay'); if(disp) disp.textContent=state.settings.startDate||todayKey();
-    $('#autoSyncSwitch')?.classList.toggle('on',state.settings.autoSync);
+    $('#dailyBackupSwitch')?.classList.toggle('on',!!state.settings.dailyBackup);
     $('#reminderSwitch')?.classList.toggle('on',state.settings.reminders);
   }
   function drawRewardPanel(tab=rewardActiveTab){
@@ -1199,7 +1240,7 @@
     }
     refreshSettingsChrome();
     renderTopProfile();
-    $('#autoSyncSwitch').disabled=false;
+    $('#dailyBackupSwitch').disabled=!fileHandle;
   }
   /* ---------- FILE SYNC ---------- */
   function openHandleDb(){
@@ -1251,6 +1292,7 @@
       if(await stored.queryPermission({mode:'readwrite'})!=='granted')return false;
       fileHandle=stored;
       state.settings.fileConnected=true;
+      if(state.settings.dailyBackup!==false) state.settings.dailyBackup=true;
       return true;
     }catch(e){return false;}
   }
@@ -1262,13 +1304,14 @@
       if(perm!=='granted')return false;
       fileHandle=stored;
       state.settings.fileConnected=true;
+      if(state.settings.dailyBackup!==false) state.settings.dailyBackup=true;
       updateStatus();
       renderSettings();
       return true;
     }catch(e){return false;}
   }
-  async function connectFile(){if(!window.showOpenFilePicker){toast('File connection needs Chrome/Edge on desktop. Use Export/Import instead.');return;} if(await reconnectStoredFile()){toast('File reconnected'); if(state.settings.autoSync) await save(true,{render:'all'}); else await save(false,{render:'none'}); refreshSettingsChrome(); return;} try{[fileHandle]=await window.showOpenFilePicker({types:[{description:'JSON Backup',accept:{'application/json':['.json']}}]}); const file=await fileHandle.getFile(); const txt=await file.text(); if(txt.trim()){state=JSON.parse(txt); normalizeState(); invalidateSettings();} state.settings.fileConnected=true; state.settings.autoSync=true; await storeFileHandle(fileHandle); await save(true,{render:'all'}); toast('File connected');}catch(e){}}
-  async function createFile(){if(!window.showSaveFilePicker){toast('Create file needs Chrome/Edge on desktop. Use Export instead.');return;} try{fileHandle=await window.showSaveFilePicker({suggestedName:'habit-tracker-backup.json',types:[{description:'JSON Backup',accept:{'application/json':['.json']}}]}); state.settings.fileConnected=true; state.settings.autoSync=true; await storeFileHandle(fileHandle); await save(false,{render:'none'}); refreshSettingsChrome(); toast('Backup file created');}catch(e){}}
+  async function connectFile(){if(!window.showOpenFilePicker){toast('File connection needs Chrome/Edge on desktop. Use Export/Import instead.');return;} if(await reconnectStoredFile()){toast('File reconnected'); state.settings.dailyBackup=true; setupDailyBackupLoop(); await save(true,{render:'none'}); refreshSettingsChrome(); return;} try{[fileHandle]=await window.showOpenFilePicker({types:[{description:'JSON Backup',accept:{'application/json':['.json']}}]}); const file=await fileHandle.getFile(); const txt=await file.text(); if(txt.trim()){state=JSON.parse(txt); normalizeState(); invalidateSettings();} state.settings.fileConnected=true; state.settings.dailyBackup=true; await storeFileHandle(fileHandle); setupDailyBackupLoop(); await writeBackupFile(true); refreshSettingsChrome(); toast('File connected');}catch(e){}}
+  async function createFile(){if(!window.showSaveFilePicker){toast('Create file needs Chrome/Edge on desktop. Use Export instead.');return;} try{fileHandle=await window.showSaveFilePicker({suggestedName:'habit-tracker-backup.json',types:[{description:'JSON Backup',accept:{'application/json':['.json']}}]}); state.settings.fileConnected=true; state.settings.dailyBackup=true; await storeFileHandle(fileHandle); setupDailyBackupLoop(); await writeBackupFile(true); refreshSettingsChrome(); toast('Backup file created');}catch(e){}}
   function reminderBody(habit){const tpl=(habit.reminder?.message||state.settings.defaultReminderMessage||'Time for {habit}!').slice(0,REMINDER_MSG_LIMIT); return tpl.replace(/\{habit\}/g,habit.name||'your habit');}
   async function toggleReminders(){
     const turningOn=!state.settings.reminders;
@@ -1368,29 +1411,26 @@
   $('#reportPrev').onclick=()=>{reportCursor.setMonth(reportCursor.getMonth()-(reportMode==='month'?1:3)); renderCalendar();}; $('#reportNext').onclick=()=>{reportCursor.setMonth(reportCursor.getMonth()+(reportMode==='month'?1:3)); renderCalendar();};
   $('#fileStatus')?.addEventListener('click',()=>{if(!fileHandle&&state.settings.fileConnected){showView('settingsView'); connectFile();}});
   window.addEventListener('resize',()=>{if($('#onboardBackdrop')?.classList.contains('show')) positionOnboardCallout(ONBOARD_STEPS[onboardStep]);});
-  $('#autoSyncSwitch')?.addEventListener('click',async()=>{
+  $('#dailyBackupSwitch')?.addEventListener('click',async()=>{
     if(!fileHandle){
-      if(state.settings.autoSync){
-        state.settings.autoSync=false;
-        await save(false,{render:'none'});
-        $('#autoSyncSwitch')?.classList.toggle('on',false);
-        return;
-      }
       if(state.settings.fileConnected && await reconnectStoredFile()){
-        state.settings.autoSync=true;
+        state.settings.dailyBackup=true;
+        setupDailyBackupLoop();
         await save(false,{render:'none'});
-        $('#autoSyncSwitch')?.classList.toggle('on',true);
-        toast('Auto sync restored');
+        $('#dailyBackupSwitch')?.classList.toggle('on',true);
+        toast('Daily backup restored');
         return;
       }
       toast('Connect a backup file first');
       refreshSettingsChrome();
       return;
     }
-    state.settings.autoSync=!state.settings.autoSync;
+    state.settings.dailyBackup=!state.settings.dailyBackup;
     await save(false,{render:'none'});
-    $('#autoSyncSwitch')?.classList.toggle('on',state.settings.autoSync);
+    $('#dailyBackupSwitch')?.classList.toggle('on',state.settings.dailyBackup);
+    if(state.settings.dailyBackup) setupDailyBackupLoop();
   });
+  document.addEventListener('visibilitychange',()=>{ if(document.visibilityState==='visible') void runDailyBackupIfDue(); });
   $('#reminderSwitch')?.addEventListener('click',toggleReminders);
   $('#resetAllBtn').onclick=async()=>{if($('#confirmDeleteInput').value!=='Confirm'){toast('Type Confirm first');return;} if(!confirm('Erase all data and start fresh?'))return; const keep={colorMode:state.settings.colorMode,styleTheme:state.settings.styleTheme,userName:state.settings.userName,profileIcon:state.settings.profileIcon}; state=freshState({onboardingComplete:true,keep}); fileHandle=null; localStorage.setItem(STORAGE,JSON.stringify(state)); normalizeState(); invalidateSettings(); await save(true,{render:'all'}); toast('Data erased');};
   document.body.addEventListener('click',async e=>{
@@ -1441,5 +1481,5 @@
   setupReminderLoop();
   renderAll();
   renderOnboarding();
-  void restoreFileConnection().then(connected=>{if(connected) refreshSettingsChrome();});
+  void restoreFileConnection().then(connected=>{if(connected){ setupDailyBackupLoop(); refreshSettingsChrome(); } else setupDailyBackupLoop();});
 })();
