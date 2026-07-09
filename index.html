@@ -95,7 +95,7 @@
         </div>
 
         <div class="card collapsed" id="flexHabitCard" style="display:none">
-          <button class="collapsible-head" id="flexHabitToggle"><div><h3 style="margin:0">Not Specified Date</h3><div class="small-note" id="flexHabitSummary">0 unfinished targets</div></div><span class="collapse-caret">⌄</span></button>
+          <button class="collapsible-head" id="flexHabitToggle"><div><h3 style="margin:0">Not Specific</h3><div class="small-note" id="flexHabitSummary">0 unfinished targets</div></div><span class="collapse-caret">⌄</span></button>
           <div class="collapsible-body" style="margin-top:12px"><div id="flexHabitGroups"></div></div>
         </div>
 
@@ -115,6 +115,11 @@
         </div>
         <div class="card"><div class="card-head"><h3>Habit Setup</h3><button class="btn-inline pink" id="addHabitBtn" type="button">+ Habit</button></div><div class="habit-list" id="allHabitList"></div></div>
         <div class="card"><div class="card-head"><h3>Recent Habit Records</h3></div><div class="activity-log" id="recentActivityLog"></div></div>
+        <div class="card" id="habitCompletionCard">
+          <div class="card-head"><h3>Completion Rate</h3><div class="segmented" id="habitChartPeriodTabs"><button data-period="week" class="active">Week</button><button data-period="month">Month</button><button data-period="quarter">Quarter</button></div></div>
+          <p class="small-note" id="habitChartRangeNote"></p>
+          <div class="habit-completion-table" id="habitCompletionTable"></div>
+        </div>
       </section>
 
       <section class="view" id="reportView">
@@ -194,7 +199,7 @@
         <div class="card settings-card sync-card">
           <div class="sync-status-panel" id="backupStatus">No backup file connected.</div>
           <div class="sync-actions" id="syncActionsGrid"></div>
-          <div class="switch-row sync-auto-row"><div><strong>Auto sync</strong><div class="small-note">Writes every edit to your connected JSON file.</div></div><button class="switch" id="autoSyncSwitch" aria-label="Auto sync toggle"></button></div>
+          <div class="switch-row sync-auto-row"><div><strong>Auto backup</strong><div class="small-note">Saves to your file a few seconds after you stop editing, when you leave the app, and once daily at 3:00 AM (Hong Kong time). Edits stay instant on this device.</div></div><button class="switch" id="autoBackupSwitch" aria-label="Auto backup toggle"></button></div>
         </div>
 
         <p class="settings-section-label">Notifications</p>
@@ -203,16 +208,14 @@
           <div class="form-grid" id="reminderSettings" style="margin-top:12px"></div>
         </div>
 
-        <p class="settings-section-label">Data &amp; help</p>
+        <p class="settings-section-label">Help</p>
         <div class="card settings-card">
-          <div class="field"><label>Data mode</label><span class="chip" id="dataModeChip">Demo</span><p class="small-note">Demo loads sample habits and history. Real use starts clean from today.</p><div class="segmented data-mode-tabs" id="dataModeTabs"><button type="button" data-mode="demo">Demo</button><button type="button" data-mode="real">Real use</button></div><button class="btn-secondary settings-action" id="applyDataModeBtn" type="button">Switch data mode</button></div>
-          <div class="settings-divider"></div>
           <button class="btn-secondary settings-action" id="replayOnboardingBtn" type="button">Replay onboarding tour</button>
         </div>
 
         <p class="settings-section-label danger-label">Danger zone</p>
         <div class="card settings-card settings-danger">
-          <p class="small-note">Erases all data and reloads your selected mode. Type <strong>Confirm</strong> to proceed.</p>
+          <p class="small-note">Erases all habits, records, and settings. Type <strong>Confirm</strong> to proceed.</p>
           <div class="field"><input id="confirmDeleteInput" placeholder="Type Confirm"></div>
           <button class="btn-danger settings-action" id="resetAllBtn" type="button">Erase all data</button>
         </div>
