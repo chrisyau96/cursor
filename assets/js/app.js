@@ -1212,8 +1212,10 @@
     const start=$('#trackerStartDate'); if(start) start.value=state.settings.startDate||todayKey();
     const disp=$('#startDateDisplay'); if(disp) disp.textContent=state.settings.startDate||todayKey();
     $('#autoBackupSwitch')?.classList.toggle('on',!!state.settings.autoBackup);
+    $('#autoBackupSwitch')?.toggleAttribute('disabled',!fileHandle);
     $('#reminderSwitch')?.classList.toggle('on',state.settings.reminders);
   }
+  function refreshBackupChrome(){ updateStatus(); refreshSettingsChrome(); }
   function drawRewardPanel(tab=rewardActiveTab){
     ensureRewardShape(); const r=state.settings.rewards;
     rewardActiveTab=tab; const p=$('#rewardPanel'); if(!p)return;
@@ -1263,7 +1265,7 @@
     }
     refreshSettingsChrome();
     renderTopProfile();
-    $('#autoBackupSwitch').disabled=!fileHandle;
+    $('#autoBackupSwitch')?.toggleAttribute('disabled',!fileHandle);
   }
   /* ---------- FILE SYNC ---------- */
   function openHandleDb(){
@@ -1275,7 +1277,7 @@
     });
   }
   async function storeFileHandle(handle){
-    if(!handle)return;
+    if(!handle)return false;
     try{
       const db=await openHandleDb();
       await new Promise((resolve,reject)=>{
@@ -1284,7 +1286,8 @@
         tx.oncomplete=()=>resolve();
         tx.onerror=()=>reject(tx.error);
       });
-    }catch(e){}
+      return true;
+    }catch(e){return false;}
   }
   async function loadStoredFileHandle(){
     try{
@@ -1308,35 +1311,45 @@
       });
     }catch(e){}
   }
-  async function restoreFileConnection(){
-    const stored=await loadStoredFileHandle();
-    if(!stored)return false;
+  function applyStoredFileHandle(stored){
+    fileHandle=stored;
+    state.settings.fileConnected=true;
+    if(state.settings.autoBackup!==false) state.settings.autoBackup=true;
+    state.settings.dailyBackup=!!state.settings.autoBackup;
+    localStorage.setItem(STORAGE,JSON.stringify(state));
+  }
+  async function verifyStoredHandle(stored){
+    if(!stored) return false;
     try{
-      if(await stored.queryPermission({mode:'readwrite'})!=='granted')return false;
-      fileHandle=stored;
-      state.settings.fileConnected=true;
-      if(state.settings.autoBackup!==false) state.settings.autoBackup=true;
-      state.settings.dailyBackup=!!state.settings.autoBackup;
+      const perm=stored.queryPermission?await stored.queryPermission({mode:'readwrite'}):'prompt';
+      if(perm==='denied') return false;
+      if(perm==='granted') return true;
+      await stored.getFile();
       return true;
     }catch(e){return false;}
+  }
+  async function restoreFileConnection(){
+    const stored=await loadStoredFileHandle();
+    if(!stored) return false;
+    if(!(await verifyStoredHandle(stored))) return false;
+    applyStoredFileHandle(stored);
+    return true;
   }
   async function reconnectStoredFile(){
     const stored=await loadStoredFileHandle();
-    if(!stored)return false;
+    if(!stored) return false;
     try{
-      const perm=await stored.requestPermission({mode:'readwrite'});
-      if(perm!=='granted')return false;
-      fileHandle=stored;
-      state.settings.fileConnected=true;
-      if(state.settings.autoBackup!==false) state.settings.autoBackup=true;
-      state.settings.dailyBackup=!!state.settings.autoBackup;
-      updateStatus();
-      renderSettings();
+      if(stored.requestPermission){
+        const perm=await stored.requestPermission({mode:'readwrite'});
+        if(perm!=='granted') return false;
+      } else if(!(await verifyStoredHandle(stored))) return false;
+      applyStoredFileHandle(stored);
+      refreshBackupChrome();
       return true;
     }catch(e){return false;}
   }
-  async function connectFile(){if(!window.showOpenFilePicker){toast('File connection needs Chrome/Edge on desktop. Use Export/Import instead.');return;} if(await reconnectStoredFile()){toast('File reconnected'); state.settings.autoBackup=true; state.settings.dailyBackup=true; setupDailyBackupLoop(); await flushBackupSync(); refreshSettingsChrome(); return;} try{[fileHandle]=await window.showOpenFilePicker({types:[{description:'JSON Backup',accept:{'application/json':['.json']}}]}); const file=await fileHandle.getFile(); const txt=await file.text(); if(txt.trim()){state=JSON.parse(txt); normalizeState(); invalidateSettings();} state.settings.fileConnected=true; state.settings.autoBackup=true; state.settings.dailyBackup=true; await storeFileHandle(fileHandle); setupDailyBackupLoop(); await writeBackupFile(true); refreshSettingsChrome(); toast('File connected');}catch(e){}}
-  async function createFile(){if(!window.showSaveFilePicker){toast('Create file needs Chrome/Edge on desktop. Use Export instead.');return;} try{fileHandle=await window.showSaveFilePicker({suggestedName:'habit-tracker-backup.json',types:[{description:'JSON Backup',accept:{'application/json':['.json']}}]}); state.settings.fileConnected=true; state.settings.autoBackup=true; state.settings.dailyBackup=true; await storeFileHandle(fileHandle); setupDailyBackupLoop(); await writeBackupFile(true); refreshSettingsChrome(); toast('Backup file created');}catch(e){}}
+  async function connectFile(){if(!window.showOpenFilePicker){toast('File connection needs Chrome/Edge on desktop. Use Export/Import instead.');return;} if(await reconnectStoredFile()){toast('File reconnected'); setupDailyBackupLoop(); await flushBackupSync(); refreshBackupChrome(); return;} try{[fileHandle]=await window.showOpenFilePicker({types:[{description:'JSON Backup',accept:{'application/json':['.json']}}]}); const file=await fileHandle.getFile(); const txt=await file.text(); if(txt.trim()){state=JSON.parse(txt); normalizeState(); invalidateSettings();} state.settings.fileConnected=true; state.settings.autoBackup=true; state.settings.dailyBackup=true; if(!(await storeFileHandle(fileHandle))) toast('Connected, but this browser may not remember the file after refresh'); setupDailyBackupLoop(); await writeBackupFile(true); refreshBackupChrome(); toast('File connected');}catch(e){}}
+  async function createFile(){if(!window.showSaveFilePicker){toast('Create file needs Chrome/Edge on desktop. Use Export instead.');return;} try{fileHandle=await window.showSaveFilePicker({suggestedName:'habit-tracker-backup.json',types:[{description:'JSON Backup',accept:{'application/json':['.json']}}]}); state.settings.fileConnected=true; state.settings.autoBackup=true; state.settings.dailyBackup=true; if(!(await storeFileHandle(fileHandle))) toast('File created, but this browser may not remember it after refresh'); setupDailyBackupLoop(); await writeBackupFile(true); refreshBackupChrome(); toast('Backup file created');}catch(e){}}
   function reminderBody(habit){const tpl=(habit.reminder?.message||state.settings.defaultReminderMessage||'Time for {habit}!').slice(0,REMINDER_MSG_LIMIT); return tpl.replace(/\{habit\}/g,habit.name||'your habit');}
   async function toggleReminders(){
     const turningOn=!state.settings.reminders;
@@ -1444,6 +1457,7 @@
         setupDailyBackupLoop();
         await flushBackupSync();
         $('#autoBackupSwitch')?.classList.toggle('on',true);
+        refreshBackupChrome();
         toast('Auto backup restored');
         return;
       }
@@ -1460,9 +1474,25 @@
   });
   document.addEventListener('visibilitychange',()=>{
     if(document.visibilityState==='hidden') void flushBackupSync();
-    else if(document.visibilityState==='visible') void runDailyBackupIfDue();
+    else if(document.visibilityState==='visible'){ void runDailyBackupIfDue(); void tryReconnectOnReturn(); }
   });
-  window.addEventListener('pagehide',()=>{ void flushBackupSync(); });
+  let reconnectGestureTried=false;
+  async function tryReconnectOnReturn(){
+    if(fileHandle||!state.settings.fileConnected) return;
+    if(await restoreFileConnection()){
+      setupDailyBackupLoop();
+      refreshBackupChrome();
+      void flushBackupSync();
+    }
+  }
+  document.addEventListener('click',()=>{
+    if(fileHandle||!state.settings.fileConnected||reconnectGestureTried) return;
+    reconnectGestureTried=true;
+    void reconnectStoredFile().then(ok=>{
+      if(!ok) reconnectGestureTried=false;
+      else { setupDailyBackupLoop(); void flushBackupSync(); }
+    });
+  },true);
   $('#reminderSwitch')?.addEventListener('click',toggleReminders);
   $('#resetAllBtn').onclick=async()=>{if($('#confirmDeleteInput').value!=='Confirm'){toast('Type Confirm first');return;} if(!confirm('Erase all data and start fresh?'))return; const keep={colorMode:state.settings.colorMode,styleTheme:state.settings.styleTheme,userName:state.settings.userName,profileIcon:state.settings.profileIcon}; state=freshState({onboardingComplete:true,keep}); fileHandle=null; localStorage.setItem(STORAGE,JSON.stringify(state)); normalizeState(); invalidateSettings(); await save(true,{render:'all'}); toast('Data erased');};
   document.body.addEventListener('click',async e=>{
@@ -1511,7 +1541,12 @@
   lastLevel=levelInfo().cur.level;
   applyAppearance();
   setupReminderLoop();
-  renderAll();
-  renderOnboarding();
-  void restoreFileConnection().then(connected=>{if(connected){ setupDailyBackupLoop(); refreshSettingsChrome(); } else setupDailyBackupLoop();});
+  void (async function boot(){
+    const connected=await restoreFileConnection();
+    setupDailyBackupLoop();
+    renderAll();
+    renderOnboarding();
+    refreshBackupChrome();
+    if(connected) void flushBackupSync();
+  })();
 })();
