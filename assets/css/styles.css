@@ -359,6 +359,11 @@ input[type=range]::-moz-range-track{height:6px;border-radius:999px;background:va
 .dynamic-fields{border:1px solid var(--line);background:#fbfbff;border-radius:16px;padding:12px}
 .sub-field{margin-top:10px}.sub-field:first-child{margin-top:0}
 .hint,.inline-hint{font-size:11px;color:var(--muted);line-height:1.35;margin-top:6px}
+.info-tip{display:inline-grid;place-items:center;width:18px;height:18px;border:none;border-radius:50%;background:var(--brand-soft);color:var(--brand);font-size:11px;font-weight:800;line-height:1;padding:0;cursor:pointer;vertical-align:middle;flex:0 0 auto}
+.info-tip:active{transform:scale(.94)}
+.settings-section-label{display:flex;align-items:center;gap:4px}
+.card-head .card-tip{margin-right:auto;margin-left:4px}
+.switch-row strong{display:inline-flex;align-items:center;gap:4px}
 .help-dot{width:22px;height:22px;border-radius:50%;display:inline-grid;place-items:center;background:var(--soft-purple);color:var(--purple);font-size:12px;font-weight:900;flex:0 0 auto}
 .schedule-grid{display:grid;grid-template-columns:1fr 1fr;gap:8px}
 .schedule-grid.three{grid-template-columns:1fr 1fr 1fr}
@@ -443,9 +448,9 @@ input[type=range]::-moz-range-track{height:6px;border-radius:999px;background:va
 
 /* Switch */
 .switch-row{display:flex;align-items:center;justify-content:space-between;gap:12px}
-.switch-row strong{font-size:14px;font-weight:800;letter-spacing:-.01em}
+.switch-row strong{font-size:14px;font-weight:800;letter-spacing:-.01em;display:inline-flex;align-items:center;gap:4px}
 .switch-row .small-note{margin-top:3px}
-.switch{width:50px;height:28px;background:#e5e8f0;border-radius:999px;position:relative;flex:0 0 auto}
+.switch{width:50px;height:28px;background:#e5e8f0;border-radius:999px;position:relative;flex:0 0 auto;border:none;padding:0;cursor:pointer}
 .switch:after{content:"";position:absolute;width:22px;height:22px;left:3px;top:3px;background:#fff;border-radius:50%;box-shadow:var(--shadow-sm);transition:.2s}
 .switch.on{background:linear-gradient(135deg,var(--brand),var(--brand2))}
 .switch.on:after{left:25px}
