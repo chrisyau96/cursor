@@ -33,11 +33,9 @@
   const FILE_HANDLE_DB='momentumFileHandles';
   const FILE_HANDLE_KEY='backup';
   let reminderTimer=null;
-  let dailyBackupTimer=null;
   let backupDebounceTimer=null;
   let backupSyncInFlight=false;
   let backupSyncQueued=false;
-  const DAILY_BACKUP_HOUR=3;
   const BACKUP_DEBOUNCE_MS=2500;
   let reportCursor=hkNow();
   let reportMode='month';
@@ -163,7 +161,7 @@
     else if(mode==='active') renderAfterSave(null);
     else if(mode!=='none') renderAfterSave(mode);
     else { updateStatus(); renderTopProfile(); }
-    if(!skipSync){ queueBackupSync(); void runDailyBackupIfDue(); }
+    if(!skipSync) queueBackupSync();
   }
   function toast(msg){const t=$('#toast'); t.textContent=msg; t.classList.add('show'); setTimeout(()=>t.classList.remove('show'),1600)}
   function backupEnabled(){return !!state.settings.autoBackup&&!!fileHandle;}
@@ -185,17 +183,6 @@
       if(backupSyncQueued) void flushBackupSync();
     }
   }
-  function dailyBackupSlotStart(now=hkNow()){
-    const slot=new Date(now); slot.setHours(DAILY_BACKUP_HOUR,0,0,0);
-    if(now<slot) slot.setDate(slot.getDate()-1);
-    return slot;
-  }
-  function dailyBackupDue(){
-    if(!state.settings.autoBackup||!fileHandle) return false;
-    const slot=dailyBackupSlotStart();
-    const last=state.settings.lastScheduledBackupAt?new Date(state.settings.lastScheduledBackupAt):null;
-    return !last||last<slot;
-  }
   async function canWriteBackup(){
     if(!fileHandle) return false;
     if(fileHandle.queryPermission) return (await fileHandle.queryPermission({mode:'readwrite'}))==='granted';
@@ -209,7 +196,6 @@
       await w.write(JSON.stringify(state,null,2));
       await w.close();
       state.settings.fileConnected=true;
-      state.settings.lastScheduledBackupAt=new Date().toISOString();
       touchBackupTimestamp();
       localStorage.setItem(STORAGE,JSON.stringify(state));
       if(silent) maybeRenderBackupStatus();
@@ -220,14 +206,8 @@
       return false;
     }
   }
-  async function runDailyBackupIfDue(){ if(!dailyBackupDue()) return; await writeBackupFile(true); }
-  function setupDailyBackupLoop(){
-    if(dailyBackupTimer) clearInterval(dailyBackupTimer);
-    void runDailyBackupIfDue();
-    dailyBackupTimer=setInterval(()=>{ void runDailyBackupIfDue(); },60000);
-  }
-
   function weekStart(date){const d=new Date(date); d.setHours(0,0,0,0); d.setDate(d.getDate()-d.getDay()); return d;}
+  function weekKey(date){return dateKey(weekStart(date));}
   function fmtDueShort(k){const d=parseDate(k); return d.toLocaleDateString(undefined,{month:'short',day:'numeric'});}
   function isNotSpecific(habit){const f=habit.frequency||{}; if(f.mode==='daily') return f.schedule?.type==='any'; return !f.schedule||f.schedule.type==='any';}
   function touchBackupTimestamp(){state.settings.lastBackupAt=new Date().toISOString();}
@@ -398,7 +378,7 @@
   }
   function currentPeriodKey(habit,date=hkNow()){
     const f=habit.frequency||{mode:'daily',days:[0,1,2,3,4,5,6]};
-    if(f.mode==='daily') return dateKey(date);
+    if(f.mode==='daily') return weekKey(date);
     if(f.mode==='monthly'||(f.mode==='custom'&&f.period==='month')) return monthKey(date);
     if(f.mode==='custom'&&f.period==='quarter') return quarterKey(date);
     if(f.mode==='custom'&&f.period==='year') return yearKey(date);
@@ -418,19 +398,20 @@
   }
   function habitDueMarkup(h,now=hkNow()){return isNotSpecific(h)?`<span class="mini-dot"></span><span class="due-tag">Due ${fmtDueShort(habitDueDate(h,now))}</span>`:'';}
   function isFlexibleHabit(habit,date=hkNow()){if(habit.paused||habit.archived||!afterStart(dateKey(date))) return false; if(!isNotSpecific(habit)) return false; ensureFlexPeriod(habit,date); if(!periodMonthAllowed(habit.frequency,date)) return false; return periodCount(habit,date)<periodTarget(habit);}
-  function isScheduledToday(habit,date=hkNow()){if(habit.paused||habit.archived)return false;
+  function showsOnHomeToday(habit,date=hkNow()){if(habit.paused||habit.archived)return false;
     if(!afterStart(dateKey(date))) return false;
     if(isNotSpecific(habit)) return false;
     const f=habit.frequency||{};
-    if(f.mode==='daily') return (f.days||[]).includes(date.getDay()) && periodCount(habit,date)<periodTarget(habit);
+    if(f.mode==='daily') return (f.days||[]).includes(date.getDay());
     if(!f.schedule || f.schedule.type==='any') return false;
-    return matchesScheduleRule(f,date) && periodCount(habit,date)<periodTarget(habit);
+    return matchesScheduleRule(f,date);
   }
+  function isScheduledToday(habit,date=hkNow()){return showsOnHomeToday(habit,date)&&periodCount(habit,date)<periodTarget(habit);}
   function periodCount(habit,date=hkNow()){if(isNotSpecific(habit)){const {start,end}=flexWindow(habit,date); return state.records.filter(r=>r.habitId===habit.id&&r.date>=start&&r.date<=end).length;} const key=currentPeriodKey(habit,date); return state.records.filter(r=>r.habitId===habit.id && currentPeriodKey(habit,parseDate(r.date))===key).length}
   function todayHabitCount(habit,date=hkNow()){const k=dateKey(date); return state.records.filter(r=>r.habitId===habit.id && r.date===k).length}
   function dayScheduledHabits(date){if(!afterStart(dateKey(date))) return []; return state.habits.filter(h=>{const f=h.frequency||{}; if(f.mode==='daily') return (f.days||[]).includes(date.getDay()); if(!f.schedule || f.schedule.type==='any') return false; return matchesScheduleRule(f,date);});}
   function dayPct(date){const scheduled=dayScheduledHabits(date); if(!scheduled.length) return null; let points=0,total=0; scheduled.forEach(h=>{const target=(h.frequency.mode==='daily')?periodTarget(h):1; const count=(h.frequency.mode==='daily')?todayHabitCount(h,date):(periodCount(h,date)>0?1:0); points+=Math.min(count,target); total+=target;}); return total?Math.round(points/total*100):null;}
-  function completionOfHabit(habit,date=hkNow()){const target=periodTarget(habit); const count=habit.frequency.mode==='daily'?todayHabitCount(habit,date):periodCount(habit,date); return {count,target,pct:Math.min(100,Math.round(count/target*100)),done:count>=target};}
+  function completionOfHabit(habit,date=hkNow()){const target=periodTarget(habit); const count=periodCount(habit,date); return {count,target,pct:Math.min(100,Math.round(count/target*100)),done:count>=target};}
   function habitXpKey(habit,date){return habit.id+'|'+currentPeriodKey(habit,date);}
   function habitXpPerTap(habit){const total=Math.max(1,Math.round(Number(habit.xpReward)||5)); const target=Math.max(1,periodTarget(habit)); return Math.max(1,Math.round(total/target));}
   function habitPeriodXp(habit,date){
@@ -521,8 +502,9 @@
   }
   function refreshHomeAfterRecord(habitId, date=todayKey()){
     const now=parseDate(date);
-    const scheduled=activeHabits().filter(h=>isScheduledToday(h,now));
-    updateHomeSummary(now, scheduled);
+    const homeHabits=activeHabits().filter(h=>showsOnHomeToday(h,now));
+    const box=$('#todayHabitGroups'); if(box) delete box.dataset.sig;
+    updateHomeSummary(now, homeHabits);
     renderTopProfile();
     const habit=state.habits.find(h=>h.id===habitId);
     const btn=document.querySelector(`button.check-btn[data-habit-id="${habitId}"][data-date="${date}"]`);
@@ -533,33 +515,33 @@
       const groupEl=wrap.closest('.habit-group');
       wrap.replaceWith(fresh);
       const gid=habit.groupId||'_ungrouped';
-      refreshGroupProgress(groupEl||fresh.closest('.habit-group'), gid, scheduled, now);
+      refreshGroupProgress(groupEl||fresh.closest('.habit-group'), gid, homeHabits, now);
     }else{
-      renderTodayHabitGroups(now, scheduled);
+      renderTodayHabitGroups(now, homeHabits);
     }
-    if(date===todayKey()) renderWeekStrip();
+    if(date===todayKey()){ renderWeekStrip(); renderFlexibleHabits(now); }
   }
   function renderHome(){
-    const now=hkNow(); const scheduled=activeHabits().filter(h=>isScheduledToday(h,now));
+    const now=hkNow(); const homeHabits=activeHabits().filter(h=>showsOnHomeToday(h,now));
     $('#greeting').textContent=timeGreeting()+greetName();
     $('#todayEntryStamp').textContent=fmtDate(now);
-    updateHomeSummary(now, scheduled);
+    updateHomeSummary(now, homeHabits);
     const box=$('#todayHabitGroups');
-    const sig=dateKey(now)+'|'+scheduled.map(h=>h.id+':'+completionOfHabit(h,now).count).join(',');
-    if(box && box.dataset.sig!==sig){box.dataset.sig=sig; renderTodayHabitGroups(now, scheduled);}
+    const sig=dateKey(now)+'|'+homeHabits.map(h=>h.id+':'+completionOfHabit(h,now).count).join(',');
+    if(box && box.dataset.sig!==sig){box.dataset.sig=sig; renderTodayHabitGroups(now, homeHabits);}
     const strip=$('#weekStrip');
     const weekSig=weekOffset+'|'+todayKey();
     if(strip && strip.dataset.sig!==weekSig){strip.dataset.sig=weekSig; renderWeekStrip();}
     renderFlexibleHabits(now); renderHomeJournal(); renderQuote(); renderTopProfile(); renderWeeklyReviewCard();
     const wt=$('#weekToday'); if(wt) wt.style.display=weekOffset===0?'none':'inline-grid';
   }
-  function renderTodayHabitGroups(now, scheduled){
+  function renderTodayHabitGroups(now, homeHabits){
     const box=$('#todayHabitGroups'); if(!box)return;
     box.innerHTML='';
-    if(!scheduled.length){box.innerHTML='<div class="empty"><div class="empty-icon">✨</div>No habits scheduled today.<button class="btn-primary empty-cta" data-open-habit>Add your first habit</button></div>'; $$('[data-open-habit]',box).forEach(b=>b.onclick=()=>openHabitModal()); return;}
+    if(!homeHabits.length){box.innerHTML='<div class="empty"><div class="empty-icon">✨</div>No habits scheduled today.<button class="btn-primary empty-cta" data-open-habit>Add your first habit</button></div>'; $$('[data-open-habit]',box).forEach(b=>b.onclick=()=>openHabitModal()); return;}
     const used=new Set(); const groups=sortedGroups();
-    groups.forEach(g=>{const hs=scheduled.filter(h=>h.groupId===g.id); if(!hs.length)return; hs.forEach(h=>used.add(h.id)); box.appendChild(renderHabitGroupBlock(g,hs,now));});
-    const rest=scheduled.filter(h=>!used.has(h.id));
+    groups.forEach(g=>{const hs=homeHabits.filter(h=>h.groupId===g.id); if(!hs.length)return; hs.forEach(h=>used.add(h.id)); box.appendChild(renderHabitGroupBlock(g,hs,now));});
+    const rest=homeHabits.filter(h=>!used.has(h.id));
     if(rest.length) box.appendChild(renderHabitGroupBlock({id:'_ungrouped',name:'Ungrouped',emoji:'📌',color:'#66758c'},rest,now));
   }
   function renderHabitGroupBlock(group, habits, now){
@@ -617,12 +599,20 @@
     return wrap;
   }
   function openDaySummary(k){const d=parseDate(k); const p=dayPct(d); const j=state.journals[k]; toast(`${fmtDate(d)} · ${isVacationDay(k)?'Paused':(p??'—')+'%'}${j?` · ${j.mood} ${j.energy}/10`:''}`);}
+  function flexHabitsForHome(now=hkNow()){
+    return activeHabits().filter(h=>{
+      if(h.paused||h.archived||!isNotSpecific(h)) return false;
+      if(!afterStart(dateKey(now))) return false;
+      ensureFlexPeriod(h,now);
+      return periodMonthAllowed(h.frequency,now);
+    });
+  }
   function renderFlexibleHabits(now=hkNow()){
     const card=$('#flexHabitCard'), list=$('#flexHabitGroups'); if(!card||!list)return;
     let rolled=false;
     activeHabits().forEach(h=>{if(ensureFlexPeriod(h,now)) rolled=true;});
     if(rolled) void save(true,{render:'none'});
-    const flex=activeHabits().filter(h=>isFlexibleHabit(h,now));
+    const flex=flexHabitsForHome(now);
     if(!flex.length){card.style.display='none'; return;}
     card.style.display='block';
     const unfinished=flex.reduce((s,h)=>s+Math.max(0,periodTarget(h)-completionOfHabit(h,now).count),0);
@@ -782,8 +772,8 @@
     const isEdit=!!habit;
     const h=habit||{name:'',emoji:'📖',color:COLOURS[0],target:1,xpReward:5,frequency:{mode:'daily',days:[1,2,3,4,5]},reminder:{enabled:false,time:state.settings.globalReminderTime||'20:30',message:''}};
     const xpPer=habitXpPerTap(h);
-    openModal(isEdit?'Edit Habit':'Add Habit',`<div class="form-grid"><div class="field"><label>Habit Name</label><input id="habitName" value="${escapeAttr(h.name)}" placeholder="e.g. Bible Time"></div><div class="field"><label>Group</label><select id="habitGroup"><option value="">Ungrouped</option>${sortedGroups().map(g=>`<option value="${g.id}" ${h.groupId===g.id?'selected':''}>${escapeHtml(g.name)}</option>`).join('')}</select></div><div class="field"><label>Icon</label><div class="emoji-row">${EMOJIS.map(e=>`<button class="emoji-swatch ${h.emoji===e?'active':''}" data-emoji="${e}">${e}</button>`).join('')}</div><input id="habitEmoji" value="${escapeAttr(h.emoji||'📖')}" maxlength="4" placeholder="📖" style="margin-top:8px"></div><div class="field"><label>Colour</label><div class="color-row">${COLOURS.map(c=>`<button class="color-swatch ${h.color===c?'active':''}" data-color="${c}" style="background:${c}"></button>`).join('')}</div></div><div class="field"><label>Target Count</label><select id="habitTarget">${Array.from({length:10},(_,i)=>i+1).map(n=>`<option value="${n}" ${Number(h.target||1)===n?'selected':''}>${n} time${n>1?'s':''}</option>`).join('')}</select></div><div class="field"><label>EXP per period</label><input id="habitXpReward" type="number" min="1" max="100" step="1" value="${Math.round(Number(h.xpReward)||5)}"><div class="hint" id="habitXpHint">${xpPer} EXP per completion at current target</div></div><div class="field"><label>Frequency</label><select id="freqMode"><option value="daily">Weekly</option><option value="monthly">Monthly</option><option value="custom">Custom</option></select></div><div class="dynamic-fields" id="freqFields"></div><div class="dynamic-fields"><div class="switch-row"><div><strong>Habit Reminder</strong><div class="small-note" id="habitReminderHint"></div></div><button class="switch" id="habitReminderToggle"></button></div><div class="field" style="margin-top:10px"><label>Reminder Time</label><input type="time" id="habitReminderTime" value="${h.reminder?.time||'20:30'}"></div><div class="field" id="daysBeforeDueField" style="display:none"><label>Remind days before due</label><input type="number" id="habitDaysBeforeDue" min="0" max="14" step="1" value="${Number(h.reminder?.daysBeforeDue??1)}"><div class="hint">For Not Specific habits, notification fires this many days before the due date.</div></div><div class="field"><label>Notification message</label><input id="habitReminderMsg" maxlength="${REMINDER_MSG_LIMIT}" value="${escapeAttr(h.reminder?.message||state.settings.defaultReminderMessage||'Time for {habit}!')}" placeholder="Time for {habit}!"><div class="hint"><span id="habitMsgCount">0</span>/${REMINDER_MSG_LIMIT} · {habit} is replaced with this habit's name when sent</div></div></div><div class="modal-actions"><button class="btn-secondary" data-close>Cancel</button><button class="btn-primary" id="saveHabitBtn">Save</button></div>${isEdit?'<button class="btn-danger settings-save" id="deleteHabitBtn" type="button">Delete habit</button>':''}</div>`);
-    function updateXpHint(){const t=Math.max(1,Number($('#habitTarget')?.value||1)); const total=Math.max(1,Math.round(Number($('#habitXpReward')?.value||5))); const hint=$('#habitXpHint'); if(hint) hint.textContent=`${Math.max(1,Math.round(total/t))} EXP per completion at current target`;}
+    openModal(isEdit?'Edit Habit':'Add Habit',`<div class="form-grid"><div class="field"><label>Habit Name</label><input id="habitName" value="${escapeAttr(h.name)}" placeholder="e.g. Bible Time"></div><div class="field"><label>Group</label><select id="habitGroup"><option value="">Ungrouped</option>${sortedGroups().map(g=>`<option value="${g.id}" ${h.groupId===g.id?'selected':''}>${escapeHtml(g.name)}</option>`).join('')}</select></div><div class="field"><label>Icon</label><div class="emoji-row">${EMOJIS.map(e=>`<button type="button" class="emoji-swatch ${h.emoji===e?'active':''}" data-emoji="${e}">${e}</button>`).join('')}</div><input id="habitEmoji" value="${escapeAttr(h.emoji||'📖')}" maxlength="4" placeholder="📖" style="margin-top:8px"></div><div class="field"><label>Colour</label><div class="color-row">${COLOURS.map(c=>`<button type="button" class="color-swatch ${h.color===c?'active':''}" data-color="${c}" style="background:${c}"></button>`).join('')}</div></div><div class="field"><label>Target Count</label><select id="habitTarget">${Array.from({length:10},(_,i)=>i+1).map(n=>`<option value="${n}" ${Number(h.target||1)===n?'selected':''}>${n} time${n>1?'s':''}</option>`).join('')}</select></div><div class="field"><label>EXP per period ${infoTip('Total EXP for the period is split across each completion at your target count.')}</label><input id="habitXpReward" type="number" min="1" max="100" step="1" value="${Math.round(Number(h.xpReward)||5)}"><div class="inline-hint" id="habitXpHint">${xpPer} EXP per completion</div></div><div class="field"><label>Frequency</label><select id="freqMode"><option value="daily">Weekly</option><option value="monthly">Monthly</option><option value="custom">Custom</option></select></div><div class="dynamic-fields" id="freqFields"></div><div class="dynamic-fields"><div class="switch-row"><div><strong>Habit Reminder ${infoTip('Optional alert for this habit at the set time.')}</strong></div><button type="button" class="switch" id="habitReminderToggle" aria-label="Habit reminder toggle"></button></div><div class="field" style="margin-top:10px"><label>Reminder Time</label><input type="time" id="habitReminderTime" value="${h.reminder?.time||'20:30'}"></div><div class="field" id="daysBeforeDueField" style="display:none"><label>Remind days before due ${infoTip('For Not Specific habits, notification fires this many days before the due date.')}</label><input type="number" id="habitDaysBeforeDue" min="0" max="14" step="1" value="${Number(h.reminder?.daysBeforeDue??1)}"></div><div class="field"><label>Notification message ${infoTip('{habit} is replaced with this habit\'s name when sent.')}</label><input id="habitReminderMsg" maxlength="${REMINDER_MSG_LIMIT}" value="${escapeAttr(h.reminder?.message||state.settings.defaultReminderMessage||'Time for {habit}!')}" placeholder="Time for {habit}!"><div class="inline-hint"><span id="habitMsgCount">0</span>/${REMINDER_MSG_LIMIT}</div></div></div><div class="modal-actions"><button class="btn-secondary" data-close>Cancel</button><button class="btn-primary" id="saveHabitBtn">Save</button></div>${isEdit?'<button class="btn-danger settings-save" id="deleteHabitBtn" type="button">Delete habit</button>':''}</div>`);
+    function updateXpHint(){const t=Math.max(1,Number($('#habitTarget')?.value||1)); const total=Math.max(1,Math.round(Number($('#habitXpReward')?.value||5))); const hint=$('#habitXpHint'); if(hint) hint.textContent=`${Math.max(1,Math.round(total/t))} EXP per completion`;}
     $('#habitTarget')?.addEventListener('change',updateXpHint);
     $('#habitXpReward')?.addEventListener('input',updateXpHint);
     const msgInput=$('#habitReminderMsg'), msgCount=$('#habitMsgCount');
@@ -798,11 +788,11 @@
     function monthOptions(v){return Array.from({length:12},(_,i)=>i+1).map(n=>`<option value="${n}" ${Number(v)===n?'selected':''}>${new Date(2026,n-1,1).toLocaleDateString([], {month:'long'})}</option>`).join('')}
     function scheduleFields(freq,mode){
       const s=freq.schedule||{};
-      return `<div class="field"><label>Schedule Type</label><select id="scheduleType"><option value="any" ${!s.type||s.type==='any'?'selected':''}>Not Specific</option><option value="date" ${s.type==='date'?'selected':''}>Specific date</option><option value="weekday" ${s.type==='weekday'?'selected':''}>Specific weekday</option></select></div><div id="scheduleFieldsInner"></div><div class="hint">Not Specific habits can be completed any time in the period. A due date is shown on the home card.</div>`;
+      return `<div class="field"><label>Schedule Type</label><select id="scheduleType"><option value="any" ${!s.type||s.type==='any'?'selected':''}>Not Specific</option><option value="date" ${s.type==='date'?'selected':''}>Specific date</option><option value="weekday" ${s.type==='weekday'?'selected':''}>Specific weekday</option></select></div><div id="scheduleFieldsInner"></div>`;
     }
     function drawScheduleInner(){
       const type=$('#scheduleType')?.value||'any'; const s=f.schedule||{}; const inner=$('#scheduleFieldsInner'); if(!inner)return;
-      if(type==='any') { inner.innerHTML=`<div class="hint">Complete any time before the due date in this period.</div>`; return; }
+      if(type==='any') { inner.innerHTML=''; return; }
       let periodExtra='';
       const period=$('#customPeriod')?.value || f.period || 'quarter';
       if($('#freqMode')?.value==='custom' && period==='quarter') periodExtra = `<div class="field"><label>Month in Quarter</label><select id="monthInPeriod"><option value="any" ${String(s.monthInPeriod)==='any'?'selected':''}>Every month in quarter</option><option value="1" ${String(s.monthInPeriod||1)==='1'?'selected':''}>1st month</option><option value="2" ${String(s.monthInPeriod)==='2'?'selected':''}>2nd month</option><option value="3" ${String(s.monthInPeriod)==='3'?'selected':''}>3rd month</option></select></div>`;
@@ -819,19 +809,19 @@
           const setup=$('#weeklySetupType')?.value||'days';
           const inner=$('#weeklyFieldsInner'); if(!inner)return;
           if(setup==='any'){
-            inner.innerHTML=`<div class="field"><label>Due weekday</label><select id="dueWeekday">${weekdayOptions(f.schedule?.dueWeekday??6)}</select><div class="hint">Shown on the home card. A new period starts after the due date if missed.</div></div>`;
+            inner.innerHTML=`<div class="field"><label>Due weekday ${infoTip('Shown on the home card. A new period starts after the due date if missed.')}</label><select id="dueWeekday">${weekdayOptions(f.schedule?.dueWeekday??6)}</select></div>`;
           } else {
-            inner.innerHTML=`<div class="sub-field field"><label>Active days</label><div class="day-row">${DOW.map((d,i)=>`<button class="day-pill ${(f.days||[]).includes(i)?'active':''}" data-day="${i}">${d[0]}</button>`).join('')}</div><div class="hint">Tap the days when this habit should appear on the Home page.</div></div>`;
+            inner.innerHTML=`<div class="sub-field field"><label>Active days ${infoTip('Tap the days when this habit should appear on the Home page.')}</label><div class="day-row">${DOW.map((d,i)=>`<button type="button" class="day-pill ${(f.days||[]).includes(i)?'active':''}" data-day="${i}">${d[0]}</button>`).join('')}</div></div>`;
             $$('.day-pill').forEach(b=>b.onclick=()=>b.classList.toggle('active'));
           }
           const daysBefore=$('#daysBeforeDueField'); if(daysBefore) daysBefore.style.display=setup==='any'?'block':'none';
         }
         $('#weeklySetupType').onchange=drawWeeklyInner; drawWeeklyInner();
       }else if(mode==='monthly'){
-        box.innerHTML=`<div class="sub-field field"><label>Monthly Setup</label><div class="hint">The target count applies once per month. Choose when the habit should appear.</div></div>${scheduleFields(f,'monthly')}`;
+        box.innerHTML=`<div class="sub-field field"><label>Monthly Setup ${infoTip('The target count applies once per month. Choose when the habit should appear.')}</label></div>${scheduleFields(f,'monthly')}`;
         $('#scheduleType').onchange=drawScheduleInner; drawScheduleInner();
       }else{
-        box.innerHTML=`<div class="sub-field field"><label>Custom Period</label><select id="customPeriod"><option value="quarter">Quarterly</option><option value="year">Yearly</option></select><div class="hint">Use custom for lower-frequency commitments. The target count applies once per selected period.</div></div><div id="customScheduleBox"></div>`;
+        box.innerHTML=`<div class="sub-field field"><label>Custom Period</label><select id="customPeriod"><option value="quarter">Quarterly</option><option value="year">Yearly</option></select></div><div id="customScheduleBox"></div>`;
         $('#customPeriod').value=f.period||'quarter';
         function drawCustomSchedule(){ const cf={...f,period:$('#customPeriod').value,schedule:f.schedule||{type:'any'}}; $('#customScheduleBox').innerHTML=scheduleFields(cf,'custom'); $('#scheduleType').onchange=drawScheduleInner; drawScheduleInner(); }
         $('#customPeriod').onchange=drawCustomSchedule; drawCustomSchedule();
@@ -839,22 +829,23 @@
     }
     $('#freqMode').onchange=()=>{drawFreq(); syncReminderUi();}; drawFreq();
     const t=$('#habitReminderToggle'), time=$('#habitReminderTime'), daysBefore=$('#habitDaysBeforeDue');
-    t.classList.toggle('on',!!h.reminder?.enabled);
+    if(t) t.classList.toggle('on',!!h.reminder?.enabled);
     if(daysBefore) daysBefore.value=String(h.reminder?.daysBeforeDue??1);
     function syncReminderUi(){
+      if(!t) return;
       const on=t.classList.contains('on');
       t.classList.toggle('on',on);
       t.disabled=false;
-      time.disabled=!on;
+      if(time) time.disabled=!on;
       if(daysBefore) daysBefore.disabled=!on;
-      const globalOn=!!state.settings.reminders;
-      $('#habitReminderHint').textContent=on?(globalOn?'Per-habit alert at the set time.':'Reminders enabled for this habit only.'):'Off for this habit.';
-      const setup=$('#weeklySetupType')?.value;
       const daysBeforeField=$('#daysBeforeDueField');
+      const setup=$('#weeklySetupType')?.value;
       if(daysBeforeField) daysBeforeField.style.display=(setup==='any'||isNotSpecific(h))?'block':'none';
     }
     syncReminderUi();
-    t.onclick=async()=>{
+    if(t) t.onclick=async(e)=>{
+      e.preventDefault();
+      e.stopPropagation();
       const turningOn=!t.classList.contains('on');
       if(turningOn){
         if('Notification' in window && Notification.permission==='default'){
@@ -864,11 +855,13 @@
         if(!state.settings.reminders){
           state.settings.reminders=true;
           setupReminderLoop();
-          $('#reminderSwitch')?.classList.toggle('on',true);
+          refreshSettingsChrome();
         }
         t.classList.add('on');
+        toast('Reminder on for this habit');
       } else {
         t.classList.remove('on');
+        toast('Reminder off for this habit');
       }
       syncReminderUi();
     };
@@ -910,7 +903,7 @@
     const c=$('#trendCanvas'); if(!c)return; updateTrendTitle(); const ctx=c.getContext('2d'),ratio=devicePixelRatio||1; c.width=c.offsetWidth*ratio; c.height=c.offsetHeight*ratio; ctx.setTransform(ratio,0,0,ratio,0,0); const W=c.offsetWidth,H=c.offsetHeight; ctx.clearRect(0,0,W,H);
     const labels=[]; const pctVals=[]; const energy=[]; const end=trendEndDate();
     for(let i=trendDays-1;i>=0;i--){const d=new Date(end);d.setDate(d.getDate()-i);const k=dateKey(d); if(isVacationDay(k)){labels.push(`${d.getMonth()+1}/${d.getDate()}`); pctVals.push(null); energy.push(null); continue;} labels.push(`${d.getMonth()+1}/${d.getDate()}`); pctVals.push(dayPct(d)); energy.push(state.journals[k]?.energy??null);}
-    $('#trendNote').textContent='Bars show daily habit completion. The line shows your journal energy. Use ‹ › to review other months.';
+    const note=$('#trendNote'); if(note) note.textContent='';
     const cs=getComputedStyle(document.documentElement); const gridCol=(cs.getPropertyValue('--line')||'#eeeeF6').trim(); const axisCol=(cs.getPropertyValue('--faint')||'#7c8199').trim(); const lineCol=(cs.getPropertyValue('--brand')||'#4f46e5').trim();
     const left=34,right=12,top=18,bottom=42,plotW=W-left-right,plotH=H-top-bottom,bw=plotW/trendDays;
     ctx.strokeStyle=gridCol; ctx.lineWidth=1; ctx.fillStyle=axisCol; ctx.font='10px Inter,Arial'; for(let i=0;i<=4;i++){const y=top+plotH*i/4; ctx.beginPath();ctx.moveTo(left,y);ctx.lineTo(W-right,y);ctx.stroke(); ctx.fillText((100-i*25)+'%',4,y+3);}
@@ -981,7 +974,7 @@
     }
     const cur=periodAvgPct(dateKey(curStart),dateKey(curEnd)); const prev=periodAvgPct(dateKey(prevStart),dateKey(prevEnd));
     const delta=cur-prev; const cls=delta>0?'up':delta<0?'down':'flat';
-    box.innerHTML=`<div class="small-note">Compares average daily habit completion % between the current and previous ${comparePeriod}. Pause days are excluded.</div><div class="compare-grid"><div class="compare-box"><div class="compare-val">${cur}%</div><div class="compare-label">${curLabel}</div></div><div class="compare-box"><div class="compare-val">${prev}%</div><div class="compare-label">${prevLabel}</div></div></div><div class="compare-delta ${cls}">${delta>0?`▲ +${delta} pts`:delta<0?`▼ ${delta} pts`:'— No change'}</div>`;
+    box.innerHTML=`<div class="compare-grid"><div class="compare-box"><div class="compare-val">${cur}%</div><div class="compare-label">${curLabel}</div></div><div class="compare-box"><div class="compare-val">${prev}%</div><div class="compare-label">${prevLabel}</div></div></div><div class="compare-delta ${cls}">${delta>0?`▲ +${delta} pts`:delta<0?`▼ ${delta} pts`:'— No change'}</div>`;
   }
   function celebrate(msg){if(window.matchMedia('(prefers-reduced-motion: reduce)').matches){toast(msg);return;} const layer=$('#celebrateLayer'); if(!layer)return; layer.innerHTML=''; const banner=document.createElement('div'); banner.className='celebrate-banner'; banner.textContent=msg; layer.appendChild(banner); for(let i=0;i<24;i++){const p=document.createElement('div'); p.className='confetti'; p.style.left=Math.random()*100+'%'; p.style.background=['#4f46e5','#059669','#f59e0b','#ea580c','#7c3aed'][i%5]; p.style.animationDelay=(Math.random()*.4)+'s'; layer.appendChild(p);} setTimeout(()=>{layer.innerHTML='';},1600); haptic();}
   function checkCelebrations(){const li=levelInfo(); if(li.cur.level>lastLevel){lastLevel=li.cur.level; celebrate(`Level up! ${li.cur.icon} ${li.cur.name}`);} else lastLevel=li.cur.level;}
@@ -1157,9 +1150,9 @@
     const stamp=`<div class="small-note" style="margin-top:6px">Last updated: <strong>${updated}</strong></div>`;
     const linked=!!fileHandle;
     const named=state.settings.backupFileName?` · ${escapeHtml(state.settings.backupFileName)}`:'';
-    if(linked) box.innerHTML=`<strong>Linked</strong>${named}<br>Your data stays on this device instantly. The backup file updates a few seconds after you stop editing, when you leave, and once daily at ${DAILY_BACKUP_HOUR}:00 AM (Hong Kong time).${stamp}`;
-    else if(state.settings.fileConnected) box.innerHTML=(state.settings.autoBackup?`<strong>Linked on this device</strong>${named}<br>Backup resumes automatically when file access is available. If syncing pauses, open Backup &amp; sync and tap Connect existing file once.${stamp}`:`<strong>Previously linked</strong>${named}<br>Turn auto backup back on or connect the same JSON file to resume syncing.${stamp}`);
-    else box.innerHTML=`<strong>Not connected</strong><br>Create or connect a JSON backup file, or import an existing backup to load data.${stamp}`;
+    if(linked) box.innerHTML=`<strong>Linked</strong>${named}${stamp}`;
+    else if(state.settings.fileConnected) box.innerHTML=(state.settings.autoBackup?`<strong>Linked on this device</strong>${named}${stamp}`:`<strong>Previously linked</strong>${named}${stamp}`);
+    else box.innerHTML=`<strong>Not connected</strong>${stamp}`;
   }
   function openImportConnectModal(){
     if(!window.showOpenFilePicker){toast('Connect file needs Chrome/Edge on desktop');return;}
@@ -1231,18 +1224,30 @@
     ensureRewardShape(); const r=state.settings.rewards;
     rewardActiveTab=tab; const p=$('#rewardPanel'); if(!p)return;
     if(tab==='credit'){
-      p.innerHTML=`<div class="panel-intro"><div class="panel-intro-title">Credit rules</div><div class="small-note">Each completion level can be used once. A 100% day also earns every lower level's reward.</div></div><div id="creditRulesBox"></div><button class="btn-secondary add-rule-btn" id="addCreditRule" type="button">+ Add credit rule</button>`;
+      p.innerHTML=`<div class="panel-intro"><div class="panel-intro-title">Credit rules ${infoTip('Each completion level can be used once. A 100% day also earns every lower level\'s reward.')}</div></div><div id="creditRulesBox"></div><button class="btn-secondary add-rule-btn" id="addCreditRule" type="button">+ Add credit rule</button>`;
       const box=$('#creditRulesBox'); box.innerHTML='';
       (r.creditRules||[]).forEach((rule,idx)=>{const div=document.createElement('div'); div.className='rule-card'; div.innerHTML=`<div class="rule-card-head"><div class="rule-card-title">Credit rule</div><span class="gift-rule-chip">HK$${rule.amount||0}</span></div><div class="rule-grid"><div class="rule-row"><div class="field"><label>Completion</label><select data-pct>${[50,60,70,80,90,100].map(n=>`<option value="${n}">${n}%+</option>`).join('')}</select></div><div class="field"><label>Amount</label><select data-amount>${[1,2,5,10,20,30,50,100].map(n=>`<option value="${n}">HK$${n}</option>`).join('')}</select></div></div></div><div class="rule-actions"><button class="btn-text-danger" data-remove type="button">Remove</button></div>`; div.querySelector('[data-pct]').value=rule.pct||100; div.querySelector('[data-amount]').value=rule.amount||10; const persist=async()=>{const pct=Number(div.querySelector('[data-pct]').value); const dup=(r.creditRules||[]).some((x,i)=>i!==idx&&Number(x.pct)===pct); if(dup){toast('Duplicate completion %'); return;} rule.pct=pct; rule.amount=Number(div.querySelector('[data-amount]').value); await save(false,{render:'none'});}; div.querySelector('[data-pct]').onchange=persist; div.querySelector('[data-amount]').onchange=persist; div.querySelector('[data-remove]').onclick=async()=>{r.creditRules.splice(idx,1); await save(false,{render:'none'}); drawRewardPanel('credit'); toast('Credit rule removed')}; box.appendChild(div);});
     } else if(tab==='penalty'){
-      p.innerHTML=`<div class="panel-intro"><div class="panel-intro-title">Penalty rules</div><div class="small-note">Charged once each time you hit consecutive 0% days.</div></div><div class="rule-card"><div class="rule-grid"><div class="field field-full"><label>Trigger</label><select id="penaltyZeroDays">${[1,2,3,4,5,7].map(n=>`<option value="${n}">${n} missed day${n>1?'s':''} in a row</option>`).join('')}</select></div><div class="rule-row"><div class="field"><label>Deduct credit</label><select id="penaltyCredit">${[0,2,5,10,20,30,50].map(n=>`<option value="${n}">HK$${n}</option>`).join('')}</select></div><div class="field"><label>Deduct EXP</label><select id="penaltyXp">${[0,10,20,30,50,100].map(n=>`<option value="${n}">${n} EXP</option>`).join('')}</select></div></div></div></div>`;
+      p.innerHTML=`<div class="panel-intro"><div class="panel-intro-title">Penalty rules ${infoTip('Charged once each time you hit consecutive 0% days.')}</div></div><div class="rule-card"><div class="rule-grid"><div class="field field-full"><label>Trigger</label><select id="penaltyZeroDays">${[1,2,3,4,5,7].map(n=>`<option value="${n}">${n} missed day${n>1?'s':''} in a row</option>`).join('')}</select></div><div class="rule-row"><div class="field"><label>Deduct credit</label><select id="penaltyCredit">${[0,2,5,10,20,30,50].map(n=>`<option value="${n}">HK$${n}</option>`).join('')}</select></div><div class="field"><label>Deduct EXP</label><select id="penaltyXp">${[0,10,20,30,50,100].map(n=>`<option value="${n}">${n} EXP</option>`).join('')}</select></div></div></div></div>`;
       $('#penaltyZeroDays').value=r.penaltyZeroDays||2; $('#penaltyCredit').value=r.penaltyCredit||5; $('#penaltyXp').value=r.penaltyXp||20;
       const persist=async()=>{r.penaltyZeroDays=Number($('#penaltyZeroDays').value); r.penaltyCredit=Number($('#penaltyCredit').value); r.penaltyXp=Number($('#penaltyXp').value); await save(false,{render:'none'});};
       $('#penaltyZeroDays').onchange=persist; $('#penaltyCredit').onchange=persist; $('#penaltyXp').onchange=persist;
     } else {
-      p.innerHTML=`<div class="panel-intro"><div class="panel-intro-title">Gift rules</div><div class="small-note">Unlock a gift for keeping a streak. Earned gifts appear on the Rewards page.</div></div><div id="giftRulesBox"></div><button class="btn-secondary add-rule-btn" id="addGiftRule" type="button">+ Add gift rule</button>`;
+      p.innerHTML=`<div class="panel-intro"><div class="panel-intro-title">Gift rules ${infoTip('Unlock a gift for keeping a streak. Earned gifts appear on the Rewards page.')}</div></div><div id="giftRulesBox"></div><button class="btn-secondary add-rule-btn" id="addGiftRule" type="button">+ Add gift rule</button>`;
       const box=$('#giftRulesBox'); box.innerHTML='';
       (r.giftRules||[]).forEach((g,idx)=>{const div=document.createElement('div'); div.className='rule-card'; div.innerHTML=`<div class="rule-card-head"><div class="rule-card-title">Gift rule</div><span class="gift-rule-chip">${g.icon||'🎁'} ${escapeHtml(g.gift||'Gift')}</span></div><div class="rule-grid"><div class="rule-row icon-name"><div class="field"><label>Icon</label><input class="rule-input-icon" data-icon value="${escapeAttr(g.icon||'🎁')}" maxlength="4" placeholder="🍽️"></div><div class="field"><label>Gift name</label><input data-gift value="${escapeAttr(g.gift||'Buffet')}" placeholder="Buffet"></div></div><div class="rule-row"><div class="field"><label>Completion</label><select data-pct>${[50,60,70,80,90,100].map(n=>`<option value="${n}">${n}%+</option>`).join('')}</select></div><div class="field"><label>Streak days</label><select data-days>${[7,14,21,30,45,60,90,120].map(n=>`<option value="${n}">${n} days</option>`).join('')}</select></div></div></div><div class="rule-actions"><button class="btn-text-danger" data-remove type="button">Remove</button></div>`; div.querySelector('[data-pct]').value=g.pct||80; div.querySelector('[data-days]').value=g.days||30; const persist=async()=>{g.icon=div.querySelector('[data-icon]').value.trim()||'🎁'; g.gift=div.querySelector('[data-gift]').value.trim()||'Gift'; g.pct=Number(div.querySelector('[data-pct]').value); g.days=Number(div.querySelector('[data-days]').value); await save(false,{render:'none'});}; div.querySelector('[data-icon]').onchange=persist; div.querySelector('[data-gift]').onchange=persist; div.querySelector('[data-pct]').onchange=persist; div.querySelector('[data-days]').onchange=persist; div.querySelector('[data-remove]').onclick=async()=>{r.giftRules.splice(idx,1); await save(false,{render:'none'}); drawRewardPanel('gift'); toast('Gift rule removed')}; box.appendChild(div);});
+    }
+  }
+  function bindReminderSettings(){
+    const grt=$('#globalReminderTime');
+    if(grt && !grt.dataset.bound){
+      grt.dataset.bound='1';
+      grt.addEventListener('change',async()=>{state.settings.globalReminderTime=grt.value; await save(false,{render:'none'}); setupReminderLoop();});
+    }
+    const drm=$('#defaultReminderMessage');
+    if(drm && !drm.dataset.bound){
+      drm.dataset.bound='1';
+      drm.addEventListener('change',async()=>{state.settings.defaultReminderMessage=(drm.value||'Time for {habit}!').slice(0,REMINDER_MSG_LIMIT); await save(false,{render:'none'});});
     }
   }
   function renderSettings(force=false){
@@ -1259,20 +1264,17 @@
       const cms=$('#colorModeSelect'); if(cms){cms.value=state.settings.colorMode||'system'; cms.onchange=async()=>{state.settings.colorMode=cms.value; applyAppearance(); await save(false,{render:'none'}); toast('Theme saved');};}
       const upload=$('#profileIconInput'); if(upload && !upload.dataset.bound){upload.dataset.bound='1'; upload.onchange=e=>{const file=e.target.files&&e.target.files[0]; if(!file)return; const reader=new FileReader(); reader.onload=async()=>{state.settings.profileIcon=reader.result; await save(false,{render:'none'}); toast('Profile photo saved')}; reader.readAsDataURL(file);};}
       $('#trackerStartDate').onchange=async()=>{state.settings.startDate=$('#trackerStartDate').value||todayKey(); await save(false,{render:'none'}); toast('Start date saved')};
-      if(!$('#reminderSettings')?.dataset.bound){
-        const rem=$('#reminderSettings'); if(rem) rem.dataset.bound='1';
-        $('#globalReminderTime')?.addEventListener('change',async()=>{state.settings.globalReminderTime=$('#globalReminderTime').value; await save(false,{render:'none'}); setupReminderLoop();});
-        $('#defaultReminderMessage')?.addEventListener('change',async()=>{state.settings.defaultReminderMessage=($('#defaultReminderMessage').value||'Time for {habit}!').slice(0,REMINDER_MSG_LIMIT); await save(false,{render:'none'});});
-      }
     } else {
       $$('#rewardTabs button').forEach(b=>b.classList.toggle('active',b.dataset.tab===rewardActiveTab));
     }
     const remBox=$('#reminderSettings');
     if(remBox && !remBox.querySelector('#globalReminderTime')){
-      remBox.innerHTML=`<div class="field"><label>Default Reminder Time</label><input type="time" id="globalReminderTime" value="${state.settings.globalReminderTime||'20:30'}"></div><div class="field"><label>Default notification message</label><input id="defaultReminderMessage" maxlength="${REMINDER_MSG_LIMIT}" value="${escapeAttr(state.settings.defaultReminderMessage||'Time for {habit}!')}"><div class="hint">${REMINDER_MSG_LIMIT} characters max · {habit} is replaced with each habit's name when sent</div></div>`;
+      remBox.innerHTML=`<div class="field"><label>Default Reminder Time</label><input type="time" id="globalReminderTime" value="${state.settings.globalReminderTime||'20:30'}"></div><div class="field"><label>Default notification message ${infoTip('{habit} is replaced with each habit\'s name when sent.')}</label><input id="defaultReminderMessage" maxlength="${REMINDER_MSG_LIMIT}" value="${escapeAttr(state.settings.defaultReminderMessage||'Time for {habit}!')}"></div>`;
+      bindReminderSettings();
     } else if(remBox){
       const grt=$('#globalReminderTime'); if(grt) grt.value=state.settings.globalReminderTime||'20:30';
       const drm=$('#defaultReminderMessage'); if(drm) drm.value=state.settings.defaultReminderMessage||'Time for {habit}!';
+      bindReminderSettings();
     }
     refreshSettingsChrome();
     renderTopProfile();
@@ -1366,16 +1368,41 @@
       return true;
     }catch(e){return false;}
   }
-  async function connectFile(){if(!window.showOpenFilePicker){toast('File connection needs Chrome/Edge on desktop. Use Export/Import instead.');return;} if(await reconnectStoredFile(false)){setupDailyBackupLoop(); await flushBackupSync(); refreshBackupChrome(); return;} try{[fileHandle]=await window.showOpenFilePicker({types:[{description:'JSON Backup',accept:{'application/json':['.json']}}]}); const file=await fileHandle.getFile(); const txt=await file.text(); if(txt.trim()){state=JSON.parse(txt); normalizeState(); invalidateSettings();} state.settings.fileConnected=true; state.settings.autoBackup=true; state.settings.dailyBackup=true; state.settings.backupFileName=file.name||'habit-tracker-backup.json'; if(!(await storeFileHandle(fileHandle))) toast('Connected, but this browser may not remember the file after refresh'); setupDailyBackupLoop(); await writeBackupFile(true); refreshBackupChrome(); toast('Backup file linked');}catch(e){}}
-  async function createFile(){if(!window.showSaveFilePicker){toast('Create file needs Chrome/Edge on desktop. Use Export instead.');return;} try{fileHandle=await window.showSaveFilePicker({suggestedName:'habit-tracker-backup.json',types:[{description:'JSON Backup',accept:{'application/json':['.json']}}]}); state.settings.fileConnected=true; state.settings.autoBackup=true; state.settings.dailyBackup=true; state.settings.backupFileName=fileHandle.name||'habit-tracker-backup.json'; if(!(await storeFileHandle(fileHandle))) toast('File created, but this browser may not remember it after refresh'); setupDailyBackupLoop(); await writeBackupFile(true); refreshBackupChrome(); toast('Backup file created');}catch(e){}}
+  async function connectFile(){if(!window.showOpenFilePicker){toast('File connection needs Chrome/Edge on desktop. Use Export/Import instead.');return;} if(await reconnectStoredFile(false)){await flushBackupSync(); refreshBackupChrome(); return;} try{[fileHandle]=await window.showOpenFilePicker({types:[{description:'JSON Backup',accept:{'application/json':['.json']}}]}); const file=await fileHandle.getFile(); const txt=await file.text(); if(txt.trim()){state=JSON.parse(txt); normalizeState(); invalidateSettings();} state.settings.fileConnected=true; state.settings.autoBackup=true; state.settings.dailyBackup=true; state.settings.backupFileName=file.name||'habit-tracker-backup.json'; if(!(await storeFileHandle(fileHandle))) toast('Connected, but this browser may not remember the file after refresh'); await writeBackupFile(true); refreshBackupChrome(); toast('Backup file linked');}catch(e){}}
+  async function createFile(){if(!window.showSaveFilePicker){toast('Create file needs Chrome/Edge on desktop. Use Export instead.');return;} try{fileHandle=await window.showSaveFilePicker({suggestedName:'habit-tracker-backup.json',types:[{description:'JSON Backup',accept:{'application/json':['.json']}}]}); state.settings.fileConnected=true; state.settings.autoBackup=true; state.settings.dailyBackup=true; state.settings.backupFileName=fileHandle.name||'habit-tracker-backup.json'; if(!(await storeFileHandle(fileHandle))) toast('File created, but this browser may not remember it after refresh'); await writeBackupFile(true); refreshBackupChrome(); toast('Backup file created');}catch(e){}}
   function reminderBody(habit){const tpl=(habit.reminder?.message||state.settings.defaultReminderMessage||'Time for {habit}!').slice(0,REMINDER_MSG_LIMIT); return tpl.replace(/\{habit\}/g,habit.name||'your habit');}
   async function toggleReminders(){
     const turningOn=!state.settings.reminders;
-    if(turningOn && 'Notification' in window && Notification.permission==='default') await Notification.requestPermission();
+    if(turningOn && 'Notification' in window && Notification.permission==='default'){
+      const perm=await Notification.requestPermission();
+      if(perm!=='granted'){toast('Allow notifications to use reminders'); return;}
+    }
     state.settings.reminders=turningOn;
-    await save(false,{render:'none'}); setupReminderLoop();
-    $('#reminderSwitch')?.classList.toggle('on',state.settings.reminders);
+    await save(false,{render:'none'});
+    setupReminderLoop();
     refreshSettingsChrome();
+    toast(state.settings.reminders?'Reminders on':'Reminders off');
+  }
+  async function toggleAutoBackup(){
+    if(!fileHandle){
+      if(state.settings.fileConnected && await reconnectStoredFile()){
+        state.settings.autoBackup=true;
+        state.settings.dailyBackup=true;
+        await flushBackupSync();
+        refreshBackupChrome();
+        toast('Auto backup restored');
+        return;
+      }
+      toast('Connect a backup file first');
+      refreshSettingsChrome();
+      return;
+    }
+    state.settings.autoBackup=!state.settings.autoBackup;
+    state.settings.dailyBackup=!!state.settings.autoBackup;
+    await save(false,{render:'none'});
+    if(!state.settings.autoBackup) clearTimeout(backupDebounceTimer);
+    refreshBackupChrome();
+    toast(state.settings.autoBackup?'Auto backup on':'Auto backup off');
   }
   function shouldRemindHabit(h,now){
     if(!h.reminder?.enabled||h.paused||h.archived) return false;
@@ -1424,6 +1451,8 @@
   function closeModal(){$('#modalBackdrop').classList.remove('show')}
   function escapeHtml(s=''){return String(s).replace(/[&<>"]/g,m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[m]))}
   function escapeAttr(s=''){return escapeHtml(s).replace(/'/g,'&#39;')}
+  function infoTip(text){return `<button type="button" class="info-tip" aria-label="Help" data-tip="${escapeAttr(text)}">ⓘ</button>`;}
+  function labelWithTip(label,text){return `${label}${infoTip(text)}`;}
 
   function showView(view){
     const prev=$('.view.active')?.id;
@@ -1441,6 +1470,7 @@
     }
     const host=$('.view-host');
     if(host && prev!==view) host.scrollTop=0;
+    if(view==='homeView') renderHome();
     if(view==='reportView')renderReport();
     if(view==='rewardsView')renderRewards();
     if(view==='levelView')renderLevel();
@@ -1467,44 +1497,25 @@
   $('#reportPrev').onclick=()=>{reportCursor.setMonth(reportCursor.getMonth()-(reportMode==='month'?1:3)); renderCalendar();}; $('#reportNext').onclick=()=>{reportCursor.setMonth(reportCursor.getMonth()+(reportMode==='month'?1:3)); renderCalendar();};
   $('#fileStatus')?.addEventListener('click',()=>{if(!fileHandle&&state.settings.fileConnected) showView('settingsView');});
   window.addEventListener('resize',()=>{if($('#onboardBackdrop')?.classList.contains('show')) positionOnboardCallout(ONBOARD_STEPS[onboardStep]);});
-  $('#autoBackupSwitch')?.addEventListener('click',async()=>{
-    if(!fileHandle){
-      if(state.settings.fileConnected && await reconnectStoredFile()){
-        state.settings.autoBackup=true;
-        state.settings.dailyBackup=true;
-        setupDailyBackupLoop();
-        await flushBackupSync();
-        $('#autoBackupSwitch')?.classList.toggle('on',true);
-        refreshBackupChrome();
-        toast('Auto backup restored');
-        return;
-      }
-      toast('Connect a backup file first');
-      refreshSettingsChrome();
-      return;
-    }
-    state.settings.autoBackup=!state.settings.autoBackup;
-    state.settings.dailyBackup=!!state.settings.autoBackup;
-    await save(false,{render:'none'});
-    $('#autoBackupSwitch')?.classList.toggle('on',state.settings.autoBackup);
-    if(state.settings.autoBackup) setupDailyBackupLoop();
-    else clearTimeout(backupDebounceTimer);
-  });
   document.addEventListener('visibilitychange',()=>{
     if(document.visibilityState==='hidden') void flushBackupSync();
-    else if(document.visibilityState==='visible'){ void runDailyBackupIfDue(); void tryReconnectOnReturn(); }
+    else if(document.visibilityState==='visible') void tryReconnectOnReturn();
   });
   async function tryReconnectOnReturn(){
     if(fileHandle||!state.settings.fileConnected) return;
     if(await restoreFileConnection()){
-      setupDailyBackupLoop();
       refreshBackupChrome();
       if(await canWriteBackup()) void flushBackupSync();
     }
   }
-  $('#reminderSwitch')?.addEventListener('click',toggleReminders);
   $('#resetAllBtn').onclick=async()=>{if($('#confirmDeleteInput').value!=='Confirm'){toast('Type Confirm first');return;} if(!confirm('Erase all data and start fresh?'))return; const keep={colorMode:state.settings.colorMode,styleTheme:state.settings.styleTheme,userName:state.settings.userName,profileIcon:state.settings.profileIcon}; state=freshState({onboardingComplete:true,keep}); fileHandle=null; localStorage.setItem(STORAGE,JSON.stringify(state)); normalizeState(); invalidateSettings(); await save(true,{render:'all'}); toast('Data erased');};
   document.body.addEventListener('click',async e=>{
+    const tipBtn=e.target.closest('.info-tip');
+    if(tipBtn){e.preventDefault(); e.stopPropagation(); toast(tipBtn.dataset.tip||''); return;}
+    const remSwitch=e.target.closest('#reminderSwitch');
+    if(remSwitch){e.preventDefault(); e.stopPropagation(); await toggleReminders(); return;}
+    const autoSwitch=e.target.closest('#autoBackupSwitch');
+    if(autoSwitch && !autoSwitch.disabled){e.preventDefault(); e.stopPropagation(); await toggleAutoBackup(); return;}
     const check=e.target.closest('button.check-btn[data-habit-id]:not(.done):not(:disabled)');
     if(check){
       e.preventDefault(); e.stopPropagation();
@@ -1552,7 +1563,6 @@
   setupReminderLoop();
   void (async function boot(){
     const connected=await restoreFileConnection();
-    setupDailyBackupLoop();
     renderAll();
     renderOnboarding();
     refreshBackupChrome();

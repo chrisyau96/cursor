@@ -120,7 +120,7 @@
       <section class="view" id="reportView">
         <div class="section-title"><h2>Report</h2></div>
         <div class="card">
-          <div class="card-head"><h3>Compare Periods</h3><div class="segmented" id="comparePeriodTabs"><button data-period="week">Week</button><button data-period="month" class="active">Month</button></div></div>
+          <div class="card-head"><h3>Compare Periods</h3><button type="button" class="info-tip card-tip" aria-label="Help" data-tip="Compares average daily habit completion % between the current and previous period. Pause days are excluded.">ⓘ</button><div class="segmented" id="comparePeriodTabs"><button data-period="week">Week</button><button data-period="month" class="active">Month</button></div></div>
           <div id="comparePeriodBox"></div>
         </div>
         <div class="card"><div class="card-head"><h3>Insights</h3></div><div id="correlationInsights"></div></div>
@@ -129,7 +129,7 @@
           <p class="small-note" id="habitChartRangeNote"></p>
           <div class="habit-completion-table" id="habitCompletionTable"></div>
         </div>
-        <div class="card"><div class="card-head"><h3>Performance Trend</h3><div class="segmented" id="rangeTabs"><button data-days="7" class="active">7D</button><button data-days="14">14D</button><button data-days="30">30D</button></div></div><div class="report-toolbar"><button class="round-nav" id="trendPrev">‹</button><div class="report-title" id="trendTitle">This month</div><button class="round-nav" id="trendNext">›</button></div><div class="canvas-wrap"><canvas id="trendCanvas"></canvas></div><p class="small-note" id="trendNote"></p></div>
+        <div class="card"><div class="card-head"><h3>Performance Trend</h3><button type="button" class="info-tip card-tip" aria-label="Help" data-tip="Bars show daily habit completion. The line shows your journal energy. Use ‹ › to review other months.">ⓘ</button><div class="segmented" id="rangeTabs"><button data-days="7" class="active">7D</button><button data-days="14">14D</button><button data-days="30">30D</button></div></div><div class="report-toolbar"><button class="round-nav" id="trendPrev">‹</button><div class="report-title" id="trendTitle">This month</div><button class="round-nav" id="trendNext">›</button></div><div class="canvas-wrap"><canvas id="trendCanvas"></canvas></div></div>
         <div class="card">
           <div class="card-head"><h3>Calendar Review</h3><div class="segmented" id="reportMode"><button data-mode="month" class="active">Month</button><button data-mode="quarter">Quarter</button></div></div>
           <div class="field" style="margin-bottom:10px"><label>Habit filter</label><select id="calendarHabitFilter"><option value="">All habits</option></select></div>
@@ -171,10 +171,10 @@
 
         <p class="settings-section-label">Profile</p>
         <div class="card settings-card">
-          <div class="field"><label>Display name</label><input id="userNameInput" placeholder="e.g. Chris" maxlength="12"><div class="inline-hint"><span id="userNameCount">0</span>/12 · shown in greeting</div></div>
+          <div class="field"><label>Display name</label><input id="userNameInput" placeholder="e.g. Chris" maxlength="12"><div class="inline-hint"><span id="userNameCount">0</span>/12</div></div>
           <div class="upload-profile-box settings-profile-row">
             <div class="profile-avatar" id="settingsProfileAvatar">🌱</div>
-            <div class="upload-profile-copy"><strong>Profile photo</strong><span>Shown in the level card and header.</span><label class="upload-file-btn">Upload photo<input type="file" id="profileIconInput" accept="image/*" hidden></label></div>
+            <div class="upload-profile-copy"><strong>Profile photo</strong><label class="upload-file-btn">Upload photo<input type="file" id="profileIconInput" accept="image/*" hidden></label></div>
           </div>
         </div>
 
@@ -186,11 +186,10 @@
         <p class="settings-section-label">Reward rules</p>
         <div class="card settings-card"><div class="form-grid" id="rewardSettings"></div></div>
 
-        <p class="settings-section-label">Tracking</p>
+        <p class="settings-section-label">Tracking <button type="button" class="info-tip" aria-label="Help" data-tip="Pause periods keep records but freeze EXP, credits, gifts and penalties.">ⓘ</button></p>
         <div class="card settings-card">
           <div class="field"><label>Tracker start date</label><input type="date" id="trackerStartDate"><div class="inline-hint">Current: <span id="startDateDisplay">—</span></div></div>
           <div class="settings-divider"></div>
-          <div class="small-note">Pause periods keep records but freeze EXP, credits, gifts and penalties.</div>
           <div id="vacationSummary" class="vacation-summary"></div>
           <div class="vacation-actions"><button class="btn-secondary" id="addVacationBtn" type="button">+ Pause period</button><button class="btn-secondary" id="viewVacationLogBtn" type="button">View log</button></div>
         </div>
@@ -199,12 +198,12 @@
         <div class="card settings-card sync-card">
           <div class="sync-status-panel" id="backupStatus">No backup file connected.</div>
           <div class="sync-actions" id="syncActionsGrid"></div>
-          <div class="switch-row sync-auto-row"><div><strong>Auto backup</strong><div class="small-note">Saves to your file a few seconds after you stop editing, when you leave the app, and once daily at 3:00 AM (Hong Kong time). Edits stay instant on this device.</div></div><button class="switch" id="autoBackupSwitch" aria-label="Auto backup toggle"></button></div>
+          <div class="switch-row sync-auto-row"><div><strong>Auto backup <button type="button" class="info-tip" aria-label="Help" data-tip="Saves to your linked JSON file a few seconds after you stop editing, and again when you leave the app. Edits stay instant on this device.">ⓘ</button></strong></div><button type="button" class="switch" id="autoBackupSwitch" aria-label="Auto backup toggle"></button></div>
         </div>
 
         <p class="settings-section-label">Notifications</p>
         <div class="card settings-card">
-          <div class="switch-row"><div><strong>Reminders</strong><div class="small-note">Optional per-habit alerts at scheduled times.</div></div><button class="switch" id="reminderSwitch" aria-label="Reminder toggle"></button></div>
+          <div class="switch-row"><div><strong>Reminders <button type="button" class="info-tip" aria-label="Help" data-tip="Optional per-habit alerts at scheduled times.">ⓘ</button></strong></div><button type="button" class="switch" id="reminderSwitch" aria-label="Reminder toggle"></button></div>
           <div class="form-grid" id="reminderSettings" style="margin-top:12px"></div>
         </div>
 
@@ -213,9 +212,8 @@
           <button class="btn-secondary settings-action" id="replayOnboardingBtn" type="button">Replay onboarding tour</button>
         </div>
 
-        <p class="settings-section-label danger-label">Danger zone</p>
+        <p class="settings-section-label danger-label">Danger zone <button type="button" class="info-tip" aria-label="Help" data-tip="Erases all habits, records, and settings. Type Confirm to proceed.">ⓘ</button></p>
         <div class="card settings-card settings-danger">
-          <p class="small-note">Erases all habits, records, and settings. Type <strong>Confirm</strong> to proceed.</p>
           <div class="field"><input id="confirmDeleteInput" placeholder="Type Confirm"></div>
           <button class="btn-danger settings-action" id="resetAllBtn" type="button">Erase all data</button>
         </div>
