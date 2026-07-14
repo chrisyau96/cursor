@@ -363,6 +363,7 @@ input[type=range]::-moz-range-track{height:6px;border-radius:999px;background:va
 .info-tip:active{transform:scale(.94)}
 .settings-section-label{display:flex;align-items:center;gap:4px}
 .card-head .card-tip{margin-right:auto;margin-left:4px}
+.switch-label-wrap{display:inline-flex;align-items:center;gap:6px}
 .switch-row strong{display:inline-flex;align-items:center;gap:4px}
 .help-dot{width:22px;height:22px;border-radius:50%;display:inline-grid;place-items:center;background:var(--soft-purple);color:var(--purple);font-size:12px;font-weight:900;flex:0 0 auto}
 .schedule-grid{display:grid;grid-template-columns:1fr 1fr;gap:8px}
@@ -370,6 +371,12 @@ input[type=range]::-moz-range-track{height:6px;border-radius:999px;background:va
 .small-note{font-size:12px;line-height:1.35;color:var(--muted)}
 
 /* Modal (bottom sheet) */
+.help-sheet-backdrop{position:fixed;inset:0;background:rgba(9,14,26,.45);backdrop-filter:blur(2px);z-index:130;display:none;align-items:flex-end;justify-content:center}
+.help-sheet-backdrop.show{display:flex;animation:fade .2s ease}
+.help-sheet{position:relative;width:100%;max-width:480px;background:var(--card);border-radius:22px 22px 0 0;padding:14px 18px calc(22px + var(--safe-bottom));max-height:min(52dvh,360px);overflow:auto;box-shadow:0 -16px 40px rgba(0,0,0,.22);animation:sheet-up .28s cubic-bezier(.22,.9,.3,1) both}
+.help-sheet-close{position:absolute;top:10px;right:10px;z-index:2}
+.help-sheet-body{padding:28px 4px 8px;font-size:14px;line-height:1.5;color:var(--ink);white-space:pre-wrap}
+.settings-version{text-align:center;font-size:11px;color:var(--muted);margin:24px 2px calc(var(--tabbar-h) + var(--safe-bottom) + 4px);padding-bottom:2px}
 .modal-backdrop{position:fixed;inset:0;background:rgba(9,14,26,.5);backdrop-filter:blur(2px);z-index:120;display:none;align-items:flex-end;justify-content:center}
 .modal-backdrop.show{display:flex;animation:fade .2s ease}
 @keyframes fade{from{opacity:0}to{opacity:1}}
