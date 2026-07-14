@@ -68,6 +68,7 @@
   const PREVIEW=3;
   const LAZY_CHUNK=10;
   const REMINDER_MSG_LIMIT=80;
+  const APP_VERSION='v36';
   const iconBtn=(cls,svg,title)=>{const b=document.createElement('button'); b.className='act-btn '+cls; b.innerHTML=svg; b.title=title; b.setAttribute('aria-label',title); return b;};
 
   const USER_NAME_MAX=12;
@@ -163,7 +164,22 @@
     else { updateStatus(); renderTopProfile(); }
     if(!skipSync) queueBackupSync();
   }
-  function toast(msg){const t=$('#toast'); t.textContent=msg; t.classList.add('show'); setTimeout(()=>t.classList.remove('show'),1600)}
+  function toast(msg,duration=1600){const t=$('#toast'); if(!t)return; t.textContent=msg; t.classList.add('show'); clearTimeout(toast._timer); toast._timer=setTimeout(()=>t.classList.remove('show'),duration);}
+  function showHelpSheet(text){
+    const bd=$('#helpSheetBackdrop'), body=$('#helpSheetBody');
+    if(!bd||!body||!text) return;
+    body.textContent=text;
+    bd.classList.add('show');
+    bd.setAttribute('aria-hidden','false');
+    document.body.classList.add('help-sheet-open');
+  }
+  function closeHelpSheet(){
+    const bd=$('#helpSheetBackdrop');
+    if(!bd) return;
+    bd.classList.remove('show');
+    bd.setAttribute('aria-hidden','true');
+    document.body.classList.remove('help-sheet-open');
+  }
   function backupEnabled(){return !!state.settings.autoBackup&&!!fileHandle;}
   function maybeRenderBackupStatus(){ if($('#settingsView')?.classList.contains('active')) renderBackupStatus(); }
   function queueBackupSync(){
@@ -1120,10 +1136,23 @@
     $('#redeemGrid').innerHTML=`<div class="gift-card credit-spend" style="grid-column:1/-1"><div class="card-head"><h3>Credit Rewards</h3><span class="chip orange">HK$${bal} available</span></div><div class="redeem-form"><div class="field"><label>Redeemed For</label><input id="creditSpendText" placeholder="e.g. headphone, game, coffee"></div><div class="field"><label>Credit Amount</label><input id="creditSpendAmount" type="number" min="0" max="${bal}" step="1" value="${Math.min(10,bal)}"><input id="creditSpendSlider" type="range" min="0" max="${bal}" step="1" value="${Math.min(10,bal)}"><div class="inline-hint">Use the number box or slider, up to your balance.</div></div><button class="btn-primary ${canRedeemCredit?'':'btn-dim'}" id="spendCreditBtn" ${canRedeemCredit?'':'disabled'}>Redeem Credit</button></div></div>` + giftCardHtml;
 
     const slider=$('#creditSpendSlider'), amount=$('#creditSpendAmount'); if(slider&&amount){slider.oninput=()=>amount.value=slider.value; amount.oninput=()=>{let v=Math.max(0,Math.min(bal,Number(amount.value||0))); amount.value=v; slider.value=v;};}
-    $('#spendCreditBtn').onclick=async()=>{if(bal<=0)return; const amt=Number($('#creditSpendAmount').value); const what=$('#creditSpendText').value.trim(); if(!what){toast('Enter what you redeemed');return;} if(amt<=0){toast('Enter credit amount');return;} if(creditTotal()<amt){toast('Not enough credits');return;} state.redemptions.push({id:uid(),date:todayKey(),type:'redeemCredit',desc:'Credit spend · '+what,credit:-amt,xp:0,what}); await save(false,{render:'rewardsView'}); toast('Credit redeemed')};
-    const sel=$('#activeGiftSelect'); if(sel) sel.onchange=async()=>{rewards.activeGiftId=sel.value; await save(false,{render:'none'}); toast('Gift goal updated')};
-    const rg=$('#redeemGiftBtn'); if(rg) rg.onclick=async()=>{const g=active; if(!g)return; if(giftCount(g)<=0){toast('Gift not unlocked yet');return;} state.redemptions.push({id:uid(),date:todayKey(),type:'redeemGift',desc:'Redeemed '+(g.gift||'Gift'),gift:g.gift||'Gift',giftIcon:g.icon||'🎁',giftRuleId:g.id,credit:0,xp:0}); await save(false,{render:'rewardsView'}); toast('Gift redeemed')};
     renderPreview($('#ledgerList'),ledger(),ledgerNode,'Reward Ledger');
+  }
+  async function spendCreditReward(){
+    const bal=creditTotal(); if(bal<=0) return;
+    const amt=Number($('#creditSpendAmount')?.value||0);
+    const what=$('#creditSpendText')?.value.trim()||'';
+    if(!what){toast('Enter what you redeemed');return;}
+    if(amt<=0){toast('Enter credit amount');return;}
+    if(creditTotal()<amt){toast('Not enough credits');return;}
+    state.redemptions.push({id:uid(),date:todayKey(),type:'redeemCredit',desc:'Credit spend · '+what,credit:-amt,xp:0,what});
+    await save(false,{render:'rewardsView'}); toast('Credit redeemed');
+  }
+  async function redeemGiftReward(){
+    const g=activeGiftRule(); if(!g) return;
+    if(giftCount(g)<=0){toast('Gift not unlocked yet');return;}
+    state.redemptions.push({id:uid(),date:todayKey(),type:'redeemGift',desc:'Redeemed '+(g.gift||'Gift'),gift:g.gift||'Gift',giftIcon:g.icon||'🎁',giftRuleId:g.id,credit:0,xp:0});
+    await save(false,{render:'rewardsView'}); toast('Gift redeemed');
   }
 
   /* ---------- SETTINGS ---------- */
@@ -1132,14 +1161,19 @@
     const connected=!!fileHandle;
     grid.innerHTML='';
     if(connected){
-      grid.innerHTML='<button class="btn-secondary" id="exportBtn" type="button">Export a copy</button><button class="btn-inline gray" id="disconnectFileBtn" type="button">Disconnect file</button>';
-      $('#disconnectFileBtn').onclick=async()=>{fileHandle=null; state.settings.fileConnected=false; state.settings.autoBackup=false; state.settings.dailyBackup=false; clearTimeout(backupDebounceTimer); await clearStoredFileHandle(); await save(true,{render:'none'}); updateStatus(); refreshSettingsChrome(); toast('Disconnected');};
-      $('#exportBtn').onclick=exportJson;
+      grid.innerHTML='<button type="button" class="btn-secondary" data-sync-action="export">Export a copy</button><button type="button" class="btn-inline gray" data-sync-action="disconnect">Disconnect file</button>';
     }else{
-      grid.innerHTML='<button class="btn-primary" id="createFileBtn" type="button">Create backup file</button><button class="btn-secondary" id="connectFileBtn" type="button">Connect existing file</button><label class="btn-secondary sync-import-label" id="importLabel">Import JSON<input type="file" id="importInput" accept="application/json" hidden></label>';
-      $('#createFileBtn').onclick=createFile;
-      $('#connectFileBtn').onclick=connectFile;
-      $('#importInput').onchange=e=>e.target.files[0]&&importJson(e.target.files[0]);
+      grid.innerHTML='<button type="button" class="btn-primary" data-sync-action="create">Create backup file</button><button type="button" class="btn-secondary" data-sync-action="connect">Connect existing file</button><label class="btn-secondary sync-import-label">Import JSON<input type="file" id="importInput" accept="application/json" hidden></label>';
+    }
+  }
+  async function handleSyncAction(action){
+    if(action==='export') return exportJson();
+    if(action==='create') return createFile();
+    if(action==='connect') return connectFile();
+    if(action==='disconnect'){
+      fileHandle=null; state.settings.fileConnected=false; state.settings.autoBackup=false; state.settings.dailyBackup=false;
+      clearTimeout(backupDebounceTimer); await clearStoredFileHandle(); await save(true,{render:'none'});
+      updateStatus(); refreshSettingsChrome(); toast('Disconnected');
     }
   }
   function renderBackupStatus(){
@@ -1215,8 +1249,13 @@
     renderVacationSettings(); renderSyncActions(); renderDataModeSettings(); renderBackupStatus();
     const start=$('#trackerStartDate'); if(start) start.value=state.settings.startDate||todayKey();
     const disp=$('#startDateDisplay'); if(disp) disp.textContent=state.settings.startDate||todayKey();
-    $('#autoBackupSwitch')?.classList.toggle('on',!!state.settings.autoBackup);
-    $('#autoBackupSwitch')?.toggleAttribute('disabled',!fileHandle && !state.settings.fileConnected);
+    const autoSw=$('#autoBackupSwitch');
+    if(autoSw){
+      autoSw.classList.toggle('on',!!state.settings.autoBackup);
+      const autoLocked=!fileHandle && !state.settings.fileConnected;
+      autoSw.classList.toggle('disabled',autoLocked);
+      autoSw.setAttribute('aria-disabled',autoLocked?'true':'false');
+    }
     $('#reminderSwitch')?.classList.toggle('on',state.settings.reminders);
   }
   function refreshBackupChrome(){ updateStatus(); refreshSettingsChrome(); }
@@ -1255,8 +1294,7 @@
     const built=!force && rs.dataset.built==='1' && rs.querySelector('#rewardTabs');
     if(!built){
       rs.dataset.built='1';
-      rs.innerHTML=`<div class="segmented reward-rule-tabs" id="rewardTabs"><button data-tab="credit" class="${rewardActiveTab==='credit'?'active':''}">Credit</button><button data-tab="gift" class="${rewardActiveTab==='gift'?'active':''}">Gift</button><button data-tab="penalty" class="${rewardActiveTab==='penalty'?'active':''}">Penalty</button></div><div id="rewardPanel" class="form-grid"></div>`;
-      $('#rewardTabs').onclick=e=>{if(e.target.tagName!=='BUTTON')return; rewardActiveTab=e.target.dataset.tab; $$('#rewardTabs button').forEach(b=>b.classList.remove('active')); e.target.classList.add('active'); drawRewardPanel(rewardActiveTab);};
+      rs.innerHTML=`<div class="segmented reward-rule-tabs" id="rewardTabs"><button type="button" data-tab="credit" class="${rewardActiveTab==='credit'?'active':''}">Credit</button><button type="button" data-tab="gift" class="${rewardActiveTab==='gift'?'active':''}">Gift</button><button type="button" data-tab="penalty" class="${rewardActiveTab==='penalty'?'active':''}">Penalty</button></div><div id="rewardPanel" class="form-grid"></div>`;
       drawRewardPanel(rewardActiveTab);
       const un=$('#userNameInput'); if(un){un.value=(state.settings.userName||'').slice(0,USER_NAME_MAX); un.maxLength=USER_NAME_MAX;}
       const nameCount=$('#userNameCount'); if(nameCount) nameCount.textContent=String((un?.value||'').length);
@@ -1278,7 +1316,17 @@
     }
     refreshSettingsChrome();
     renderTopProfile();
-    $('#autoBackupSwitch')?.toggleAttribute('disabled',!fileHandle && !state.settings.fileConnected);
+    renderSettingsVersion();
+    const autoSw=$('#autoBackupSwitch');
+    if(autoSw){
+      const autoLocked=!fileHandle && !state.settings.fileConnected;
+      autoSw.classList.toggle('disabled',autoLocked);
+      autoSw.setAttribute('aria-disabled',autoLocked?'true':'false');
+    }
+  }
+  function renderSettingsVersion(){
+    const el=$('#settingsVersion');
+    if(el) el.textContent=`Momentum ${APP_VERSION}`;
   }
   /* ---------- FILE SYNC ---------- */
   function openHandleDb(){
@@ -1378,16 +1426,18 @@
       if(perm!=='granted'){toast('Allow notifications to use reminders'); return;}
     }
     state.settings.reminders=turningOn;
+    $('#reminderSwitch')?.classList.toggle('on',turningOn);
     await save(false,{render:'none'});
     setupReminderLoop();
     refreshSettingsChrome();
-    toast(state.settings.reminders?'Reminders on':'Reminders off');
+    toast(turningOn?'Reminders on':'Reminders off');
   }
   async function toggleAutoBackup(){
     if(!fileHandle){
       if(state.settings.fileConnected && await reconnectStoredFile()){
         state.settings.autoBackup=true;
         state.settings.dailyBackup=true;
+        $('#autoBackupSwitch')?.classList.toggle('on',true);
         await flushBackupSync();
         refreshBackupChrome();
         toast('Auto backup restored');
@@ -1399,6 +1449,7 @@
     }
     state.settings.autoBackup=!state.settings.autoBackup;
     state.settings.dailyBackup=!!state.settings.autoBackup;
+    $('#autoBackupSwitch')?.classList.toggle('on',state.settings.autoBackup);
     await save(false,{render:'none'});
     if(!state.settings.autoBackup) clearTimeout(backupDebounceTimer);
     refreshBackupChrome();
@@ -1474,28 +1525,94 @@
     if(view==='reportView')renderReport();
     if(view==='rewardsView')renderRewards();
     if(view==='levelView')renderLevel();
-    if(view==='settingsView') renderSettings();
+    if(view==='settingsView'){
+      renderSettings();
+      requestAnimationFrame(()=>$('#settingsVersion')?.scrollIntoView({block:'end',behavior:'smooth'}));
+    }
   }
-  $$('.nav-item').forEach(b=>b.onclick=()=>showView(b.dataset.view));
-  const fab=$('#fabAdd'); if(fab) fab.onclick=()=>openHabitModal();
-  $('#profileQuick').onclick=()=>showView('levelView'); $('#topSettingsBtn').onclick=()=>showView('settingsView');
-  $$('[data-open-habit]').forEach(b=>b.onclick=()=>openHabitModal()); $('#modalClose').onclick=closeModal; $('#modalBackdrop').onclick=e=>{if(e.target.id==='modalBackdrop')closeModal()};
-  $('#addGroupBtn')?.addEventListener('click',async()=>{state.groups.push({id:uid(),name:'New Group',emoji:'📋',color:COLOURS[state.groups.length%COLOURS.length],sortOrder:state.groups.length}); await save(false,{render:'habitsView'}); toast('Group added');});
-  $('#addHabitBtn')?.addEventListener('click',()=>openHabitModal());
-  $('#addVacationBtn')?.addEventListener('click',()=>openAddPauseModal());
-  $('#viewVacationLogBtn')?.addEventListener('click',openVacationLog);
-  $('#statusToggle')?.addEventListener('click',()=>{state.settings.statusRowOpen=!state.settings.statusRowOpen; localStorage.setItem(STORAGE,JSON.stringify(state)); updateStatus();});
-  $('#onboardNext')?.addEventListener('click',()=>{if(onboardStep<ONBOARD_STEPS.length-1){onboardStep++; showOnboardStep();} else finishOnboarding();});
-  $('#onboardBack')?.addEventListener('click',()=>{if(onboardStep>0){onboardStep--; showOnboardStep();}});
-  $('#onboardClose')?.addEventListener('click',finishOnboarding);
-  $('#replayOnboardingBtn')?.addEventListener('click',()=>{state.settings.onboardingComplete=false; onboardStep=0; renderOnboarding();});
-  $('#resetTodayBtn')?.addEventListener('click',resetTodayRecords);
-  const wp=$('#weekPrev'); if(wp)wp.onclick=()=>{weekOffset--; renderWeekStrip();}; const wn=$('#weekNext'); if(wn)wn.onclick=()=>{weekOffset++; renderWeekStrip();}; const wt=$('#weekToday'); if(wt)wt.onclick=()=>{weekOffset=0; renderWeekStrip();};
-  $('#rangeTabs').onclick=e=>{if(e.target.tagName!=='BUTTON')return; trendDays=Number(e.target.dataset.days); $$('#rangeTabs button').forEach(b=>b.classList.remove('active')); e.target.classList.add('active'); drawTrend();};
-  {const tp=$('#trendPrev'); if(tp)tp.onclick=()=>{trendCursor.setMonth(trendCursor.getMonth()-1); drawTrend();}; const tn=$('#trendNext'); if(tn)tn.onclick=()=>{const now=hkNow(); const c=new Date(trendCursor); c.setMonth(c.getMonth()+1); if(c.getFullYear()>now.getFullYear()||(c.getFullYear()===now.getFullYear()&&c.getMonth()>now.getMonth())){toast('Already at the latest month');return;} trendCursor=c; drawTrend();};}
-  $('#reportMode').onclick=e=>{if(e.target.tagName!=='BUTTON')return; reportMode=e.target.dataset.mode; $$('#reportMode button').forEach(b=>b.classList.remove('active')); e.target.classList.add('active'); renderCalendar();};
-  $('#reportPrev').onclick=()=>{reportCursor.setMonth(reportCursor.getMonth()-(reportMode==='month'?1:3)); renderCalendar();}; $('#reportNext').onclick=()=>{reportCursor.setMonth(reportCursor.getMonth()+(reportMode==='month'?1:3)); renderCalendar();};
-  $('#fileStatus')?.addEventListener('click',()=>{if(!fileHandle&&state.settings.fileConnected) showView('settingsView');});
+  function handleSegmentedClick(segBtn){
+    const tabs=segBtn.closest('.segmented');
+    if(!tabs||segBtn.tagName!=='BUTTON') return false;
+    const activate=()=>{tabs.querySelectorAll('button').forEach(b=>b.classList.remove('active')); segBtn.classList.add('active');};
+    if(tabs.id==='comparePeriodTabs'){comparePeriod=segBtn.dataset.period; activate(); renderComparePeriods(); return true;}
+    if(tabs.id==='habitChartPeriodTabs'){habitChartPeriod=segBtn.dataset.period; activate(); renderHabitCompletionChart(); return true;}
+    if(tabs.id==='rangeTabs'){trendDays=Number(segBtn.dataset.days); activate(); drawTrend(); return true;}
+    if(tabs.id==='reportMode'){reportMode=segBtn.dataset.mode; activate(); renderCalendar(); return true;}
+    if(tabs.id==='rewardTabs'){rewardActiveTab=segBtn.dataset.tab; activate(); drawRewardPanel(rewardActiveTab); return true;}
+    return false;
+  }
+  function bindAppEvents(){
+    if(bindAppEvents.done) return;
+    bindAppEvents.done=true;
+    document.addEventListener('click',e=>{
+      const tipBtn=e.target.closest('.info-tip');
+      if(!tipBtn) return;
+      e.preventDefault();
+      e.stopPropagation();
+      showHelpSheet(tipBtn.getAttribute('data-tip')||'');
+    },true);
+    document.body.addEventListener('click',async e=>{
+      if(e.target.closest('.info-tip')) return;
+      if(e.target.closest('#helpSheetClose')||(e.target.id==='helpSheetBackdrop'&&!e.target.closest('.help-sheet'))){closeHelpSheet(); return;}
+      if(e.target.closest('[data-close]')){closeModal(); closeHelpSheet(); return;}
+      if(e.target.closest('#modalClose')||e.target.id==='modalBackdrop'){closeModal(); return;}
+      const nav=e.target.closest('.nav-item[data-view]');
+      if(nav){showView(nav.dataset.view); return;}
+      if(e.target.closest('#fabAdd')){openHabitModal(); return;}
+      if(e.target.closest('#profileQuick')){showView('levelView'); return;}
+      if(e.target.closest('#topSettingsBtn')){showView('settingsView'); return;}
+      if(e.target.closest('[data-open-habit]')){openHabitModal(); return;}
+      const remSwitch=e.target.closest('#reminderSwitch');
+      if(remSwitch){e.preventDefault(); e.stopPropagation(); await toggleReminders(); return;}
+      const autoSwitch=e.target.closest('#autoBackupSwitch');
+      if(autoSwitch){
+        e.preventDefault(); e.stopPropagation();
+        if(autoSwitch.getAttribute('aria-disabled')==='true'){toast('Connect a backup file first'); return;}
+        await toggleAutoBackup();
+        return;
+      }
+      const segBtn=e.target.closest('.segmented button');
+      if(segBtn&&handleSegmentedClick(segBtn)) return;
+      const syncBtn=e.target.closest('[data-sync-action]');
+      if(syncBtn){e.preventDefault(); await handleSyncAction(syncBtn.dataset.syncAction); return;}
+      if(e.target.closest('#spendCreditBtn')){e.preventDefault(); await spendCreditReward(); return;}
+      if(e.target.closest('#redeemGiftBtn')){e.preventDefault(); await redeemGiftReward(); return;}
+      if(e.target.closest('#homeJournalViewAll')){openJournalListModal(); return;}
+      if(e.target.closest('#addGroupBtn')){state.groups.push({id:uid(),name:'New Group',emoji:'📋',color:COLOURS[state.groups.length%COLOURS.length],sortOrder:state.groups.length}); await save(false,{render:'habitsView'}); toast('Group added'); return;}
+      if(e.target.closest('#addHabitBtn')){openHabitModal(); return;}
+      if(e.target.closest('#addVacationBtn')){openAddPauseModal(); return;}
+      if(e.target.closest('#viewVacationLogBtn')){openVacationLog(); return;}
+      if(e.target.closest('#replayOnboardingBtn')){state.settings.onboardingComplete=false; onboardStep=0; renderOnboarding(); return;}
+      if(e.target.closest('#resetTodayBtn')){resetTodayRecords(); return;}
+      if(e.target.closest('#flexHabitToggle')){$('#flexHabitCard')?.classList.toggle('collapsed'); return;}
+      if(e.target.closest('#weekPrev')){weekOffset--; renderWeekStrip(); return;}
+      if(e.target.closest('#weekNext')){weekOffset++; renderWeekStrip(); return;}
+      if(e.target.closest('#weekToday')){weekOffset=0; renderWeekStrip(); return;}
+      if(e.target.closest('#trendPrev')){trendCursor.setMonth(trendCursor.getMonth()-1); drawTrend(); return;}
+      if(e.target.closest('#trendNext')){const now=hkNow(); const c=new Date(trendCursor); c.setMonth(c.getMonth()+1); if(c.getFullYear()>now.getFullYear()||(c.getFullYear()===now.getFullYear()&&c.getMonth()>now.getMonth())){toast('Already at the latest month');return;} trendCursor=c; drawTrend(); return;}
+      if(e.target.closest('#reportPrev')){reportCursor.setMonth(reportCursor.getMonth()-(reportMode==='month'?1:3)); renderCalendar(); return;}
+      if(e.target.closest('#reportNext')){reportCursor.setMonth(reportCursor.getMonth()+(reportMode==='month'?1:3)); renderCalendar(); return;}
+      if(e.target.closest('#statusToggle')){state.settings.statusRowOpen=!state.settings.statusRowOpen; localStorage.setItem(STORAGE,JSON.stringify(state)); updateStatus(); return;}
+      if(e.target.closest('#onboardNext')){if(onboardStep<ONBOARD_STEPS.length-1){onboardStep++; showOnboardStep();} else finishOnboarding(); return;}
+      if(e.target.closest('#onboardBack')){if(onboardStep>0){onboardStep--; showOnboardStep();} return;}
+      if(e.target.closest('#onboardClose')){finishOnboarding(); return;}
+      if(e.target.closest('#fileStatus')&&!fileHandle&&state.settings.fileConnected){showView('settingsView'); return;}
+      if(e.target.closest('#resetAllBtn')){if($('#confirmDeleteInput')?.value!=='Confirm'){toast('Type Confirm first');return;} if(!confirm('Erase all data and start fresh?'))return; const keep={colorMode:state.settings.colorMode,styleTheme:state.settings.styleTheme,userName:state.settings.userName,profileIcon:state.settings.profileIcon}; state=freshState({onboardingComplete:true,keep}); fileHandle=null; localStorage.setItem(STORAGE,JSON.stringify(state)); normalizeState(); invalidateSettings(); await save(true,{render:'all'}); toast('Data erased'); return;}
+      const check=e.target.closest('button.check-btn[data-habit-id]:not(.done):not(:disabled)');
+      if(check){e.preventDefault(); e.stopPropagation(); const wrap=check.closest('.swipe-wrap'); await addRecord(check.dataset.habitId,'',check.dataset.date||todayKey()); if(wrap?.dataset.afterKey) openDayDetail(wrap.dataset.afterKey); return;}
+      const reset=e.target.closest('[data-reset][data-habit-id]');
+      if(reset){e.preventDefault(); e.stopPropagation(); const wrap=reset.closest('.swipe-wrap'); await resetHabitForDate(reset.dataset.habitId,reset.dataset.date||todayKey()); if(wrap?.dataset.afterKey) openDayDetail(wrap.dataset.afterKey); return;}
+      const addCredit=e.target.closest('#addCreditRule');
+      if(addCredit){ensureRewardShape(); const r=state.settings.rewards; const used=new Set((r.creditRules||[]).map(x=>Number(x.pct))); const pct=[50,60,70,80,90,100].find(x=>!used.has(x)); if(!pct){toast('All completion rules already used');return;} r.creditRules.push({id:uid(),pct,amount:pct>=100?10:2}); await save(false,{render:'none'}); toast('Credit rule added'); if($('#rewardPanel')) drawRewardPanel('credit'); return;}
+      const addGift=e.target.closest('#addGiftRule');
+      if(addGift){ensureRewardShape(); const r=state.settings.rewards; r.giftRules=r.giftRules||[]; r.giftRules.push({id:uid(),gift:'Buffet',icon:'🍽️',pct:80,days:30}); await save(false,{render:'none'}); toast('Gift rule added'); if($('#rewardPanel')) drawRewardPanel('gift'); return;}
+      if(!e.target.closest('.swipe-wrap')) $$('.swipe-wrap.open').forEach(w=>w.classList.remove('open'));
+    });
+    document.body.addEventListener('change',async e=>{
+      if(e.target.id==='importInput'&&e.target.files?.[0]){importJson(e.target.files[0]); e.target.value=''; return;}
+      if(e.target.id==='activeGiftSelect'){ensureRewardShape(); state.settings.rewards.activeGiftId=e.target.value; await save(false,{render:'none'}); renderGiftRedeem(); toast('Gift goal updated');}
+    });
+  }
   window.addEventListener('resize',()=>{if($('#onboardBackdrop')?.classList.contains('show')) positionOnboardCallout(ONBOARD_STEPS[onboardStep]);});
   document.addEventListener('visibilitychange',()=>{
     if(document.visibilityState==='hidden') void flushBackupSync();
@@ -1508,55 +1625,9 @@
       if(await canWriteBackup()) void flushBackupSync();
     }
   }
-  $('#resetAllBtn').onclick=async()=>{if($('#confirmDeleteInput').value!=='Confirm'){toast('Type Confirm first');return;} if(!confirm('Erase all data and start fresh?'))return; const keep={colorMode:state.settings.colorMode,styleTheme:state.settings.styleTheme,userName:state.settings.userName,profileIcon:state.settings.profileIcon}; state=freshState({onboardingComplete:true,keep}); fileHandle=null; localStorage.setItem(STORAGE,JSON.stringify(state)); normalizeState(); invalidateSettings(); await save(true,{render:'all'}); toast('Data erased');};
-  document.body.addEventListener('click',async e=>{
-    const tipBtn=e.target.closest('.info-tip');
-    if(tipBtn){e.preventDefault(); e.stopPropagation(); toast(tipBtn.dataset.tip||''); return;}
-    const remSwitch=e.target.closest('#reminderSwitch');
-    if(remSwitch){e.preventDefault(); e.stopPropagation(); await toggleReminders(); return;}
-    const autoSwitch=e.target.closest('#autoBackupSwitch');
-    if(autoSwitch && !autoSwitch.disabled){e.preventDefault(); e.stopPropagation(); await toggleAutoBackup(); return;}
-    const check=e.target.closest('button.check-btn[data-habit-id]:not(.done):not(:disabled)');
-    if(check){
-      e.preventDefault(); e.stopPropagation();
-      const wrap=check.closest('.swipe-wrap');
-      await addRecord(check.dataset.habitId,'',check.dataset.date||todayKey());
-      if(wrap?.dataset.afterKey) openDayDetail(wrap.dataset.afterKey);
-      return;
-    }
-    const reset=e.target.closest('[data-reset][data-habit-id]');
-    if(reset){
-      e.preventDefault(); e.stopPropagation();
-      const wrap=reset.closest('.swipe-wrap');
-      await resetHabitForDate(reset.dataset.habitId,reset.dataset.date||todayKey());
-      if(wrap?.dataset.afterKey) openDayDetail(wrap.dataset.afterKey);
-      return;
-    }
-    const addCredit=e.target.closest('#addCreditRule');
-    if(addCredit){
-      ensureRewardShape(); const r=state.settings.rewards;
-      const used=new Set((r.creditRules||[]).map(x=>Number(x.pct)));
-      const pct=[50,60,70,80,90,100].find(x=>!used.has(x));
-      if(!pct){toast('All completion rules already used');return;}
-      r.creditRules.push({id:uid(),pct,amount:pct>=100?10:2});
-      await save(false,{render:'none'}); toast('Credit rule added');
-      if($('#rewardPanel')) drawRewardPanel('credit');
-      return;
-    }
-    const addGift=e.target.closest('#addGiftRule');
-    if(addGift){
-      ensureRewardShape(); const r=state.settings.rewards;
-      r.giftRules=r.giftRules||[];
-      r.giftRules.push({id:uid(),gift:'Buffet',icon:'🍽️',pct:80,days:30});
-      await save(false,{render:'none'}); toast('Gift rule added');
-      if($('#rewardPanel')) drawRewardPanel('gift');
-      return;
-    }
-    if(!e.target.closest('.swipe-wrap')) $$('.swipe-wrap.open').forEach(w=>w.classList.remove('open'));
-  });
-  $('#comparePeriodTabs')?.addEventListener('click',e=>{if(e.target.tagName!=='BUTTON')return; comparePeriod=e.target.dataset.period; $$('#comparePeriodTabs button').forEach(b=>b.classList.remove('active')); e.target.classList.add('active'); renderComparePeriods();});
-  $('#habitChartPeriodTabs')?.addEventListener('click',e=>{if(e.target.tagName!=='BUTTON')return; habitChartPeriod=e.target.dataset.period; $$('#habitChartPeriodTabs button').forEach(b=>b.classList.remove('active')); e.target.classList.add('active'); renderHabitCompletionChart();});
   window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change',()=>{if((state.settings.colorMode||'system')==='system') applyAppearance();});
+  document.addEventListener('keydown',e=>{if(e.key==='Escape'&&$('#helpSheetBackdrop')?.classList.contains('show')) closeHelpSheet();});
+  bindAppEvents();
   resetDefaultAppIcons();
   lastLevel=levelInfo().cur.level;
   applyAppearance();
@@ -1566,6 +1637,7 @@
     renderAll();
     renderOnboarding();
     refreshBackupChrome();
+    renderSettingsVersion();
     if(connected && await canWriteBackup()) void flushBackupSync();
   })();
 })();

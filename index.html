@@ -120,18 +120,18 @@
       <section class="view" id="reportView">
         <div class="section-title"><h2>Report</h2></div>
         <div class="card">
-          <div class="card-head"><h3>Compare Periods</h3><button type="button" class="info-tip card-tip" aria-label="Help" data-tip="Compares average daily habit completion % between the current and previous period. Pause days are excluded.">ⓘ</button><div class="segmented" id="comparePeriodTabs"><button data-period="week">Week</button><button data-period="month" class="active">Month</button></div></div>
+          <div class="card-head"><h3>Compare Periods</h3><button type="button" class="info-tip card-tip" aria-label="Help" data-tip="Compares average daily habit completion % between the current and previous period. Pause days are excluded.">ⓘ</button><div class="segmented" id="comparePeriodTabs"><button type="button" data-period="week">Week</button><button type="button" data-period="month" class="active">Month</button></div></div>
           <div id="comparePeriodBox"></div>
         </div>
         <div class="card"><div class="card-head"><h3>Insights</h3></div><div id="correlationInsights"></div></div>
         <div class="card" id="habitCompletionCard">
-          <div class="card-head"><h3>Completion Rate</h3><div class="segmented" id="habitChartPeriodTabs"><button data-period="week" class="active">Week</button><button data-period="month">Month</button><button data-period="quarter">Quarter</button></div></div>
+          <div class="card-head"><h3>Completion Rate</h3><div class="segmented" id="habitChartPeriodTabs"><button type="button" data-period="week" class="active">Week</button><button type="button" data-period="month">Month</button><button type="button" data-period="quarter">Quarter</button></div></div>
           <p class="small-note" id="habitChartRangeNote"></p>
           <div class="habit-completion-table" id="habitCompletionTable"></div>
         </div>
-        <div class="card"><div class="card-head"><h3>Performance Trend</h3><button type="button" class="info-tip card-tip" aria-label="Help" data-tip="Bars show daily habit completion. The line shows your journal energy. Use ‹ › to review other months.">ⓘ</button><div class="segmented" id="rangeTabs"><button data-days="7" class="active">7D</button><button data-days="14">14D</button><button data-days="30">30D</button></div></div><div class="report-toolbar"><button class="round-nav" id="trendPrev">‹</button><div class="report-title" id="trendTitle">This month</div><button class="round-nav" id="trendNext">›</button></div><div class="canvas-wrap"><canvas id="trendCanvas"></canvas></div></div>
+        <div class="card"><div class="card-head"><h3>Performance Trend</h3><button type="button" class="info-tip card-tip" aria-label="Help" data-tip="Bars show daily habit completion. The line shows your journal energy. Use ‹ › to review other months.">ⓘ</button><div class="segmented" id="rangeTabs"><button type="button" data-days="7" class="active">7D</button><button type="button" data-days="14">14D</button><button type="button" data-days="30">30D</button></div></div><div class="report-toolbar"><button class="round-nav" id="trendPrev">‹</button><div class="report-title" id="trendTitle">This month</div><button class="round-nav" id="trendNext">›</button></div><div class="canvas-wrap"><canvas id="trendCanvas"></canvas></div></div>
         <div class="card">
-          <div class="card-head"><h3>Calendar Review</h3><div class="segmented" id="reportMode"><button data-mode="month" class="active">Month</button><button data-mode="quarter">Quarter</button></div></div>
+          <div class="card-head"><h3>Calendar Review</h3><div class="segmented" id="reportMode"><button type="button" data-mode="month" class="active">Month</button><button type="button" data-mode="quarter">Quarter</button></div></div>
           <div class="field" style="margin-bottom:10px"><label>Habit filter</label><select id="calendarHabitFilter"><option value="">All habits</option></select></div>
           <div class="report-toolbar"><button class="round-nav" id="reportPrev">‹</button><div class="report-title" id="reportTitle">Month</div><button class="round-nav" id="reportNext">›</button></div>
           <div id="monthReport"><div class="calendar-weekdays" id="calendarWeekdays"></div><div class="calendar-grid" id="calendarGrid"></div></div>
@@ -198,12 +198,12 @@
         <div class="card settings-card sync-card">
           <div class="sync-status-panel" id="backupStatus">No backup file connected.</div>
           <div class="sync-actions" id="syncActionsGrid"></div>
-          <div class="switch-row sync-auto-row"><div><strong>Auto backup <button type="button" class="info-tip" aria-label="Help" data-tip="Saves to your linked JSON file a few seconds after you stop editing, and again when you leave the app. Edits stay instant on this device.">ⓘ</button></strong></div><button type="button" class="switch" id="autoBackupSwitch" aria-label="Auto backup toggle"></button></div>
+          <div class="switch-row sync-auto-row"><div class="switch-label-wrap"><strong>Auto backup</strong><button type="button" class="info-tip" aria-label="Help" data-tip="Saves to your linked JSON file a few seconds after you stop editing, and again when you leave the app. Edits stay instant on this device.">ⓘ</button></div><button type="button" class="switch" id="autoBackupSwitch" aria-label="Auto backup toggle"></button></div>
         </div>
 
         <p class="settings-section-label">Notifications</p>
         <div class="card settings-card">
-          <div class="switch-row"><div><strong>Reminders <button type="button" class="info-tip" aria-label="Help" data-tip="Optional per-habit alerts at scheduled times.">ⓘ</button></strong></div><button type="button" class="switch" id="reminderSwitch" aria-label="Reminder toggle"></button></div>
+          <div class="switch-row"><div class="switch-label-wrap"><strong>Reminders</strong><button type="button" class="info-tip" aria-label="Help" data-tip="Optional per-habit alerts at scheduled times.">ⓘ</button></div><button type="button" class="switch" id="reminderSwitch" aria-label="Reminder toggle"></button></div>
           <div class="form-grid" id="reminderSettings" style="margin-top:12px"></div>
         </div>
 
@@ -217,6 +217,7 @@
           <div class="field"><input id="confirmDeleteInput" placeholder="Type Confirm"></div>
           <button class="btn-danger settings-action" id="resetAllBtn" type="button">Erase all data</button>
         </div>
+        <p class="settings-version" id="settingsVersion">Momentum v36</p>
       </section>
     </main>
 
@@ -257,6 +258,12 @@
   </div>
 
   <div class="modal-backdrop" id="modalBackdrop"><div class="modal" id="modalSheet"><div class="sheet-handle" id="sheetHandle"></div><div class="modal-head"><h3 id="modalTitle">Modal</h3><button class="close-x" id="modalClose" aria-label="Close">×</button></div><div id="modalBody"></div></div></div>
+  <div class="help-sheet-backdrop" id="helpSheetBackdrop" aria-hidden="true">
+    <div class="help-sheet" id="helpSheet" role="dialog" aria-modal="true" aria-labelledby="helpSheetBody">
+      <button type="button" class="close-x help-sheet-close" id="helpSheetClose" aria-label="Close">×</button>
+      <div class="help-sheet-body" id="helpSheetBody"></div>
+    </div>
+  </div>
   <div class="toast" id="toast">Saved</div>
   <div class="celebrate-layer" id="celebrateLayer" aria-hidden="true"></div>
 
