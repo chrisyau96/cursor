@@ -68,7 +68,7 @@
   const PREVIEW=3;
   const LAZY_CHUNK=10;
   const REMINDER_MSG_LIMIT=80;
-  const APP_VERSION='v35';
+  const APP_VERSION='v36';
   const iconBtn=(cls,svg,title)=>{const b=document.createElement('button'); b.className='act-btn '+cls; b.innerHTML=svg; b.title=title; b.setAttribute('aria-label',title); return b;};
 
   const USER_NAME_MAX=12;
@@ -171,12 +171,14 @@
     body.textContent=text;
     bd.classList.add('show');
     bd.setAttribute('aria-hidden','false');
+    document.body.classList.add('help-sheet-open');
   }
   function closeHelpSheet(){
     const bd=$('#helpSheetBackdrop');
     if(!bd) return;
     bd.classList.remove('show');
     bd.setAttribute('aria-hidden','true');
+    document.body.classList.remove('help-sheet-open');
   }
   function backupEnabled(){return !!state.settings.autoBackup&&!!fileHandle;}
   function maybeRenderBackupStatus(){ if($('#settingsView')?.classList.contains('active')) renderBackupStatus(); }
@@ -1247,8 +1249,13 @@
     renderVacationSettings(); renderSyncActions(); renderDataModeSettings(); renderBackupStatus();
     const start=$('#trackerStartDate'); if(start) start.value=state.settings.startDate||todayKey();
     const disp=$('#startDateDisplay'); if(disp) disp.textContent=state.settings.startDate||todayKey();
-    $('#autoBackupSwitch')?.classList.toggle('on',!!state.settings.autoBackup);
-    $('#autoBackupSwitch')?.toggleAttribute('disabled',!fileHandle && !state.settings.fileConnected);
+    const autoSw=$('#autoBackupSwitch');
+    if(autoSw){
+      autoSw.classList.toggle('on',!!state.settings.autoBackup);
+      const autoLocked=!fileHandle && !state.settings.fileConnected;
+      autoSw.classList.toggle('disabled',autoLocked);
+      autoSw.setAttribute('aria-disabled',autoLocked?'true':'false');
+    }
     $('#reminderSwitch')?.classList.toggle('on',state.settings.reminders);
   }
   function refreshBackupChrome(){ updateStatus(); refreshSettingsChrome(); }
@@ -1310,7 +1317,12 @@
     refreshSettingsChrome();
     renderTopProfile();
     renderSettingsVersion();
-    $('#autoBackupSwitch')?.toggleAttribute('disabled',!fileHandle && !state.settings.fileConnected);
+    const autoSw=$('#autoBackupSwitch');
+    if(autoSw){
+      const autoLocked=!fileHandle && !state.settings.fileConnected;
+      autoSw.classList.toggle('disabled',autoLocked);
+      autoSw.setAttribute('aria-disabled',autoLocked?'true':'false');
+    }
   }
   function renderSettingsVersion(){
     const el=$('#settingsVersion');
@@ -1513,7 +1525,10 @@
     if(view==='reportView')renderReport();
     if(view==='rewardsView')renderRewards();
     if(view==='levelView')renderLevel();
-    if(view==='settingsView') renderSettings();
+    if(view==='settingsView'){
+      renderSettings();
+      requestAnimationFrame(()=>$('#settingsVersion')?.scrollIntoView({block:'end',behavior:'smooth'}));
+    }
   }
   function handleSegmentedClick(segBtn){
     const tabs=segBtn.closest('.segmented');
@@ -1538,7 +1553,7 @@
     },true);
     document.body.addEventListener('click',async e=>{
       if(e.target.closest('.info-tip')) return;
-      if(e.target.closest('#helpSheetClose')||e.target.id==='helpSheetBackdrop'){closeHelpSheet(); return;}
+      if(e.target.closest('#helpSheetClose')||(e.target.id==='helpSheetBackdrop'&&!e.target.closest('.help-sheet'))){closeHelpSheet(); return;}
       if(e.target.closest('[data-close]')){closeModal(); closeHelpSheet(); return;}
       if(e.target.closest('#modalClose')||e.target.id==='modalBackdrop'){closeModal(); return;}
       const nav=e.target.closest('.nav-item[data-view]');
@@ -1550,7 +1565,12 @@
       const remSwitch=e.target.closest('#reminderSwitch');
       if(remSwitch){e.preventDefault(); e.stopPropagation(); await toggleReminders(); return;}
       const autoSwitch=e.target.closest('#autoBackupSwitch');
-      if(autoSwitch&&!autoSwitch.disabled){e.preventDefault(); e.stopPropagation(); await toggleAutoBackup(); return;}
+      if(autoSwitch){
+        e.preventDefault(); e.stopPropagation();
+        if(autoSwitch.getAttribute('aria-disabled')==='true'){toast('Connect a backup file first'); return;}
+        await toggleAutoBackup();
+        return;
+      }
       const segBtn=e.target.closest('.segmented button');
       if(segBtn&&handleSegmentedClick(segBtn)) return;
       const syncBtn=e.target.closest('[data-sync-action]');
@@ -1606,6 +1626,7 @@
     }
   }
   window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change',()=>{if((state.settings.colorMode||'system')==='system') applyAppearance();});
+  document.addEventListener('keydown',e=>{if(e.key==='Escape'&&$('#helpSheetBackdrop')?.classList.contains('show')) closeHelpSheet();});
   bindAppEvents();
   resetDefaultAppIcons();
   lastLevel=levelInfo().cur.level;
