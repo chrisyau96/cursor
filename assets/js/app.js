@@ -31,6 +31,8 @@
   ];
   let fileHandle=null;
   let pauseModalDone=null;
+  let habitModalSave=null;
+  let lastTapKey='', lastTapAt=0;
   const FILE_HANDLE_DB='momentumFileHandles';
   const FILE_HANDLE_KEY='backup';
   let reminderTimer=null;
@@ -69,7 +71,7 @@
   const PREVIEW=3;
   const LAZY_CHUNK=10;
   const REMINDER_MSG_LIMIT=80;
-  const APP_VERSION='v37';
+  const APP_VERSION='v38';
   const iconBtn=(cls,svg,title)=>{const b=document.createElement('button'); b.className='act-btn '+cls; b.innerHTML=svg; b.title=title; b.setAttribute('aria-label',title); return b;};
 
   const USER_NAME_MAX=12;
@@ -430,7 +432,18 @@
   function isScheduledToday(habit,date=hkNow()){return showsOnHomeToday(habit,date)&&periodCount(habit,date)<periodTarget(habit);}
   function periodCount(habit,date=hkNow()){if(isNotSpecific(habit)){const {start,end}=flexWindow(habit,date); return state.records.filter(r=>r.habitId===habit.id&&r.date>=start&&r.date<=end).length;} const key=currentPeriodKey(habit,date); return state.records.filter(r=>r.habitId===habit.id && currentPeriodKey(habit,parseDate(r.date))===key).length}
   function todayHabitCount(habit,date=hkNow()){const k=dateKey(date); return state.records.filter(r=>r.habitId===habit.id && r.date===k).length}
-  function dayScheduledHabits(date){if(!afterStart(dateKey(date))) return []; return state.habits.filter(h=>{const f=h.frequency||{}; if(f.mode==='daily') return (f.days||[]).includes(date.getDay()); if(!f.schedule || f.schedule.type==='any') return false; return matchesScheduleRule(f,date);});}
+  function dayScheduledHabits(date){
+    if(!afterStart(dateKey(date))) return [];
+    const k=dateKey(date);
+    const seen=new Set(), out=[];
+    activeHabits().forEach(h=>{
+      if(seen.has(h.id)) return;
+      if(showsOnHomeToday(h,date) || state.records.some(r=>r.habitId===h.id&&r.date===k)){
+        seen.add(h.id); out.push(h);
+      }
+    });
+    return out;
+  }
   function dayPct(date){const scheduled=dayScheduledHabits(date); if(!scheduled.length) return null; let points=0,total=0; scheduled.forEach(h=>{const target=(h.frequency.mode==='daily')?periodTarget(h):1; const count=(h.frequency.mode==='daily')?todayHabitCount(h,date):(periodCount(h,date)>0?1:0); points+=Math.min(count,target); total+=target;}); return total?Math.round(points/total*100):null;}
   function completionOfHabit(habit,date=hkNow()){const target=periodTarget(habit); const count=periodCount(habit,date); return {count,target,pct:Math.min(100,Math.round(count/target*100)),done:count>=target};}
   function habitXpKey(habit,date){return habit.id+'|'+currentPeriodKey(habit,date);}
@@ -580,8 +593,8 @@
     let sx=0;
     wrap.addEventListener('touchstart',e=>{sx=e.touches[0].clientX;},{passive:true});
     wrap.addEventListener('touchend',e=>{const dx=e.changedTouches[0].clientX-sx; if(dx<-40) wrap.classList.add('open'); else if(dx>40) wrap.classList.remove('open');},{passive:true});
-    wrap.querySelector('[data-swipe-edit]')?.addEventListener('click',e=>{e.stopPropagation(); wrap.classList.remove('open'); openHabitModal(habit);});
-    wrap.querySelector('[data-swipe-undo]')?.addEventListener('click',async e=>{e.stopPropagation(); wrap.classList.remove('open'); await undoLastTap(habit.id,dateKeyStr); after&&after();});
+    wrap.querySelector('[data-swipe-edit]');
+    wrap.querySelector('[data-swipe-undo]');
   }
   async function undoLastTap(habitId,k){const recs=state.records.filter(r=>r.habitId===habitId&&r.date===k).sort((a,b)=>b.at.localeCompare(a.at)); if(!recs.length){toast('Nothing to undo');return;} state.records=state.records.filter(r=>r.id!==recs[0].id); await save(false,{render:'none'}); refreshHomeAfterRecord(habitId,k); toast('Undone last tap'); haptic();}
   function renderWeekStrip(){
@@ -611,7 +624,7 @@
     const actions=document.createElement('div'); actions.className='swipe-actions';
     actions.innerHTML=`<button class="swipe-act undo" data-swipe-undo type="button">Undo</button><button class="swipe-act edit" data-swipe-edit type="button">Edit</button>`;
     const row=document.createElement('div'); row.className='habit-row '+(c.done?'done':'')+(h.paused?' paused-habit':'');
-    row.innerHTML=`<div class="habit-icon" style="background:${h.color}22;color:${h.color}">${h.emoji}</div><div class="habit-main"><div class="habit-name"></div><div class="habit-meta"><span>${c.count}/${c.target}</span>${habitDueMarkup(h,now)}</div><div class="progress-mini"><span style="width:${c.pct}%;background:${h.color}"></span></div></div><button type="button" class="check-btn ${c.done?'done':''}" data-habit-id="${h.id}" data-date="${k}" ${c.done?'disabled':''} aria-label="Record ${escapeAttr(h.name)}">${c.done?'✓':'+1'}</button>${c.count?'<button type="button" class="icon-btn muted" data-reset data-habit-id="'+h.id+'" data-date="'+k+'" title="Reset" aria-label="Reset habit">↺</button>':''}`;
+    row.innerHTML=`<div class="habit-icon" style="background:${h.color}22;color:${h.color}">${h.emoji}</div><div class="habit-main"><div class="habit-name"></div><div class="habit-meta"><span>${c.count}/${c.target}</span>${habitDueMarkup(h,now)}</div><div class="progress-mini"><span style="width:${c.pct}%;background:${h.color}"></span></div></div><button type="button" class="check-btn ${c.done?'done':''}" data-habit-id="${h.id}" data-date="${k}" ${c.done?'disabled':''} aria-label="Record ${escapeAttr(h.name)}">${c.done?'✓':'+1'}</button>${c.count?'<button type="button" class="icon-btn muted reset-habit-btn" data-reset="1" data-habit-id="'+h.id+'" data-date="'+k+'" title="Reset" aria-label="Reset habit">↺</button>':''}`;
     row.querySelector('.habit-name').textContent=h.name;
     row.dataset.habitTap=h.id;
     row.dataset.date=k;
@@ -665,8 +678,55 @@
   }
   async function removeRecord(id){state.records=state.records.filter(r=>r.id!==id); await save(false,{render:'none'}); toast('Record removed')}
   async function removeRedemption(id){state.redemptions=state.redemptions.filter(r=>r.id!==id); await save(false,{render:'none'}); toast('Redemption removed')}
+  function flashRuleCard(box){
+    const cards=box?.querySelectorAll('.rule-card');
+    const card=cards?.[cards.length-1];
+    if(card){ card.classList.add('rule-flash'); card.scrollIntoView({block:'nearest',behavior:'smooth'}); setTimeout(()=>card.classList.remove('rule-flash'),900); }
+  }
+  function addCreditRule(){
+    ensureRewardShape(); const r=state.settings.rewards;
+    const used=new Set((r.creditRules||[]).map(x=>Number(x.pct)));
+    const pct=[50,60,70,80,90,100].find(x=>!used.has(x));
+    if(!pct){toast('All completion rules already used');return;}
+    r.creditRules.push({id:uid(),pct,amount:pct>=100?10:2});
+    drawRewardPanel('credit');
+    flashRuleCard($('#creditRulesBox'));
+    toast('Credit rule added');
+    void save(false,{render:'none'});
+  }
+  function addGiftRule(){
+    ensureRewardShape(); const r=state.settings.rewards;
+    r.giftRules=r.giftRules||[];
+    r.giftRules.push({id:uid(),gift:'Buffet',icon:'🍽️',pct:80,days:30});
+    drawRewardPanel('gift');
+    flashRuleCard($('#giftRulesBox'));
+    toast('Gift rule added');
+    void save(false,{render:'none'});
+  }
+  function removeCreditRule(idx){
+    const r=state.settings.rewards;
+    if(!r.creditRules?.[idx]) return;
+    r.creditRules.splice(idx,1);
+    drawRewardPanel('credit');
+    toast('Credit rule removed');
+    void save(false,{render:'none'});
+  }
+  function removeGiftRule(idx){
+    const r=state.settings.rewards;
+    if(!r.giftRules?.[idx]) return;
+    r.giftRules.splice(idx,1);
+    drawRewardPanel('gift');
+    toast('Gift rule removed');
+    void save(false,{render:'none'});
+  }
   async function resetTodayRecords(){if(!confirm('Reset all habit records for today?'))return; const k=todayKey(); state.records=state.records.filter(r=>r.date!==k); await save(false,{render:'homeView'}); toast('Today reset')}
-  async function resetHabitForDate(habitId,k){state.records=state.records.filter(r=>!(r.date===k&&r.habitId===habitId)); await save(false,{render:'none'}); refreshHomeAfterRecord(habitId,k); toast('Habit reset')}
+  function resetHabitForDate(habitId,k){
+    state.records=state.records.filter(r=>!(r.date===k&&r.habitId===habitId));
+    haptic();
+    refreshHomeAfterRecord(habitId,k);
+    toast('Habit reset');
+    void save(false,{render:'none'});
+  }
 
   /* Shared: preview 1 row + "View all" modal with lazy loading (10 at a time). */
   function renderPreview(box,items,itemFn,moreTitle){
@@ -751,9 +811,8 @@
     });
   }
   function openGroupIconPicker(group){
-    openModal('Group Icon',`<div class="emoji-row">${EMOJIS.map(e=>`<button class="emoji-swatch ${group.emoji===e?'active':''}" data-emoji="${e}">${e}</button>`).join('')}</div><div class="field" style="margin-top:12px"><label>Custom emoji</label><input id="groupEmojiInput" value="${escapeAttr(group.emoji||'📋')}" maxlength="4"></div><div class="modal-actions"><button class="btn-secondary" data-close>Cancel</button><button class="btn-primary" id="saveGroupIcon">Save</button></div>`);
+    openModal('Group Icon',`<div class="emoji-row">${EMOJIS.map(e=>`<button type="button" class="emoji-swatch ${group.emoji===e?'active':''}" data-emoji="${e}">${e}</button>`).join('')}</div><div class="field" style="margin-top:12px"><label>Custom emoji</label><input id="groupEmojiInput" data-group-id="${group.id}" value="${escapeAttr(group.emoji||'📋')}" maxlength="4"></div><div class="modal-actions"><button class="btn-secondary" data-close>Cancel</button><button class="btn-primary" id="saveGroupIcon">Save</button></div>`);
     $$('.emoji-swatch').forEach(b=>b.onclick=()=>{$$('.emoji-swatch').forEach(x=>x.classList.remove('active')); b.classList.add('active'); $('#groupEmojiInput').value=b.dataset.emoji;});
-    $('#saveGroupIcon').onclick=async()=>{group.emoji=$('#groupEmojiInput').value.trim()||'📋'; await save(false,{render:'habitsView'}); closeModal(); toast('Group icon updated');};
   }
   function renderHabits(){
     renderGroupManager();
@@ -763,14 +822,11 @@
     habits.forEach((h,idx)=>{
       const grp=state.groups.find(g=>g.id===h.groupId);
       const row=document.createElement('div'); row.className='habit-row'+(h.paused?' paused-habit':''); row.style.cursor='default';
-      row.innerHTML=`<div class="sort-btns"><button type="button" data-up>↑</button><button type="button" data-down>↓</button></div><div class="habit-icon" style="background:${h.color}22;color:${h.color}">${h.emoji}</div><div class="habit-main"><div class="habit-name"></div><div class="habit-meta"><span>${frequencyLabel(h)}</span>${grp?`<span class="mini-dot"></span><span>${escapeHtml(grp.name)}</span>`:''}<span class="mini-dot"></span><span>${fmtXp(h.xpReward||5)} EXP</span>${h.paused?'<span class="chip gray">Paused</span>':''}</div></div>`;
+      row.dataset.habitId=h.id;
+      row.innerHTML=`<div class="sort-btns"><button type="button" data-up data-habit-id="${h.id}">↑</button><button type="button" data-down data-habit-id="${h.id}">↓</button></div><div class="habit-icon" style="background:${h.color}22;color:${h.color}">${h.emoji}</div><div class="habit-main"><div class="habit-name"></div><div class="habit-meta"><span>${frequencyLabel(h)}</span>${grp?`<span class="mini-dot"></span><span>${escapeHtml(grp.name)}</span>`:''}<span class="mini-dot"></span><span>${fmtXp(h.xpReward||5)} EXP</span>${h.paused?'<span class="chip gray">Paused</span>':''}</div></div>`;
       row.querySelector('.habit-name').textContent=h.name;
-      row.querySelector('[data-up]').onclick=()=>{if(idx>0){const o=habits[idx-1]; const t=h.sortOrder??idx; h.sortOrder=o.sortOrder??idx-1; o.sortOrder=t; save(false,{render:'habitsView'});}};
-      row.querySelector('[data-down]').onclick=()=>{if(idx<habits.length-1){const o=habits[idx+1]; const t=h.sortOrder??idx; h.sortOrder=o.sortOrder??idx+1; o.sortOrder=t; save(false,{render:'habitsView'});}};
       const actions=document.createElement('div'); actions.className='habit-actions';
-      actions.innerHTML='<button class="icon-btn" data-edit aria-label="Edit">✎</button><button class="icon-btn" data-pause aria-label="Pause">'+(h.paused?'▶':'⏸')+'</button>';
-      actions.querySelector('[data-edit]').onclick=()=>openHabitModal(h);
-      actions.querySelector('[data-pause]').onclick=async()=>{h.paused=!h.paused; await save(false,{render:'habitsView'}); toast(h.paused?'Habit paused':'Habit resumed');};
+      actions.innerHTML=`<button class="icon-btn" data-edit data-habit-id="${h.id}" aria-label="Edit">✎</button><button class="icon-btn" data-pause data-habit-id="${h.id}" aria-label="Pause">${h.paused?'▶':'⏸'}</button>`;
       row.appendChild(actions); list.appendChild(row);
     }); renderRecentActivity();
   }
@@ -887,7 +943,7 @@
       }
       syncReminderUi();
     };
-    $('#saveHabitBtn').onclick=async()=>{
+    habitModalSave=async()=>{
       const mode=$('#freqMode').value; let freq={mode};
       if(mode==='daily'){
         const setup=$('#weeklySetupType')?.value||'days';
@@ -911,10 +967,13 @@
         if(schedule.type==='date') schedule.day=Number($('#scheduleDay')?.value||1); else if(schedule.type==='weekday') {schedule.ordinal=$('#scheduleOrdinal')?.value||1; schedule.weekday=Number($('#scheduleWeekday')?.value||1);}
         freq.schedule=schedule;
       }
-      const item={id:h.id||uid(),name:$('#habitName').value.trim()||'Untitled Habit',emoji:$('#habitEmoji').value,color:selectedColor,target:Number($('#habitTarget').value),xpReward:Math.max(1,Math.round(Number($('#habitXpReward').value)||5)),frequency:freq,groupId:$('#habitGroup')?.value||null,sortOrder:h.sortOrder??state.habits.length,paused:!!h.paused,archived:false,flexPeriodStart:h.flexPeriodStart||null,reminder:{enabled:t.classList.contains('on'),time:$('#habitReminderTime').value,message:($('#habitReminderMsg')?.value||state.settings.defaultReminderMessage||'Time for {habit}!').slice(0,REMINDER_MSG_LIMIT),daysBeforeDue:Number($('#habitDaysBeforeDue')?.value||1)}};
-      if(isEdit){state.habits=state.habits.map(x=>x.id===h.id?item:x)}else state.habits.push(item); await save(false,{render:'all'}); closeModal(); toast('Habit saved')
+      const t=$('#habitReminderToggle');
+      const item={id:h.id||uid(),name:$('#habitName').value.trim()||'Untitled Habit',emoji:$('#habitEmoji').value,color:selectedColor,target:Number($('#habitTarget').value),xpReward:Math.max(1,Math.round(Number($('#habitXpReward').value)||5)),frequency:freq,groupId:$('#habitGroup')?.value||null,sortOrder:h.sortOrder??state.habits.length,paused:!!h.paused,archived:false,flexPeriodStart:h.flexPeriodStart||null,reminder:{enabled:!!t?.classList.contains('on'),time:$('#habitReminderTime').value,message:($('#habitReminderMsg')?.value||state.settings.defaultReminderMessage||'Time for {habit}!').slice(0,REMINDER_MSG_LIMIT),daysBeforeDue:Number($('#habitDaysBeforeDue')?.value||1)}};
+      if(isEdit){state.habits=state.habits.map(x=>x.id===h.id?item:x)}else state.habits.push(item);
+      closeModal(); toast('Habit saved');
+      void save(false,{render:'all'});
     };
-    if(isEdit){const delBtn=$('#deleteHabitBtn'); if(delBtn) delBtn.onclick=async()=>{if(!confirm('Delete this habit? Records stay in history.'))return; state.habits=state.habits.filter(x=>x.id!==h.id); await save(false,{render:'all'}); closeModal(); toast('Habit deleted');};}
+    if(isEdit){const delBtn=$('#deleteHabitBtn'); if(delBtn) delBtn.dataset.deleteHabitId=h.id;}
   }
 
   /* ---------- REPORT ---------- */
@@ -946,7 +1005,7 @@
   }
   function renderDayJournalBox(k){const box=$('#dayJournalBox'); if(!box)return; const j=state.journals[k];
     if(j){ box.innerHTML='<div class="dj-title">Journal</div>'; box.appendChild(journalNode(k,()=>openDayDetail(k))); }
-    else { box.innerHTML=`<button class="btn-inline pink" id="addDayJournal">+ Add Journal</button>`; $('#addDayJournal').onclick=()=>{closeModal(); openJournalEditor(k);}; }
+    else { box.innerHTML=`<button class="btn-inline pink" id="addDayJournal" data-journal-date="${k}">+ Add Journal</button>`; }
   }
   function renderJournals(){const box=$('#journalHistory'); if(!box)return; const items=Object.keys(state.journals).sort((a,b)=>b.localeCompare(a)).map(k=>({date:k})); renderPreview(box,items,x=>journalNode(x.date),'Journal History');}
   function openJournalEditor(k=todayKey()){const j=state.journals[k]||{mood:'',energy:5,text:''}; openModal('Edit Journal',`<div class="form-grid journal-area"><div class="field"><label>Date</label><input type="date" id="journalDate" value="${k}"></div><div class="field"><label>Mood</label><div class="mood-row">${MOODS.map(m=>`<button class="mood ${j.mood===m?'active':''}" data-mood="${m}">${m}</button>`).join('')}</div></div><div class="field"><label>Energy Score</label><div class="energy-panel"><div class="range-value" id="modalEnergyValue">${j.energy}</div><div class="energy-scale"><input type="range" min="0" max="10" value="${j.energy}" id="modalEnergy"><div class="ticks">${Array.from({length:11},(_,i)=>`<span style="left:calc(10px + ${i}/10*(100% - 20px))">${i}</span>`).join('')}</div></div></div></div><div class="field"><label>Reflection</label><textarea id="modalJournalText">${escapeHtml(j.text||'')}</textarea></div><div class="modal-actions"><button class="btn-secondary" data-close>Cancel</button><button class="btn-primary" id="saveJournalModal">Save</button></div></div>`); $$('.mood').forEach(b=>b.onclick=()=>{$$('.mood').forEach(x=>x.classList.remove('active')); b.classList.add('active')}); $('#modalEnergy').oninput=e=>$('#modalEnergyValue').textContent=e.target.value; $('#saveJournalModal').onclick=async()=>{const nk=$('#journalDate').value||k; const wasNew=!state.journals[k]&&!state.journals[nk]; if(nk!==k) delete state.journals[k]; state.journals[nk]={mood:$('#modalBody .mood.active')?.dataset.mood||'',energy:Number($('#modalEnergy').value),text:$('#modalJournalText').value.trim(),updatedAt:new Date().toISOString()}; await save(false,{render:'none'}); if(wasNew) showXpPop('+5 EXP'); closeModal(); toast('Journal saved')};}
@@ -1285,7 +1344,7 @@
     if(tab==='credit'){
       p.innerHTML=`<div class="panel-intro"><div class="panel-intro-title">Credit rules ${infoTip('Each completion level can be used once. A 100% day also earns every lower level\'s reward.','Credit rules')}</div></div><div id="creditRulesBox"></div><button class="btn-secondary add-rule-btn" id="addCreditRule" type="button">+ Add credit rule</button>`;
       const box=$('#creditRulesBox'); box.innerHTML='';
-      (r.creditRules||[]).forEach((rule,idx)=>{const div=document.createElement('div'); div.className='rule-card'; div.innerHTML=`<div class="rule-card-head"><div class="rule-card-title">Credit rule</div><span class="gift-rule-chip">HK$${rule.amount||0}</span></div><div class="rule-grid"><div class="rule-row"><div class="field"><label>Completion</label><select data-pct>${[50,60,70,80,90,100].map(n=>`<option value="${n}">${n}%+</option>`).join('')}</select></div><div class="field"><label>Amount</label><select data-amount>${[1,2,5,10,20,30,50,100].map(n=>`<option value="${n}">HK$${n}</option>`).join('')}</select></div></div></div><div class="rule-actions"><button class="btn-text-danger" data-remove type="button">Remove</button></div>`; div.querySelector('[data-pct]').value=rule.pct||100; div.querySelector('[data-amount]').value=rule.amount||10; const persist=async()=>{const pct=Number(div.querySelector('[data-pct]').value); const dup=(r.creditRules||[]).some((x,i)=>i!==idx&&Number(x.pct)===pct); if(dup){toast('Duplicate completion %'); return;} rule.pct=pct; rule.amount=Number(div.querySelector('[data-amount]').value); await save(false,{render:'none'});}; div.querySelector('[data-pct]').onchange=persist; div.querySelector('[data-amount]').onchange=persist; div.querySelector('[data-remove]').onclick=async()=>{r.creditRules.splice(idx,1); await save(false,{render:'none'}); drawRewardPanel('credit'); toast('Credit rule removed')}; box.appendChild(div);});
+      (r.creditRules||[]).forEach((rule,idx)=>{const div=document.createElement('div'); div.className='rule-card'; div.innerHTML=`<div class="rule-card-head"><div class="rule-card-title">Credit rule</div><span class="gift-rule-chip">HK$${rule.amount||0}</span></div><div class="rule-grid"><div class="rule-row"><div class="field"><label>Completion</label><select data-pct>${[50,60,70,80,90,100].map(n=>`<option value="${n}">${n}%+</option>`).join('')}</select></div><div class="field"><label>Amount</label><select data-amount>${[1,2,5,10,20,30,50,100].map(n=>`<option value="${n}">HK$${n}</option>`).join('')}</select></div></div></div><div class="rule-actions"><button class="btn-text-danger" data-remove type="button">Remove</button></div>`; div.querySelector('[data-pct]').value=rule.pct||100; div.querySelector('[data-amount]').value=rule.amount||10; const persist=async()=>{const pct=Number(div.querySelector('[data-pct]').value); const dup=(r.creditRules||[]).some((x,i)=>i!==idx&&Number(x.pct)===pct); if(dup){toast('Duplicate completion %'); return;} rule.pct=pct; rule.amount=Number(div.querySelector('[data-amount]').value); await save(false,{render:'none'});}; div.querySelector('[data-pct]').onchange=persist; div.querySelector('[data-amount]').onchange=persist; div.querySelector('[data-remove]').dataset.ruleRemove='credit'; div.querySelector('[data-remove]').dataset.ruleIdx=String(idx); box.appendChild(div);});
     } else if(tab==='penalty'){
       p.innerHTML=`<div class="panel-intro"><div class="panel-intro-title">Penalty rules ${infoTip('Charged once each time you hit consecutive 0% days.','Penalty rules')}</div></div><div class="rule-card"><div class="rule-grid"><div class="field field-full"><label>Trigger</label><select id="penaltyZeroDays">${[1,2,3,4,5,7].map(n=>`<option value="${n}">${n} missed day${n>1?'s':''} in a row</option>`).join('')}</select></div><div class="rule-row"><div class="field"><label>Deduct credit</label><select id="penaltyCredit">${[0,2,5,10,20,30,50].map(n=>`<option value="${n}">HK$${n}</option>`).join('')}</select></div><div class="field"><label>Deduct EXP</label><select id="penaltyXp">${[0,10,20,30,50,100].map(n=>`<option value="${n}">${n} EXP</option>`).join('')}</select></div></div></div></div>`;
       $('#penaltyZeroDays').value=r.penaltyZeroDays||2; $('#penaltyCredit').value=r.penaltyCredit||5; $('#penaltyXp').value=r.penaltyXp||20;
@@ -1294,7 +1353,7 @@
     } else {
       p.innerHTML=`<div class="panel-intro"><div class="panel-intro-title">Gift rules ${infoTip('Unlock a gift for keeping a streak. Earned gifts appear on the Rewards page.','Gift rules')}</div></div><div id="giftRulesBox"></div><button class="btn-secondary add-rule-btn" id="addGiftRule" type="button">+ Add gift rule</button>`;
       const box=$('#giftRulesBox'); box.innerHTML='';
-      (r.giftRules||[]).forEach((g,idx)=>{const div=document.createElement('div'); div.className='rule-card'; div.innerHTML=`<div class="rule-card-head"><div class="rule-card-title">Gift rule</div><span class="gift-rule-chip">${g.icon||'🎁'} ${escapeHtml(g.gift||'Gift')}</span></div><div class="rule-grid"><div class="rule-row icon-name"><div class="field"><label>Icon</label><input class="rule-input-icon" data-icon value="${escapeAttr(g.icon||'🎁')}" maxlength="4" placeholder="🍽️"></div><div class="field"><label>Gift name</label><input data-gift value="${escapeAttr(g.gift||'Buffet')}" placeholder="Buffet"></div></div><div class="rule-row"><div class="field"><label>Completion</label><select data-pct>${[50,60,70,80,90,100].map(n=>`<option value="${n}">${n}%+</option>`).join('')}</select></div><div class="field"><label>Streak days</label><select data-days>${[7,14,21,30,45,60,90,120].map(n=>`<option value="${n}">${n} days</option>`).join('')}</select></div></div></div><div class="rule-actions"><button class="btn-text-danger" data-remove type="button">Remove</button></div>`; div.querySelector('[data-pct]').value=g.pct||80; div.querySelector('[data-days]').value=g.days||30; const persist=async()=>{g.icon=div.querySelector('[data-icon]').value.trim()||'🎁'; g.gift=div.querySelector('[data-gift]').value.trim()||'Gift'; g.pct=Number(div.querySelector('[data-pct]').value); g.days=Number(div.querySelector('[data-days]').value); await save(false,{render:'none'});}; div.querySelector('[data-icon]').onchange=persist; div.querySelector('[data-gift]').onchange=persist; div.querySelector('[data-pct]').onchange=persist; div.querySelector('[data-days]').onchange=persist; div.querySelector('[data-remove]').onclick=async()=>{r.giftRules.splice(idx,1); await save(false,{render:'none'}); drawRewardPanel('gift'); toast('Gift rule removed')}; box.appendChild(div);});
+      (r.giftRules||[]).forEach((g,idx)=>{const div=document.createElement('div'); div.className='rule-card'; div.innerHTML=`<div class="rule-card-head"><div class="rule-card-title">Gift rule</div><span class="gift-rule-chip">${g.icon||'🎁'} ${escapeHtml(g.gift||'Gift')}</span></div><div class="rule-grid"><div class="rule-row icon-name"><div class="field"><label>Icon</label><input class="rule-input-icon" data-icon value="${escapeAttr(g.icon||'🎁')}" maxlength="4" placeholder="🍽️"></div><div class="field"><label>Gift name</label><input data-gift value="${escapeAttr(g.gift||'Buffet')}" placeholder="Buffet"></div></div><div class="rule-row"><div class="field"><label>Completion</label><select data-pct>${[50,60,70,80,90,100].map(n=>`<option value="${n}">${n}%+</option>`).join('')}</select></div><div class="field"><label>Streak days</label><select data-days>${[7,14,21,30,45,60,90,120].map(n=>`<option value="${n}">${n} days</option>`).join('')}</select></div></div></div><div class="rule-actions"><button class="btn-text-danger" data-remove type="button">Remove</button></div>`; div.querySelector('[data-pct]').value=g.pct||80; div.querySelector('[data-days]').value=g.days||30; const persist=async()=>{g.icon=div.querySelector('[data-icon]').value.trim()||'🎁'; g.gift=div.querySelector('[data-gift]').value.trim()||'Gift'; g.pct=Number(div.querySelector('[data-pct]').value); g.days=Number(div.querySelector('[data-days]').value); await save(false,{render:'none'});}; div.querySelector('[data-icon]').onchange=persist; div.querySelector('[data-gift]').onchange=persist; div.querySelector('[data-pct]').onchange=persist; div.querySelector('[data-days]').onchange=persist; div.querySelector('[data-remove]').dataset.ruleRemove='gift'; div.querySelector('[data-remove]').dataset.ruleIdx=String(idx); box.appendChild(div);});
     }
   }
   function bindReminderSettings(){
@@ -1560,112 +1619,123 @@
     if(tabs.id==='rewardTabs'){rewardActiveTab=segBtn.dataset.tab; activate(); drawRewardPanel(rewardActiveTab); return true;}
     return false;
   }
-  function bindAppEvents(){
-    if(bindAppEvents.done) return;
-    bindAppEvents.done=true;
-    document.addEventListener('click',e=>{
-      const tipBtn=e.target.closest('.info-tip');
-      if(tipBtn){
-        e.preventDefault(); e.stopPropagation();
-        showHelpSheet(tipBtn.getAttribute('data-tip-title')||'', tipBtn.getAttribute('data-tip')||'');
-        return;
-      }
-      if(e.target.closest('#helpSheetClose')||(e.target.id==='helpSheetBackdrop'&&!e.target.closest('.help-sheet'))){closeHelpSheet(); return;}
-      if(e.target.closest('[data-close]')){closeModal(); closeHelpSheet(); return;}
-      if(e.target.closest('#modalClose')||e.target.id==='modalBackdrop'){closeModal(); return;}
-      if(e.target.closest('#savePauseBtn')){e.preventDefault(); e.stopPropagation(); void savePausePeriod(); return;}
-      const nav=e.target.closest('.nav-item[data-view]');
-      if(nav){showView(nav.dataset.view); return;}
-      if(e.target.closest('#fabAdd')){openHabitModal(); return;}
-      if(e.target.closest('#profileQuick')){showView('levelView'); return;}
-      if(e.target.closest('#topSettingsBtn')){showView('settingsView'); return;}
-      if(e.target.closest('[data-open-habit]')){openHabitModal(); return;}
-      const remSwitch=e.target.closest('#reminderSwitch');
-      if(remSwitch){e.preventDefault(); e.stopPropagation(); void toggleReminders(); return;}
-      const autoSwitch=e.target.closest('#autoBackupSwitch');
-      if(autoSwitch){
-        e.preventDefault(); e.stopPropagation();
-        if(autoSwitch.getAttribute('data-locked')==='true'){toast('Connect a backup file first'); return;}
-        void toggleAutoBackup();
-        return;
-      }
-      const segBtn=e.target.closest('.segmented button');
-      if(segBtn&&handleSegmentedClick(segBtn)) return;
-      const syncBtn=e.target.closest('[data-sync-action]');
-      if(syncBtn){e.preventDefault(); void handleSyncAction(syncBtn.dataset.syncAction); return;}
-      if(e.target.closest('#spendCreditBtn')){e.preventDefault(); void spendCreditReward(); return;}
-      if(e.target.closest('#redeemGiftBtn')){e.preventDefault(); void redeemGiftReward(); return;}
-      if(e.target.closest('#homeJournalViewAll')){openJournalListModal(); return;}
-      if(e.target.closest('#addGroupBtn')){e.preventDefault(); addGroup(); return;}
-      if(e.target.closest('#addHabitBtn')){openHabitModal(); return;}
-      if(e.target.closest('#addVacationBtn')){openAddPauseModal(); return;}
-      if(e.target.closest('#viewVacationLogBtn')){openVacationLog(); return;}
-      if(e.target.closest('#replayOnboardingBtn')){state.settings.onboardingComplete=false; onboardStep=0; renderOnboarding(); return;}
-      if(e.target.closest('#resetTodayBtn')){resetTodayRecords(); return;}
-      if(e.target.closest('#flexHabitToggle')){$('#flexHabitCard')?.classList.toggle('collapsed'); return;}
-      if(e.target.closest('#weekPrev')){weekOffset--; renderWeekStrip(); return;}
-      if(e.target.closest('#weekNext')){weekOffset++; renderWeekStrip(); return;}
-      if(e.target.closest('#weekToday')){weekOffset=0; renderWeekStrip(); return;}
-      if(e.target.closest('#trendPrev')){trendCursor.setMonth(trendCursor.getMonth()-1); drawTrend(); return;}
-      if(e.target.closest('#trendNext')){const now=hkNow(); const c=new Date(trendCursor); c.setMonth(c.getMonth()+1); if(c.getFullYear()>now.getFullYear()||(c.getFullYear()===now.getFullYear()&&c.getMonth()>now.getMonth())){toast('Already at the latest month');return;} trendCursor=c; drawTrend(); return;}
-      if(e.target.closest('#reportPrev')){reportCursor.setMonth(reportCursor.getMonth()-(reportMode==='month'?1:3)); renderCalendar(); return;}
-      if(e.target.closest('#reportNext')){reportCursor.setMonth(reportCursor.getMonth()+(reportMode==='month'?1:3)); renderCalendar(); return;}
-      if(e.target.closest('#statusToggle')){state.settings.statusRowOpen=!state.settings.statusRowOpen; localStorage.setItem(STORAGE,JSON.stringify(state)); updateStatus(); return;}
-      if(e.target.closest('#onboardNext')){if(onboardStep<ONBOARD_STEPS.length-1){onboardStep++; showOnboardStep();} else finishOnboarding(); return;}
-      if(e.target.closest('#onboardBack')){if(onboardStep>0){onboardStep--; showOnboardStep();} return;}
-      if(e.target.closest('#onboardClose')){finishOnboarding(); return;}
-      if(e.target.closest('#fileStatus')&&!fileHandle&&state.settings.fileConnected){showView('settingsView'); return;}
-      if(e.target.closest('#resetAllBtn')){
-        if($('#confirmDeleteInput')?.value!=='Confirm'){toast('Type Confirm first');return;}
-        if(!confirm('Erase all data and start fresh?'))return;
-        const keep={colorMode:state.settings.colorMode,styleTheme:state.settings.styleTheme,userName:state.settings.userName,profileIcon:state.settings.profileIcon};
-        state=freshState({onboardingComplete:true,keep}); fileHandle=null;
-        localStorage.setItem(STORAGE,JSON.stringify(state)); normalizeState(); invalidateSettings();
-        void save(true,{render:'all'}); toast('Data erased'); return;
-      }
-      const check=e.target.closest('button.check-btn[data-habit-id]:not(.done):not(:disabled)');
-      if(check){
-        e.preventDefault(); e.stopPropagation();
+  function tapAction(key,e,fn){
+    if(e){ e.preventDefault(); e.stopPropagation(); }
+    const now=Date.now();
+    if(lastTapKey===key && now-lastTapAt<350) return;
+    lastTapKey=key; lastTapAt=now;
+    fn();
+  }
+  function routeAppInteraction(e){
+    if(e.type==='pointerup' && e.pointerType==='mouse' && e.button!==0) return;
+    const tipBtn=e.target.closest('.info-tip');
+    if(tipBtn){ tapAction('tip',e,()=>showHelpSheet(tipBtn.getAttribute('data-tip-title')||'', tipBtn.getAttribute('data-tip')||'')); return; }
+    if(e.target.closest('#helpSheetClose')||(e.target.id==='helpSheetBackdrop'&&!e.target.closest('.help-sheet'))){closeHelpSheet(); return;}
+    if(e.target.closest('[data-close]')){closeModal(); closeHelpSheet(); return;}
+    if(e.target.closest('#modalClose')||e.target.id==='modalBackdrop'){closeModal(); return;}
+    if(e.target.closest('#savePauseBtn')){ tapAction('savePause',e,()=>void savePausePeriod()); return; }
+    if(e.target.closest('#saveHabitBtn')){ tapAction('saveHabit',e,()=>{ if(habitModalSave) void habitModalSave(); }); return; }
+    if(e.target.closest('#deleteHabitBtn')){ tapAction('deleteHabit',e,()=>{ const id=e.target.closest('#deleteHabitBtn')?.dataset.deleteHabitId; if(!id||!confirm('Delete this habit? Records stay in history.'))return; state.habits=state.habits.filter(x=>x.id!==id); closeModal(); toast('Habit deleted'); void save(false,{render:'all'}); }); return; }
+    if(e.target.closest('#saveGroupIcon')){ tapAction('saveGroupIcon',e,()=>{ const inp=$('#groupEmojiInput'); const emoji=inp?.value.trim()||'📋'; const gid=inp?.dataset.groupId; const g=state.groups.find(x=>x.id===gid); if(g){ g.emoji=emoji; closeModal(); toast('Group icon updated'); void save(false,{render:'habitsView'}); } }); return; }
+    if(e.target.closest('#saveJournalHome')){ tapAction('saveJournalHome',e,()=>{ const k=todayKey(); const mood=$('#homeJournalForm .mood.active')?.dataset.mood||''; const wasNew=!state.journals[k]; state.journals[k]={mood,energy:Number($('#homeEnergy').value),text:$('#homeJournalText').value.trim(),updatedAt:new Date().toISOString()}; if(wasNew) showXpPop('+5 EXP'); toast('Journal saved'); void save(false,{render:'none'}); }); return; }
+    if(e.target.closest('#saveJournalModal')){ tapAction('saveJournalModal',e,()=>{ const k=$('#journalDate')?.value||todayKey(); const wasNew=!state.journals[k]; state.journals[k]={mood:$('#modalBody .mood.active')?.dataset.mood||'',energy:Number($('#modalEnergy').value),text:$('#modalJournalText').value.trim(),updatedAt:new Date().toISOString()}; if(wasNew) showXpPop('+5 EXP'); closeModal(); toast('Journal saved'); void save(false,{render:'none'}); }); return; }
+    if(e.target.closest('#addDayJournal')){ tapAction('addDayJournal',e,()=>{ const k=e.target.closest('#addDayJournal')?.dataset.journalDate||todayKey(); closeModal(); openJournalEditor(k); }); return; }
+    const moodBtn=e.target.closest('.mood');
+    if(moodBtn){ tapAction('mood-'+moodBtn.dataset.mood,e,()=>{ moodBtn.closest('.mood-row')?.querySelectorAll('.mood').forEach(x=>x.classList.remove('active')); moodBtn.classList.add('active'); }); return; }
+    const ruleRm=e.target.closest('[data-rule-remove]');
+    if(ruleRm){ tapAction('ruleRm',e,()=>{ const idx=Number(ruleRm.dataset.ruleIdx); if(ruleRm.dataset.ruleRemove==='credit') removeCreditRule(idx); else if(ruleRm.dataset.ruleRemove==='gift') removeGiftRule(idx); }); return; }
+    const nav=e.target.closest('.nav-item[data-view]');
+    if(nav){showView(nav.dataset.view); return;}
+    if(e.target.closest('#fabAdd')){openHabitModal(); return;}
+    if(e.target.closest('#profileQuick')){showView('levelView'); return;}
+    if(e.target.closest('#topSettingsBtn')){showView('settingsView'); return;}
+    if(e.target.closest('[data-open-habit]')){openHabitModal(); return;}
+    const remSwitch=e.target.closest('#reminderSwitch');
+    if(remSwitch){ tapAction('reminder',e,()=>void toggleReminders()); return; }
+    const autoSwitch=e.target.closest('#autoBackupSwitch');
+    if(autoSwitch){ tapAction('autoBackup',e,()=>{ if(autoSwitch.getAttribute('data-locked')==='true'){toast('Connect a backup file first'); return;} void toggleAutoBackup(); }); return; }
+    const segBtn=e.target.closest('.segmented button');
+    if(segBtn&&handleSegmentedClick(segBtn)) return;
+    const syncBtn=e.target.closest('[data-sync-action]');
+    if(syncBtn){ tapAction('sync',e,()=>void handleSyncAction(syncBtn.dataset.syncAction)); return; }
+    if(e.target.closest('#spendCreditBtn')){ tapAction('spendCredit',e,()=>void spendCreditReward()); return; }
+    if(e.target.closest('#redeemGiftBtn')){ tapAction('redeemGift',e,()=>void redeemGiftReward()); return; }
+    if(e.target.closest('#homeJournalViewAll')){openJournalListModal(); return;}
+    if(e.target.closest('#addGroupBtn')){ tapAction('addGroup',e,addGroup); return; }
+    if(e.target.closest('#addHabitBtn')){openHabitModal(); return;}
+    if(e.target.closest('#addVacationBtn')){openAddPauseModal(); return;}
+    if(e.target.closest('#viewVacationLogBtn')){openVacationLog(); return;}
+    if(e.target.closest('#replayOnboardingBtn')){state.settings.onboardingComplete=false; onboardStep=0; renderOnboarding(); return;}
+    if(e.target.closest('#resetTodayBtn')){resetTodayRecords(); return;}
+    if(e.target.closest('#flexHabitToggle')){$('#flexHabitCard')?.classList.toggle('collapsed'); return;}
+    if(e.target.closest('#weekPrev')){weekOffset--; renderWeekStrip(); return;}
+    if(e.target.closest('#weekNext')){weekOffset++; renderWeekStrip(); return;}
+    if(e.target.closest('#weekToday')){weekOffset=0; renderWeekStrip(); return;}
+    if(e.target.closest('#trendPrev')){trendCursor.setMonth(trendCursor.getMonth()-1); drawTrend(); return;}
+    if(e.target.closest('#trendNext')){const now=hkNow(); const c=new Date(trendCursor); c.setMonth(c.getMonth()+1); if(c.getFullYear()>now.getFullYear()||(c.getFullYear()===now.getFullYear()&&c.getMonth()>now.getMonth())){toast('Already at the latest month');return;} trendCursor=c; drawTrend(); return;}
+    if(e.target.closest('#reportPrev')){reportCursor.setMonth(reportCursor.getMonth()-(reportMode==='month'?1:3)); renderCalendar(); return;}
+    if(e.target.closest('#reportNext')){reportCursor.setMonth(reportCursor.getMonth()+(reportMode==='month'?1:3)); renderCalendar(); return;}
+    if(e.target.closest('#statusToggle')){state.settings.statusRowOpen=!state.settings.statusRowOpen; localStorage.setItem(STORAGE,JSON.stringify(state)); updateStatus(); return;}
+    if(e.target.closest('#onboardNext')){if(onboardStep<ONBOARD_STEPS.length-1){onboardStep++; showOnboardStep();} else finishOnboarding(); return;}
+    if(e.target.closest('#onboardBack')){if(onboardStep>0){onboardStep--; showOnboardStep();} return;}
+    if(e.target.closest('#onboardClose')){finishOnboarding(); return;}
+    if(e.target.closest('#fileStatus')&&!fileHandle&&state.settings.fileConnected){showView('settingsView'); return;}
+    if(e.target.closest('#resetAllBtn')){
+      if($('#confirmDeleteInput')?.value!=='Confirm'){toast('Type Confirm first');return;}
+      if(!confirm('Erase all data and start fresh?'))return;
+      const keep={colorMode:state.settings.colorMode,styleTheme:state.settings.styleTheme,userName:state.settings.userName,profileIcon:state.settings.profileIcon};
+      state=freshState({onboardingComplete:true,keep}); fileHandle=null;
+      localStorage.setItem(STORAGE,JSON.stringify(state)); normalizeState(); invalidateSettings();
+      void save(true,{render:'all'}); toast('Data erased'); return;
+    }
+    const reset=e.target.closest('button[data-reset][data-habit-id], button.reset-habit-btn[data-habit-id]');
+    if(reset){
+      tapAction('reset-'+reset.dataset.habitId,e,()=>{
+        const wrap=reset.closest('.swipe-wrap');
+        const id=reset.dataset.habitId, date=reset.dataset.date||todayKey();
+        resetHabitForDate(id,date);
+        if(wrap?.dataset.afterKey) openDayDetail(wrap.dataset.afterKey);
+      });
+      return;
+    }
+    const check=e.target.closest('button.check-btn[data-habit-id]:not(.done):not(:disabled)');
+    if(check){
+      tapAction('check-'+check.dataset.habitId,e,()=>{
         const wrap=check.closest('.swipe-wrap');
         const id=check.dataset.habitId, date=check.dataset.date||todayKey();
         void addRecord(id,'',date).then(()=>{if(wrap?.dataset.afterKey) openDayDetail(wrap.dataset.afterKey);});
-        return;
-      }
-      const habitRow=e.target.closest('.habit-row[data-habit-tap]:not(.done)');
-      if(habitRow&&!e.target.closest('button,.swipe-actions')){
-        e.preventDefault(); e.stopPropagation();
+      });
+      return;
+    }
+    const habitRow=e.target.closest('.habit-row[data-habit-tap]:not(.done)');
+    if(habitRow&&!e.target.closest('button,.swipe-actions')){
+      tapAction('row-'+habitRow.dataset.habitTap,e,()=>{
         const wrap=habitRow.closest('.swipe-wrap');
         const id=habitRow.dataset.habitTap, date=habitRow.dataset.date||todayKey();
         void addRecord(id,'',date).then(()=>{if(wrap?.dataset.afterKey) openDayDetail(wrap.dataset.afterKey);});
-        return;
-      }
-      const reset=e.target.closest('[data-reset][data-habit-id]');
-      if(reset){
-        e.preventDefault(); e.stopPropagation();
-        const wrap=reset.closest('.swipe-wrap');
-        void resetHabitForDate(reset.dataset.habitId,reset.dataset.date||todayKey()).then(()=>{if(wrap?.dataset.afterKey) openDayDetail(wrap.dataset.afterKey);});
-        return;
-      }
-      const addCredit=e.target.closest('#addCreditRule');
-      if(addCredit){
-        ensureRewardShape(); const r=state.settings.rewards;
-        const used=new Set((r.creditRules||[]).map(x=>Number(x.pct)));
-        const pct=[50,60,70,80,90,100].find(x=>!used.has(x));
-        if(!pct){toast('All completion rules already used');return;}
-        r.creditRules.push({id:uid(),pct,amount:pct>=100?10:2});
-        void save(false,{render:'none'}); toast('Credit rule added');
-        if($('#rewardPanel')) drawRewardPanel('credit'); return;
-      }
-      const addGift=e.target.closest('#addGiftRule');
-      if(addGift){
-        ensureRewardShape(); const r=state.settings.rewards;
-        r.giftRules=r.giftRules||[];
-        r.giftRules.push({id:uid(),gift:'Buffet',icon:'🍽️',pct:80,days:30});
-        void save(false,{render:'none'}); toast('Gift rule added');
-        if($('#rewardPanel')) drawRewardPanel('gift'); return;
-      }
-      if(!e.target.closest('.swipe-wrap')) $$('.swipe-wrap.open').forEach(w=>w.classList.remove('open'));
-    },true);
+      });
+      return;
+    }
+    if(e.target.closest('#addCreditRule')){ tapAction('addCredit',e,addCreditRule); return; }
+    if(e.target.closest('#addGiftRule')){ tapAction('addGift',e,addGiftRule); return; }
+    const pauseBtn=e.target.closest('[data-pause][data-habit-id]');
+    if(pauseBtn){ tapAction('pause-'+pauseBtn.dataset.habitId,e,()=>{ const h=state.habits.find(x=>x.id===pauseBtn.dataset.habitId); if(!h)return; h.paused=!h.paused; renderHabits(); toast(h.paused?'Habit paused':'Habit resumed'); void save(false,{render:'none'}); }); return; }
+    const editBtn=e.target.closest('[data-edit][data-habit-id]');
+    if(editBtn){ tapAction('edit-'+editBtn.dataset.habitId,e,()=>{ const h=state.habits.find(x=>x.id===editBtn.dataset.habitId); if(h) openHabitModal(h); }); return; }
+    if(e.target.closest('[data-swipe-undo]')){ tapAction('swipeUndo',e,()=>{ const wrap=e.target.closest('.swipe-wrap'); const id=wrap?.querySelector('[data-habit-id]')?.dataset.habitId; const date=wrap?.querySelector('[data-habit-id]')?.dataset.date||todayKey(); if(id) void undoLastTap(id,date); wrap?.classList.remove('open'); }); return; }
+    if(e.target.closest('[data-swipe-edit]')){ tapAction('swipeEdit',e,()=>{ const wrap=e.target.closest('.swipe-wrap'); const id=wrap?.querySelector('[data-habit-id]')?.dataset.habitId; const h=state.habits.find(x=>x.id===id); wrap?.classList.remove('open'); if(h) openHabitModal(h); }); return; }
+    if(!e.target.closest('.swipe-wrap')) $$('.swipe-wrap.open').forEach(w=>w.classList.remove('open'));
+  }
+  function bindAppEvents(){
+    if(bindAppEvents.done) return;
+    bindAppEvents.done=true;
+    const onInteract=(e)=>{
+      if(e.type==='pointerup') lastTapAt=Date.now();
+      else if(e.type==='click' && Date.now()-lastTapAt<400) return;
+      routeAppInteraction(e);
+    };
+    document.addEventListener('pointerup',onInteract,true);
+    document.addEventListener('click',onInteract,true);
     document.body.addEventListener('change',e=>{
       if(e.target.id==='importInput'&&e.target.files?.[0]){importJson(e.target.files[0]); e.target.value=''; return;}
       if(e.target.id==='activeGiftSelect'){ensureRewardShape(); state.settings.rewards.activeGiftId=e.target.value; void save(false,{render:'none'}); renderGiftRedeem(); toast('Gift goal updated');}

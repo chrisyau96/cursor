@@ -205,8 +205,8 @@ h1,h2,h3,h4{margin:0}
 .check-btn.done{background:var(--green);color:#fff;box-shadow:0 10px 18px rgba(5,150,105,.22)}
 .icon-btn,.note-btn{width:34px;height:34px;border-radius:50%;display:grid;place-items:center;background:var(--soft-purple);color:var(--purple);font-weight:900;flex:0 0 auto}
 .icon-btn.red{background:#fff0f0;color:var(--red)}
-.icon-btn.muted,.habit-row .icon-btn[data-reset]{background:#e8eaef;color:#9ca3af;opacity:1}
-:root[data-theme="dark"] .icon-btn.muted,:root[data-theme="dark"] .habit-row .icon-btn[data-reset]{background:#1b2540;color:#6b7994}
+.icon-btn.muted,.habit-row .icon-btn[data-reset],.habit-row .reset-habit-btn{background:#e8eaef;color:#9ca3af;opacity:1;min-width:40px;min-height:40px;font-size:18px}
+:root[data-theme="dark"] .icon-btn.muted,:root[data-theme="dark"] .habit-row .icon-btn[data-reset],:root[data-theme="dark"] .habit-row .reset-habit-btn{background:#1b2540;color:#6b7994}
 .habit-actions{display:flex;gap:6px}
 .progress-mini{height:6px;background:#eceef6;border-radius:999px;overflow:hidden;margin-top:8px}
 .progress-mini span{display:block;height:100%;width:0;background:linear-gradient(90deg,var(--brand),var(--brand2));border-radius:inherit}
@@ -381,6 +381,9 @@ input[type=range]::-moz-range-track{height:6px;border-radius:999px;background:va
 body.help-sheet-open{overflow:hidden}
 #settingsView{padding-bottom:8px}
 .settings-version{text-align:center;font-size:11px;color:var(--muted);margin:20px 2px 16px;padding-bottom:2px}
+.rule-card.rule-flash{animation:rule-flash .9s ease}
+@keyframes rule-flash{0%,100%{box-shadow:0 0 0 0 transparent}35%{box-shadow:0 0 0 3px var(--brand-soft)}}
+button,.nav-item,.switch,.wcell,.check-btn,.icon-btn,.act-btn,.btn-primary,.btn-secondary,.info-tip{touch-action:manipulation}
 .modal-backdrop{position:fixed;inset:0;background:rgba(9,14,26,.5);backdrop-filter:blur(2px);z-index:120;display:none;align-items:flex-end;justify-content:center}
 .modal-backdrop.show{display:flex;animation:fade .2s ease}
 @keyframes fade{from{opacity:0}to{opacity:1}}
