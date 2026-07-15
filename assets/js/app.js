@@ -30,6 +30,7 @@
     {level:10,xp:14000,icon:'🏆',name:'Freedom Operator',desc:'A one-year standard of strong completion.'}
   ];
   let fileHandle=null;
+  let pauseModalDone=null;
   const FILE_HANDLE_DB='momentumFileHandles';
   const FILE_HANDLE_KEY='backup';
   let reminderTimer=null;
@@ -68,7 +69,7 @@
   const PREVIEW=3;
   const LAZY_CHUNK=10;
   const REMINDER_MSG_LIMIT=80;
-  const APP_VERSION='v36';
+  const APP_VERSION='v37';
   const iconBtn=(cls,svg,title)=>{const b=document.createElement('button'); b.className='act-btn '+cls; b.innerHTML=svg; b.title=title; b.setAttribute('aria-label',title); return b;};
 
   const USER_NAME_MAX=12;
@@ -165,9 +166,13 @@
     if(!skipSync) queueBackupSync();
   }
   function toast(msg,duration=1600){const t=$('#toast'); if(!t)return; t.textContent=msg; t.classList.add('show'); clearTimeout(toast._timer); toast._timer=setTimeout(()=>t.classList.remove('show'),duration);}
-  function showHelpSheet(text){
-    const bd=$('#helpSheetBackdrop'), body=$('#helpSheetBody');
+  function showHelpSheet(title,text){
+    const bd=$('#helpSheetBackdrop'), body=$('#helpSheetBody'), titleEl=$('#helpSheetTitle');
     if(!bd||!body||!text) return;
+    if(titleEl){
+      if(title){ titleEl.textContent=title; titleEl.hidden=false; }
+      else titleEl.hidden=true;
+    }
     body.textContent=text;
     bd.classList.add('show');
     bd.setAttribute('aria-hidden','false');
@@ -608,8 +613,9 @@
     const row=document.createElement('div'); row.className='habit-row '+(c.done?'done':'')+(h.paused?' paused-habit':'');
     row.innerHTML=`<div class="habit-icon" style="background:${h.color}22;color:${h.color}">${h.emoji}</div><div class="habit-main"><div class="habit-name"></div><div class="habit-meta"><span>${c.count}/${c.target}</span>${habitDueMarkup(h,now)}</div><div class="progress-mini"><span style="width:${c.pct}%;background:${h.color}"></span></div></div><button type="button" class="check-btn ${c.done?'done':''}" data-habit-id="${h.id}" data-date="${k}" ${c.done?'disabled':''} aria-label="Record ${escapeAttr(h.name)}">${c.done?'✓':'+1'}</button>${c.count?'<button type="button" class="icon-btn muted" data-reset data-habit-id="'+h.id+'" data-date="'+k+'" title="Reset" aria-label="Reset habit">↺</button>':''}`;
     row.querySelector('.habit-name').textContent=h.name;
+    row.dataset.habitTap=h.id;
+    row.dataset.date=k;
     wrap.appendChild(actions); wrap.appendChild(row);
-    if(!c.done) row.onclick=async(e)=>{if(e.target.closest('button'))return; await addRecord(h.id,'',k); after&&after();};
     if(after) wrap.dataset.afterKey=k;
     attachSwipeRow(wrap,h,k,after);
     return wrap;
@@ -650,10 +656,10 @@
     state.records.push({id:uid(),habitId,date,at:new Date().toISOString(),note});
     const gained=habitPeriodXp(habit,dt)-before;
     haptic();
-    if(gained>0) showXpPop('+'+fmtXp(gained)+' EXP');
-    await save(false,{render:'none'});
     refreshHomeAfterRecord(habitId, date);
+    if(gained>0) showXpPop('+'+fmtXp(gained)+' EXP');
     const pct=dayPct(dt);
+    void save(false,{render:'none'});
     if(pct===100) celebrate('Perfect day! 🎉');
     toast('Recorded');
   }
@@ -1203,17 +1209,30 @@
     else if(onPause){const v=list.find(x=>t>=x.from&&t<=x.to); box.innerHTML=`<strong>Currently paused</strong><div class="small-note" style="margin-top:4px">${escapeHtml(v?.label||'Pause')} · ${v?.from} → ${v?.to}</div>`;}
     else box.innerHTML=`<strong>${list.length} pause period${list.length===1?'':'s'}</strong><div class="small-note" style="margin-top:4px">${active.length} upcoming · view log for full history</div>`;
   }
+  function addGroup(){
+    state.groups.push({id:uid(),name:'New Group',emoji:'📋',color:COLOURS[state.groups.length%COLOURS.length],sortOrder:state.groups.length});
+    renderGroupManager();
+    toast('Group added');
+    void save(false,{render:'none'});
+  }
+  async function savePausePeriod(){
+    const from=$('#pauseFrom')?.value, to=$('#pauseTo')?.value;
+    if(!from||!to){toast('Select dates');return;}
+    if(to<from){toast('End date must be on or after start');return;}
+    if(!Array.isArray(state.settings.vacations)) state.settings.vacations=[];
+    state.settings.vacations.push({id:uid(),from,to,label:($('#pauseLabel')?.value||'Pause').trim()});
+    const done=pauseModalDone;
+    pauseModalDone=null;
+    closeModal();
+    renderVacationSettings();
+    toast('Pause period added');
+    void save(false,{render:'none'});
+    if(done) done();
+  }
   function openAddPauseModal(onDone){
     const t=todayKey(); const e=new Date(hkNow()); e.setDate(e.getDate()+6);
+    pauseModalDone=onDone||null;
     openModal('Add Pause Period',`<div class="form-grid"><div class="schedule-grid"><div class="field"><label>From</label><input type="date" id="pauseFrom" value="${t}"></div><div class="field"><label>To</label><input type="date" id="pauseTo" value="${dateKey(e)}"></div></div><div class="field"><label>Label</label><input id="pauseLabel" value="Pause" placeholder="Pause"></div><button class="btn-primary" id="savePauseBtn" type="button">Add pause period</button></div>`);
-    $('#savePauseBtn').onclick=async()=>{
-      const from=$('#pauseFrom').value, to=$('#pauseTo').value;
-      if(!from||!to){toast('Select dates');return;}
-      if(to<from){toast('End date must be on or after start');return;}
-      if(!Array.isArray(state.settings.vacations)) state.settings.vacations=[];
-      state.settings.vacations.push({id:uid(),from,to,label:($('#pauseLabel').value||'Pause').trim()});
-      await save(false,{render:'none'}); closeModal(); toast('Pause period added'); renderVacationSettings(); if(onDone) onDone();
-    };
   }
   function openVacationLog(){
     const list=[...(state.settings.vacations||[])].sort((a,b)=>b.from.localeCompare(a.from));
@@ -1253,8 +1272,9 @@
     if(autoSw){
       autoSw.classList.toggle('on',!!state.settings.autoBackup);
       const autoLocked=!fileHandle && !state.settings.fileConnected;
-      autoSw.classList.toggle('disabled',autoLocked);
-      autoSw.setAttribute('aria-disabled',autoLocked?'true':'false');
+      autoSw.classList.toggle('locked',autoLocked);
+      if(autoLocked) autoSw.setAttribute('data-locked','true');
+      else autoSw.removeAttribute('data-locked');
     }
     $('#reminderSwitch')?.classList.toggle('on',state.settings.reminders);
   }
@@ -1263,16 +1283,16 @@
     ensureRewardShape(); const r=state.settings.rewards;
     rewardActiveTab=tab; const p=$('#rewardPanel'); if(!p)return;
     if(tab==='credit'){
-      p.innerHTML=`<div class="panel-intro"><div class="panel-intro-title">Credit rules ${infoTip('Each completion level can be used once. A 100% day also earns every lower level\'s reward.')}</div></div><div id="creditRulesBox"></div><button class="btn-secondary add-rule-btn" id="addCreditRule" type="button">+ Add credit rule</button>`;
+      p.innerHTML=`<div class="panel-intro"><div class="panel-intro-title">Credit rules ${infoTip('Each completion level can be used once. A 100% day also earns every lower level\'s reward.','Credit rules')}</div></div><div id="creditRulesBox"></div><button class="btn-secondary add-rule-btn" id="addCreditRule" type="button">+ Add credit rule</button>`;
       const box=$('#creditRulesBox'); box.innerHTML='';
       (r.creditRules||[]).forEach((rule,idx)=>{const div=document.createElement('div'); div.className='rule-card'; div.innerHTML=`<div class="rule-card-head"><div class="rule-card-title">Credit rule</div><span class="gift-rule-chip">HK$${rule.amount||0}</span></div><div class="rule-grid"><div class="rule-row"><div class="field"><label>Completion</label><select data-pct>${[50,60,70,80,90,100].map(n=>`<option value="${n}">${n}%+</option>`).join('')}</select></div><div class="field"><label>Amount</label><select data-amount>${[1,2,5,10,20,30,50,100].map(n=>`<option value="${n}">HK$${n}</option>`).join('')}</select></div></div></div><div class="rule-actions"><button class="btn-text-danger" data-remove type="button">Remove</button></div>`; div.querySelector('[data-pct]').value=rule.pct||100; div.querySelector('[data-amount]').value=rule.amount||10; const persist=async()=>{const pct=Number(div.querySelector('[data-pct]').value); const dup=(r.creditRules||[]).some((x,i)=>i!==idx&&Number(x.pct)===pct); if(dup){toast('Duplicate completion %'); return;} rule.pct=pct; rule.amount=Number(div.querySelector('[data-amount]').value); await save(false,{render:'none'});}; div.querySelector('[data-pct]').onchange=persist; div.querySelector('[data-amount]').onchange=persist; div.querySelector('[data-remove]').onclick=async()=>{r.creditRules.splice(idx,1); await save(false,{render:'none'}); drawRewardPanel('credit'); toast('Credit rule removed')}; box.appendChild(div);});
     } else if(tab==='penalty'){
-      p.innerHTML=`<div class="panel-intro"><div class="panel-intro-title">Penalty rules ${infoTip('Charged once each time you hit consecutive 0% days.')}</div></div><div class="rule-card"><div class="rule-grid"><div class="field field-full"><label>Trigger</label><select id="penaltyZeroDays">${[1,2,3,4,5,7].map(n=>`<option value="${n}">${n} missed day${n>1?'s':''} in a row</option>`).join('')}</select></div><div class="rule-row"><div class="field"><label>Deduct credit</label><select id="penaltyCredit">${[0,2,5,10,20,30,50].map(n=>`<option value="${n}">HK$${n}</option>`).join('')}</select></div><div class="field"><label>Deduct EXP</label><select id="penaltyXp">${[0,10,20,30,50,100].map(n=>`<option value="${n}">${n} EXP</option>`).join('')}</select></div></div></div></div>`;
+      p.innerHTML=`<div class="panel-intro"><div class="panel-intro-title">Penalty rules ${infoTip('Charged once each time you hit consecutive 0% days.','Penalty rules')}</div></div><div class="rule-card"><div class="rule-grid"><div class="field field-full"><label>Trigger</label><select id="penaltyZeroDays">${[1,2,3,4,5,7].map(n=>`<option value="${n}">${n} missed day${n>1?'s':''} in a row</option>`).join('')}</select></div><div class="rule-row"><div class="field"><label>Deduct credit</label><select id="penaltyCredit">${[0,2,5,10,20,30,50].map(n=>`<option value="${n}">HK$${n}</option>`).join('')}</select></div><div class="field"><label>Deduct EXP</label><select id="penaltyXp">${[0,10,20,30,50,100].map(n=>`<option value="${n}">${n} EXP</option>`).join('')}</select></div></div></div></div>`;
       $('#penaltyZeroDays').value=r.penaltyZeroDays||2; $('#penaltyCredit').value=r.penaltyCredit||5; $('#penaltyXp').value=r.penaltyXp||20;
       const persist=async()=>{r.penaltyZeroDays=Number($('#penaltyZeroDays').value); r.penaltyCredit=Number($('#penaltyCredit').value); r.penaltyXp=Number($('#penaltyXp').value); await save(false,{render:'none'});};
       $('#penaltyZeroDays').onchange=persist; $('#penaltyCredit').onchange=persist; $('#penaltyXp').onchange=persist;
     } else {
-      p.innerHTML=`<div class="panel-intro"><div class="panel-intro-title">Gift rules ${infoTip('Unlock a gift for keeping a streak. Earned gifts appear on the Rewards page.')}</div></div><div id="giftRulesBox"></div><button class="btn-secondary add-rule-btn" id="addGiftRule" type="button">+ Add gift rule</button>`;
+      p.innerHTML=`<div class="panel-intro"><div class="panel-intro-title">Gift rules ${infoTip('Unlock a gift for keeping a streak. Earned gifts appear on the Rewards page.','Gift rules')}</div></div><div id="giftRulesBox"></div><button class="btn-secondary add-rule-btn" id="addGiftRule" type="button">+ Add gift rule</button>`;
       const box=$('#giftRulesBox'); box.innerHTML='';
       (r.giftRules||[]).forEach((g,idx)=>{const div=document.createElement('div'); div.className='rule-card'; div.innerHTML=`<div class="rule-card-head"><div class="rule-card-title">Gift rule</div><span class="gift-rule-chip">${g.icon||'🎁'} ${escapeHtml(g.gift||'Gift')}</span></div><div class="rule-grid"><div class="rule-row icon-name"><div class="field"><label>Icon</label><input class="rule-input-icon" data-icon value="${escapeAttr(g.icon||'🎁')}" maxlength="4" placeholder="🍽️"></div><div class="field"><label>Gift name</label><input data-gift value="${escapeAttr(g.gift||'Buffet')}" placeholder="Buffet"></div></div><div class="rule-row"><div class="field"><label>Completion</label><select data-pct>${[50,60,70,80,90,100].map(n=>`<option value="${n}">${n}%+</option>`).join('')}</select></div><div class="field"><label>Streak days</label><select data-days>${[7,14,21,30,45,60,90,120].map(n=>`<option value="${n}">${n} days</option>`).join('')}</select></div></div></div><div class="rule-actions"><button class="btn-text-danger" data-remove type="button">Remove</button></div>`; div.querySelector('[data-pct]').value=g.pct||80; div.querySelector('[data-days]').value=g.days||30; const persist=async()=>{g.icon=div.querySelector('[data-icon]').value.trim()||'🎁'; g.gift=div.querySelector('[data-gift]').value.trim()||'Gift'; g.pct=Number(div.querySelector('[data-pct]').value); g.days=Number(div.querySelector('[data-days]').value); await save(false,{render:'none'});}; div.querySelector('[data-icon]').onchange=persist; div.querySelector('[data-gift]').onchange=persist; div.querySelector('[data-pct]').onchange=persist; div.querySelector('[data-days]').onchange=persist; div.querySelector('[data-remove]').onclick=async()=>{r.giftRules.splice(idx,1); await save(false,{render:'none'}); drawRewardPanel('gift'); toast('Gift rule removed')}; box.appendChild(div);});
     }
@@ -1320,8 +1340,9 @@
     const autoSw=$('#autoBackupSwitch');
     if(autoSw){
       const autoLocked=!fileHandle && !state.settings.fileConnected;
-      autoSw.classList.toggle('disabled',autoLocked);
-      autoSw.setAttribute('aria-disabled',autoLocked?'true':'false');
+      autoSw.classList.toggle('locked',autoLocked);
+      if(autoLocked) autoSw.setAttribute('data-locked','true');
+      else autoSw.removeAttribute('data-locked');
     }
   }
   function renderSettingsVersion(){
@@ -1449,11 +1470,12 @@
     }
     state.settings.autoBackup=!state.settings.autoBackup;
     state.settings.dailyBackup=!!state.settings.autoBackup;
-    $('#autoBackupSwitch')?.classList.toggle('on',state.settings.autoBackup);
-    await save(false,{render:'none'});
-    if(!state.settings.autoBackup) clearTimeout(backupDebounceTimer);
+    const on=state.settings.autoBackup;
+    $('#autoBackupSwitch')?.classList.toggle('on',on);
+    if(!on) clearTimeout(backupDebounceTimer);
     refreshBackupChrome();
-    toast(state.settings.autoBackup?'Auto backup on':'Auto backup off');
+    toast(on?'Auto backup on':'Auto backup off');
+    void save(false,{render:'none'});
   }
   function shouldRemindHabit(h,now){
     if(!h.reminder?.enabled||h.paused||h.archived) return false;
@@ -1502,7 +1524,7 @@
   function closeModal(){$('#modalBackdrop').classList.remove('show')}
   function escapeHtml(s=''){return String(s).replace(/[&<>"]/g,m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[m]))}
   function escapeAttr(s=''){return escapeHtml(s).replace(/'/g,'&#39;')}
-  function infoTip(text){return `<button type="button" class="info-tip" aria-label="Help" data-tip="${escapeAttr(text)}">ⓘ</button>`;}
+  function infoTip(text,title=''){const t=title?` data-tip-title="${escapeAttr(title)}"`:''; return `<button type="button" class="info-tip" aria-label="Help"${t} data-tip="${escapeAttr(text)}">ⓘ</button>`;}
   function labelWithTip(label,text){return `${label}${infoTip(text)}`;}
 
   function showView(view){
@@ -1525,10 +1547,7 @@
     if(view==='reportView')renderReport();
     if(view==='rewardsView')renderRewards();
     if(view==='levelView')renderLevel();
-    if(view==='settingsView'){
-      renderSettings();
-      requestAnimationFrame(()=>$('#settingsVersion')?.scrollIntoView({block:'end',behavior:'smooth'}));
-    }
+    if(view==='settingsView') renderSettings();
   }
   function handleSegmentedClick(segBtn){
     const tabs=segBtn.closest('.segmented');
@@ -1546,16 +1565,15 @@
     bindAppEvents.done=true;
     document.addEventListener('click',e=>{
       const tipBtn=e.target.closest('.info-tip');
-      if(!tipBtn) return;
-      e.preventDefault();
-      e.stopPropagation();
-      showHelpSheet(tipBtn.getAttribute('data-tip')||'');
-    },true);
-    document.body.addEventListener('click',async e=>{
-      if(e.target.closest('.info-tip')) return;
+      if(tipBtn){
+        e.preventDefault(); e.stopPropagation();
+        showHelpSheet(tipBtn.getAttribute('data-tip-title')||'', tipBtn.getAttribute('data-tip')||'');
+        return;
+      }
       if(e.target.closest('#helpSheetClose')||(e.target.id==='helpSheetBackdrop'&&!e.target.closest('.help-sheet'))){closeHelpSheet(); return;}
       if(e.target.closest('[data-close]')){closeModal(); closeHelpSheet(); return;}
       if(e.target.closest('#modalClose')||e.target.id==='modalBackdrop'){closeModal(); return;}
+      if(e.target.closest('#savePauseBtn')){e.preventDefault(); e.stopPropagation(); void savePausePeriod(); return;}
       const nav=e.target.closest('.nav-item[data-view]');
       if(nav){showView(nav.dataset.view); return;}
       if(e.target.closest('#fabAdd')){openHabitModal(); return;}
@@ -1563,22 +1581,22 @@
       if(e.target.closest('#topSettingsBtn')){showView('settingsView'); return;}
       if(e.target.closest('[data-open-habit]')){openHabitModal(); return;}
       const remSwitch=e.target.closest('#reminderSwitch');
-      if(remSwitch){e.preventDefault(); e.stopPropagation(); await toggleReminders(); return;}
+      if(remSwitch){e.preventDefault(); e.stopPropagation(); void toggleReminders(); return;}
       const autoSwitch=e.target.closest('#autoBackupSwitch');
       if(autoSwitch){
         e.preventDefault(); e.stopPropagation();
-        if(autoSwitch.getAttribute('aria-disabled')==='true'){toast('Connect a backup file first'); return;}
-        await toggleAutoBackup();
+        if(autoSwitch.getAttribute('data-locked')==='true'){toast('Connect a backup file first'); return;}
+        void toggleAutoBackup();
         return;
       }
       const segBtn=e.target.closest('.segmented button');
       if(segBtn&&handleSegmentedClick(segBtn)) return;
       const syncBtn=e.target.closest('[data-sync-action]');
-      if(syncBtn){e.preventDefault(); await handleSyncAction(syncBtn.dataset.syncAction); return;}
-      if(e.target.closest('#spendCreditBtn')){e.preventDefault(); await spendCreditReward(); return;}
-      if(e.target.closest('#redeemGiftBtn')){e.preventDefault(); await redeemGiftReward(); return;}
+      if(syncBtn){e.preventDefault(); void handleSyncAction(syncBtn.dataset.syncAction); return;}
+      if(e.target.closest('#spendCreditBtn')){e.preventDefault(); void spendCreditReward(); return;}
+      if(e.target.closest('#redeemGiftBtn')){e.preventDefault(); void redeemGiftReward(); return;}
       if(e.target.closest('#homeJournalViewAll')){openJournalListModal(); return;}
-      if(e.target.closest('#addGroupBtn')){state.groups.push({id:uid(),name:'New Group',emoji:'📋',color:COLOURS[state.groups.length%COLOURS.length],sortOrder:state.groups.length}); await save(false,{render:'habitsView'}); toast('Group added'); return;}
+      if(e.target.closest('#addGroupBtn')){e.preventDefault(); addGroup(); return;}
       if(e.target.closest('#addHabitBtn')){openHabitModal(); return;}
       if(e.target.closest('#addVacationBtn')){openAddPauseModal(); return;}
       if(e.target.closest('#viewVacationLogBtn')){openVacationLog(); return;}
@@ -1597,20 +1615,60 @@
       if(e.target.closest('#onboardBack')){if(onboardStep>0){onboardStep--; showOnboardStep();} return;}
       if(e.target.closest('#onboardClose')){finishOnboarding(); return;}
       if(e.target.closest('#fileStatus')&&!fileHandle&&state.settings.fileConnected){showView('settingsView'); return;}
-      if(e.target.closest('#resetAllBtn')){if($('#confirmDeleteInput')?.value!=='Confirm'){toast('Type Confirm first');return;} if(!confirm('Erase all data and start fresh?'))return; const keep={colorMode:state.settings.colorMode,styleTheme:state.settings.styleTheme,userName:state.settings.userName,profileIcon:state.settings.profileIcon}; state=freshState({onboardingComplete:true,keep}); fileHandle=null; localStorage.setItem(STORAGE,JSON.stringify(state)); normalizeState(); invalidateSettings(); await save(true,{render:'all'}); toast('Data erased'); return;}
+      if(e.target.closest('#resetAllBtn')){
+        if($('#confirmDeleteInput')?.value!=='Confirm'){toast('Type Confirm first');return;}
+        if(!confirm('Erase all data and start fresh?'))return;
+        const keep={colorMode:state.settings.colorMode,styleTheme:state.settings.styleTheme,userName:state.settings.userName,profileIcon:state.settings.profileIcon};
+        state=freshState({onboardingComplete:true,keep}); fileHandle=null;
+        localStorage.setItem(STORAGE,JSON.stringify(state)); normalizeState(); invalidateSettings();
+        void save(true,{render:'all'}); toast('Data erased'); return;
+      }
       const check=e.target.closest('button.check-btn[data-habit-id]:not(.done):not(:disabled)');
-      if(check){e.preventDefault(); e.stopPropagation(); const wrap=check.closest('.swipe-wrap'); await addRecord(check.dataset.habitId,'',check.dataset.date||todayKey()); if(wrap?.dataset.afterKey) openDayDetail(wrap.dataset.afterKey); return;}
+      if(check){
+        e.preventDefault(); e.stopPropagation();
+        const wrap=check.closest('.swipe-wrap');
+        const id=check.dataset.habitId, date=check.dataset.date||todayKey();
+        void addRecord(id,'',date).then(()=>{if(wrap?.dataset.afterKey) openDayDetail(wrap.dataset.afterKey);});
+        return;
+      }
+      const habitRow=e.target.closest('.habit-row[data-habit-tap]:not(.done)');
+      if(habitRow&&!e.target.closest('button,.swipe-actions')){
+        e.preventDefault(); e.stopPropagation();
+        const wrap=habitRow.closest('.swipe-wrap');
+        const id=habitRow.dataset.habitTap, date=habitRow.dataset.date||todayKey();
+        void addRecord(id,'',date).then(()=>{if(wrap?.dataset.afterKey) openDayDetail(wrap.dataset.afterKey);});
+        return;
+      }
       const reset=e.target.closest('[data-reset][data-habit-id]');
-      if(reset){e.preventDefault(); e.stopPropagation(); const wrap=reset.closest('.swipe-wrap'); await resetHabitForDate(reset.dataset.habitId,reset.dataset.date||todayKey()); if(wrap?.dataset.afterKey) openDayDetail(wrap.dataset.afterKey); return;}
+      if(reset){
+        e.preventDefault(); e.stopPropagation();
+        const wrap=reset.closest('.swipe-wrap');
+        void resetHabitForDate(reset.dataset.habitId,reset.dataset.date||todayKey()).then(()=>{if(wrap?.dataset.afterKey) openDayDetail(wrap.dataset.afterKey);});
+        return;
+      }
       const addCredit=e.target.closest('#addCreditRule');
-      if(addCredit){ensureRewardShape(); const r=state.settings.rewards; const used=new Set((r.creditRules||[]).map(x=>Number(x.pct))); const pct=[50,60,70,80,90,100].find(x=>!used.has(x)); if(!pct){toast('All completion rules already used');return;} r.creditRules.push({id:uid(),pct,amount:pct>=100?10:2}); await save(false,{render:'none'}); toast('Credit rule added'); if($('#rewardPanel')) drawRewardPanel('credit'); return;}
+      if(addCredit){
+        ensureRewardShape(); const r=state.settings.rewards;
+        const used=new Set((r.creditRules||[]).map(x=>Number(x.pct)));
+        const pct=[50,60,70,80,90,100].find(x=>!used.has(x));
+        if(!pct){toast('All completion rules already used');return;}
+        r.creditRules.push({id:uid(),pct,amount:pct>=100?10:2});
+        void save(false,{render:'none'}); toast('Credit rule added');
+        if($('#rewardPanel')) drawRewardPanel('credit'); return;
+      }
       const addGift=e.target.closest('#addGiftRule');
-      if(addGift){ensureRewardShape(); const r=state.settings.rewards; r.giftRules=r.giftRules||[]; r.giftRules.push({id:uid(),gift:'Buffet',icon:'🍽️',pct:80,days:30}); await save(false,{render:'none'}); toast('Gift rule added'); if($('#rewardPanel')) drawRewardPanel('gift'); return;}
+      if(addGift){
+        ensureRewardShape(); const r=state.settings.rewards;
+        r.giftRules=r.giftRules||[];
+        r.giftRules.push({id:uid(),gift:'Buffet',icon:'🍽️',pct:80,days:30});
+        void save(false,{render:'none'}); toast('Gift rule added');
+        if($('#rewardPanel')) drawRewardPanel('gift'); return;
+      }
       if(!e.target.closest('.swipe-wrap')) $$('.swipe-wrap.open').forEach(w=>w.classList.remove('open'));
-    });
-    document.body.addEventListener('change',async e=>{
+    },true);
+    document.body.addEventListener('change',e=>{
       if(e.target.id==='importInput'&&e.target.files?.[0]){importJson(e.target.files[0]); e.target.value=''; return;}
-      if(e.target.id==='activeGiftSelect'){ensureRewardShape(); state.settings.rewards.activeGiftId=e.target.value; await save(false,{render:'none'}); renderGiftRedeem(); toast('Gift goal updated');}
+      if(e.target.id==='activeGiftSelect'){ensureRewardShape(); state.settings.rewards.activeGiftId=e.target.value; void save(false,{render:'none'}); renderGiftRedeem(); toast('Gift goal updated');}
     });
   }
   window.addEventListener('resize',()=>{if($('#onboardBackdrop')?.classList.contains('show')) positionOnboardCallout(ONBOARD_STEPS[onboardStep]);});
