@@ -73,7 +73,7 @@
   const PREVIEW=3;
   const LAZY_CHUNK=10;
   const REMINDER_MSG_LIMIT=80;
-  const APP_VERSION='v39';
+  const APP_VERSION='v40';
   const iconBtn=(cls,svg,title)=>{const b=document.createElement('button'); b.className='act-btn '+cls; b.innerHTML=svg; b.title=title; b.setAttribute('aria-label',title); return b;};
 
   const USER_NAME_MAX=12;
@@ -630,6 +630,14 @@
     row.dataset.habitTap=h.id;
     row.dataset.date=k;
     wrap.appendChild(actions); wrap.appendChild(row);
+    const resetBtn=row.querySelector('.reset-habit-btn');
+    if(resetBtn){
+      resetBtn.addEventListener('click',e=>{
+        e.preventDefault(); e.stopPropagation();
+        resetHabitForDate(h.id,k);
+        if(wrap.dataset.afterKey) openDayDetail(wrap.dataset.afterKey);
+      });
+    }
     if(after) wrap.dataset.afterKey=k;
     attachSwipeRow(wrap,h,k,after);
     return wrap;
@@ -887,12 +895,15 @@
           const setup=$('#weeklySetupType')?.value||'days';
           const inner=$('#weeklyFieldsInner'); if(!inner)return;
           if(setup==='any'){
-            inner.innerHTML=`<div class="field"><label>Due weekday ${infoTip('Shown on the home card. A new period starts after the due date if missed.')}</label><select id="dueWeekday">${weekdayOptions(f.schedule?.dueWeekday??6)}</select></div>`;
+            inner.innerHTML='<div class="small-note">Flexible weekly habit — complete anytime this week. No fixed due day.</div>';
           } else {
             inner.innerHTML=`<div class="sub-field field"><label>Active days ${infoTip('Tap the days when this habit should appear on the Home page.')}</label><div class="day-row">${DOW.map((d,i)=>`<button type="button" class="day-pill ${(f.days||[]).includes(i)?'active':''}" data-day="${i}">${d[0]}</button>`).join('')}</div></div>`;
             $$('.day-pill').forEach(b=>b.onclick=()=>b.classList.toggle('active'));
           }
-          const daysBefore=$('#daysBeforeDueField'); if(daysBefore) daysBefore.style.display=setup==='any'?'block':'none';
+          const daysBefore=$('#daysBeforeDueField');
+          const weeklyAny=setup==='any';
+          if(daysBefore) daysBefore.style.display=weeklyAny?'none':(isNotSpecific(h)?'block':'none');
+          syncReminderUi();
         }
         $('#weeklySetupType').onchange=drawWeeklyInner; drawWeeklyInner();
       }else if(mode==='monthly'){
@@ -918,7 +929,8 @@
       if(daysBefore) daysBefore.disabled=!on;
       const daysBeforeField=$('#daysBeforeDueField');
       const setup=$('#weeklySetupType')?.value;
-      if(daysBeforeField) daysBeforeField.style.display=(setup==='any'||isNotSpecific(h))?'block':'none';
+      const weeklyAny=setup==='any';
+      if(daysBeforeField) daysBeforeField.style.display=weeklyAny?'none':(setup==='days'&&isNotSpecific(h)?'block':'none');
     }
     syncReminderUi();
     if(t) t.onclick=async(e)=>{
@@ -948,7 +960,7 @@
       if(mode==='daily'){
         const setup=$('#weeklySetupType')?.value||'days';
         if(setup==='any'){
-          freq.schedule={type:'any',dueWeekday:Number($('#dueWeekday')?.value??6)};
+          freq.schedule={type:'any'};
           freq.days=[];
         } else {
           freq.days=$$('.day-pill.active').map(x=>Number(x.dataset.day));
@@ -978,6 +990,7 @@
       void save(false,{render:'none'});
     };
     if(isEdit){const delBtn=$('#deleteHabitBtn'); if(delBtn) delBtn.dataset.deleteHabitId=h.id;}
+    $('#saveHabitBtn')?.addEventListener('click',e=>{e.preventDefault(); e.stopPropagation(); if(habitModalSave) void habitModalSave();});
   }
 
   /* ---------- REPORT ---------- */
@@ -1205,6 +1218,8 @@
     $('#redeemGrid').innerHTML=`<div class="gift-card credit-spend" style="grid-column:1/-1"><div class="card-head"><h3>Credit Rewards</h3><span class="chip orange">HK$${bal} available</span></div><div class="redeem-form"><div class="field"><label>Redeemed For</label><input id="creditSpendText" placeholder="e.g. headphone, game, coffee"></div><div class="field"><label>Credit Amount</label><input id="creditSpendAmount" type="number" min="0" max="${bal}" step="1" value="${Math.min(10,bal)}"><input id="creditSpendSlider" type="range" min="0" max="${bal}" step="1" value="${Math.min(10,bal)}"><div class="inline-hint">Use the number box or slider, up to your balance.</div></div><button class="btn-primary ${canRedeemCredit?'':'btn-dim'}" id="spendCreditBtn" ${canRedeemCredit?'':'disabled'}>Redeem Credit</button></div></div>` + giftCardHtml;
 
     const slider=$('#creditSpendSlider'), amount=$('#creditSpendAmount'); if(slider&&amount){slider.oninput=()=>amount.value=slider.value; amount.oninput=()=>{let v=Math.max(0,Math.min(bal,Number(amount.value||0))); amount.value=v; slider.value=v;};}
+    $('#spendCreditBtn')?.addEventListener('click',e=>{e.preventDefault(); e.stopPropagation(); void spendCreditReward();});
+    $('#redeemGiftBtn')?.addEventListener('click',e=>{e.preventDefault(); e.stopPropagation(); void redeemGiftReward();});
     renderPreview($('#ledgerList'),ledger(),ledgerNode,'Reward Ledger');
   }
   async function spendCreditReward(){
@@ -1221,7 +1236,9 @@
     const g=activeGiftRule(); if(!g) return;
     if(giftCount(g)<=0){toast('Gift not unlocked yet');return;}
     state.redemptions.push({id:uid(),date:todayKey(),type:'redeemGift',desc:'Redeemed '+(g.gift||'Gift'),gift:g.gift||'Gift',giftIcon:g.icon||'🎁',giftRuleId:g.id,credit:0,xp:0});
-    await save(false,{render:'rewardsView'}); toast('Gift redeemed');
+    celebrate('Gift redeemed! '+(g.icon||'🎁')+' '+(g.gift||'Gift'));
+    await save(false,{render:'rewardsView'});
+    toast('Gift redeemed');
   }
 
   /* ---------- SETTINGS ---------- */
@@ -1234,6 +1251,12 @@
     }else{
       grid.innerHTML='<button type="button" class="btn-primary" data-sync-action="create">Create backup file</button><button type="button" class="btn-secondary" data-sync-action="connect">Connect existing file</button><label class="btn-secondary sync-import-label">Import JSON<input type="file" id="importInput" accept="application/json" hidden></label>';
     }
+    grid.querySelectorAll('[data-sync-action]').forEach(btn=>{
+      btn.addEventListener('click',e=>{
+        e.preventDefault(); e.stopPropagation();
+        void handleSyncAction(btn.dataset.syncAction);
+      });
+    });
   }
   async function handleSyncAction(action){
     if(action==='export') return exportJson();
@@ -1296,6 +1319,7 @@
     const t=todayKey(); const e=new Date(hkNow()); e.setDate(e.getDate()+6);
     pauseModalDone=onDone||null;
     openModal('Add Pause Period',`<div class="form-grid"><div class="schedule-grid"><div class="field"><label>From</label><input type="date" id="pauseFrom" value="${t}"></div><div class="field"><label>To</label><input type="date" id="pauseTo" value="${dateKey(e)}"></div></div><div class="field"><label>Label</label><input id="pauseLabel" value="Pause" placeholder="Pause"></div><button class="btn-primary" id="savePauseBtn" type="button">Add pause period</button></div>`);
+    $('#savePauseBtn')?.addEventListener('click',e=>{e.preventDefault(); e.stopPropagation(); void savePausePeriod();});
   }
   function openVacationLog(){
     const list=[...(state.settings.vacations||[])].sort((a,b)=>b.from.localeCompare(a.from));
@@ -1363,7 +1387,7 @@
     if(tab==='credit'){
       p.innerHTML=`<div class="panel-intro"><div class="panel-intro-title">Credit rules ${infoTip('Each completion level can be used once. A 100% day also earns every lower level\'s reward.','Credit rules')}</div></div><div id="creditRulesBox"></div><button class="btn-secondary add-rule-btn" id="addCreditRule" type="button">+ Add credit rule</button>`;
       const box=$('#creditRulesBox'); box.innerHTML='';
-      (r.creditRules||[]).forEach((rule,idx)=>{const div=document.createElement('div'); div.className='rule-card'; div.innerHTML=`<div class="rule-card-head"><div class="rule-card-title">Credit rule</div><span class="gift-rule-chip">HK$${rule.amount||0}</span></div><div class="rule-grid"><div class="rule-row"><div class="field"><label>Completion</label><select data-pct>${[50,60,70,80,90,100].map(n=>`<option value="${n}">${n}%+</option>`).join('')}</select></div><div class="field"><label>Amount</label><select data-amount>${[1,2,5,10,20,30,50,100].map(n=>`<option value="${n}">HK$${n}</option>`).join('')}</select></div></div></div><div class="rule-actions"><button class="btn-text-danger" data-remove type="button">Remove</button></div>`; div.querySelector('[data-pct]').value=rule.pct||100; div.querySelector('[data-amount]').value=rule.amount||10; const persist=async()=>{const pct=Number(div.querySelector('[data-pct]').value); const dup=(r.creditRules||[]).some((x,i)=>i!==idx&&Number(x.pct)===pct); if(dup){toast('Duplicate completion %'); return;} rule.pct=pct; rule.amount=Number(div.querySelector('[data-amount]').value); await save(false,{render:'none'});}; div.querySelector('[data-pct]').onchange=persist; div.querySelector('[data-amount]').onchange=persist; div.querySelector('[data-remove]').dataset.ruleRemove='credit'; div.querySelector('[data-remove]').dataset.ruleIdx=String(idx); box.appendChild(div);});
+      (r.creditRules||[]).forEach((rule,idx)=>{const div=document.createElement('div'); div.className='rule-card'; div.innerHTML=`<div class="rule-card-head"><div class="rule-card-title">Credit rule</div><span class="gift-rule-chip" data-chip>HK$${rule.amount||0}</span></div><div class="rule-grid"><div class="rule-row"><div class="field"><label>Completion</label><select data-pct>${[50,60,70,80,90,100].map(n=>`<option value="${n}">${n}%+</option>`).join('')}</select></div><div class="field"><label>Amount</label><select data-amount>${[1,2,5,10,20,30,50,100].map(n=>`<option value="${n}">HK$${n}</option>`).join('')}</select></div></div></div><div class="rule-actions"><button class="btn-text-danger" data-remove type="button">Remove</button></div>`; const pctSel=div.querySelector('[data-pct]'); const amtSel=div.querySelector('[data-amount]'); const chip=div.querySelector('[data-chip]'); pctSel.value=String(rule.pct??100); amtSel.value=String(rule.amount??10); const syncChip=()=>{if(chip) chip.textContent='HK$'+amtSel.value;}; syncChip(); const persist=async()=>{const pct=Number(pctSel.value); const dup=(r.creditRules||[]).some((x,i)=>i!==idx&&Number(x.pct)===pct); if(dup){toast('Duplicate completion %'); pctSel.value=String(rule.pct??100); return;} rule.pct=pct; rule.amount=Number(amtSel.value); syncChip(); await save(false,{render:'none'});}; pctSel.onchange=persist; amtSel.onchange=persist; div.querySelector('[data-remove]').dataset.ruleRemove='credit'; div.querySelector('[data-remove]').dataset.ruleIdx=String(idx); box.appendChild(div);});
     } else if(tab==='penalty'){
       p.innerHTML=`<div class="panel-intro"><div class="panel-intro-title">Penalty rules ${infoTip('Charged once each time you hit consecutive 0% days.','Penalty rules')}</div></div><div class="rule-card"><div class="rule-grid"><div class="field field-full"><label>Trigger</label><select id="penaltyZeroDays">${[1,2,3,4,5,7].map(n=>`<option value="${n}">${n} missed day${n>1?'s':''} in a row</option>`).join('')}</select></div><div class="rule-row"><div class="field"><label>Deduct credit</label><select id="penaltyCredit">${[0,2,5,10,20,30,50].map(n=>`<option value="${n}">HK$${n}</option>`).join('')}</select></div><div class="field"><label>Deduct EXP</label><select id="penaltyXp">${[0,10,20,30,50,100].map(n=>`<option value="${n}">${n} EXP</option>`).join('')}</select></div></div></div></div>`;
       $('#penaltyZeroDays').value=r.penaltyZeroDays||2; $('#penaltyCredit').value=r.penaltyCredit||5; $('#penaltyXp').value=r.penaltyXp||20;
@@ -1442,12 +1466,13 @@
     state.settings.defaultReminderMessage=form.defaultReminderMessage;
     settingsPendingProfile=null;
     settingsDraft=snapshotSettingsDraft();
+    $('#reminderSwitch')?.classList.toggle('on',!!form.reminders);
     applyAppearance();
     $('#greeting').textContent=timeGreeting()+greetName();
     renderTopProfile();
     setupReminderLoop();
-    refreshSettingsChrome();
     updateSettingsSaveBar();
+    refreshSettingsChrome();
     await save(false,{render:'none'});
     toast('Settings saved');
   }
@@ -1500,6 +1525,16 @@
       start.onchange=()=>{const disp=$('#startDateDisplay'); if(disp) disp.textContent=start.value||todayKey(); markDirty();};
     }
     bindReminderSettings();
+    const saveBtn=$('#saveSettingsBtn');
+    if(saveBtn && !saveBtn.dataset.bound){
+      saveBtn.dataset.bound='1';
+      saveBtn.addEventListener('click',e=>{e.preventDefault(); e.stopPropagation(); void saveSettingsForm();});
+    }
+    const discardBtn=$('#discardSettingsBtn');
+    if(discardBtn && !discardBtn.dataset.bound){
+      discardBtn.dataset.bound='1';
+      discardBtn.addEventListener('click',e=>{e.preventDefault(); e.stopPropagation(); discardSettingsForm();});
+    }
   }
   function bindReminderSettings(){
     const markDirty=()=>updateSettingsSaveBar();
@@ -1676,6 +1711,7 @@
   }
   async function createFile(){
     if(!window.showSaveFilePicker){toast('Create file needs Chrome/Edge on desktop. Use Export instead.');return;}
+    toast('Opening file picker…');
     try{
       fileHandle=await window.showSaveFilePicker({suggestedName:'habit-tracker-backup.json',types:[{description:'JSON Backup',accept:{'application/json':['.json']}}]});
       if(fileHandle.requestPermission){
@@ -1824,7 +1860,7 @@
     fn();
   }
   function routeAppInteraction(e){
-    if(e.type==='pointerup' && e.pointerType==='mouse' && e.button!==0) return;
+    if(e.type==='click' && e.button!==0) return;
     const tipBtn=e.target.closest('.info-tip');
     if(tipBtn){ tapAction('tip',e,()=>showHelpSheet(tipBtn.getAttribute('data-tip-title')||'', tipBtn.getAttribute('data-tip')||'')); return; }
     if(e.target.closest('#helpSheetClose')||(e.target.id==='helpSheetBackdrop'&&!e.target.closest('.help-sheet'))){closeHelpSheet(); return;}
@@ -1854,7 +1890,7 @@
     const segBtn=e.target.closest('.segmented button');
     if(segBtn&&handleSegmentedClick(segBtn)) return;
     const syncBtn=e.target.closest('[data-sync-action]');
-    if(syncBtn){ tapAction('sync',e,()=>void handleSyncAction(syncBtn.dataset.syncAction)); return; }
+    if(syncBtn){ tapAction('sync-'+syncBtn.dataset.syncAction,e,()=>void handleSyncAction(syncBtn.dataset.syncAction)); return; }
     if(e.target.closest('#spendCreditBtn')){ tapAction('spendCredit',e,()=>void spendCreditReward()); return; }
     if(e.target.closest('#redeemGiftBtn')){ tapAction('redeemGift',e,()=>void redeemGiftReward()); return; }
     if(e.target.closest('#homeJournalViewAll')){openJournalListModal(); return;}
@@ -1925,13 +1961,7 @@
   function bindAppEvents(){
     if(bindAppEvents.done) return;
     bindAppEvents.done=true;
-    const onInteract=(e)=>{
-      if(e.type==='pointerup') lastTapAt=Date.now();
-      else if(e.type==='click' && Date.now()-lastTapAt<400) return;
-      routeAppInteraction(e);
-    };
-    document.addEventListener('pointerup',onInteract,true);
-    document.addEventListener('click',onInteract,true);
+    document.addEventListener('click',e=>routeAppInteraction(e),true);
     document.body.addEventListener('change',e=>{
       if(e.target.id==='importInput'&&e.target.files?.[0]){importJson(e.target.files[0]); e.target.value=''; return;}
       if(e.target.id==='activeGiftSelect'){ensureRewardShape(); state.settings.rewards.activeGiftId=e.target.value; void save(false,{render:'none'}); renderGiftRedeem(); toast('Gift goal updated');}

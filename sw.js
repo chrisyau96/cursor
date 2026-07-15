@@ -1,6 +1,6 @@
 // Offline-first service worker for the Momentum habit-tracker PWA.
 // Cross-origin requests always go to the network.
-const CACHE = "momentum-v39";
+const CACHE = "momentum-v40";
 
 const ASSETS = [
   ".",

@@ -441,7 +441,8 @@ button,.nav-item,.switch,.wcell,.check-btn,.icon-btn,.act-btn,.btn-primary,.btn-
 .rule-card-head{display:flex;align-items:center;justify-content:space-between;gap:10px;margin-bottom:12px}
 .rule-card-title{font-size:13px;font-weight:800;letter-spacing:-.01em}
 .rule-grid{display:flex;flex-direction:column;gap:12px}
-.rule-row{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px;align-items:start}
+.rule-row{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px;align-items:end}
+.rule-row .field select,.rule-row .field input{width:100%;min-height:44px}
 .rule-row.icon-name{grid-template-columns:72px minmax(0,1fr);grid-template-rows:auto 44px;row-gap:6px;column-gap:12px;align-items:stretch}
 .rule-row.icon-name>.field{display:contents}
 .rule-row.icon-name>.field:nth-child(1) label,.rule-row.icon-name>.field:nth-child(1) input{grid-column:1}
