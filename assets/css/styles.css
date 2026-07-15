@@ -381,6 +381,10 @@ input[type=range]::-moz-range-track{height:6px;border-radius:999px;background:va
 body.help-sheet-open{overflow:hidden}
 #settingsView{padding-bottom:8px}
 .settings-version{text-align:center;font-size:11px;color:var(--muted);margin:20px 2px 16px;padding-bottom:2px}
+.settings-save-bar{position:fixed;left:50%;transform:translateX(-50%);bottom:calc(var(--tabbar-h) + var(--safe-bottom));width:min(480px,100%);display:flex;gap:10px;padding:12px 14px;background:color-mix(in srgb,var(--card) 94%,transparent);backdrop-filter:blur(10px);border-top:1px solid var(--line);box-shadow:0 -10px 30px rgba(15,23,42,.1);z-index:90}
+.settings-save-bar[hidden]{display:none!important}
+.settings-save-bar .btn-primary,.settings-save-bar .btn-secondary{flex:1;margin:0}
+#settingsView.view.active{padding-bottom:calc(80px + var(--tabbar-h) + var(--safe-bottom))}
 .rule-card.rule-flash{animation:rule-flash .9s ease}
 @keyframes rule-flash{0%,100%{box-shadow:0 0 0 0 transparent}35%{box-shadow:0 0 0 3px var(--brand-soft)}}
 button,.nav-item,.switch,.wcell,.check-btn,.icon-btn,.act-btn,.btn-primary,.btn-secondary,.info-tip{touch-action:manipulation}

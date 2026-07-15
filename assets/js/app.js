@@ -31,6 +31,8 @@
   ];
   let fileHandle=null;
   let pauseModalDone=null;
+  let settingsDraft=null;
+  let settingsPendingProfile=null;
   let habitModalSave=null;
   let lastTapKey='', lastTapAt=0;
   const FILE_HANDLE_DB='momentumFileHandles';
@@ -71,7 +73,7 @@
   const PREVIEW=3;
   const LAZY_CHUNK=10;
   const REMINDER_MSG_LIMIT=80;
-  const APP_VERSION='v38';
+  const APP_VERSION='v39';
   const iconBtn=(cls,svg,title)=>{const b=document.createElement('button'); b.className='act-btn '+cls; b.innerHTML=svg; b.title=title; b.setAttribute('aria-label',title); return b;};
 
   const USER_NAME_MAX=12;
@@ -116,7 +118,6 @@
     if(state.settings.userName===undefined) state.settings.userName='';
     if(state.settings.onboardingComplete===undefined) state.settings.onboardingComplete=state.habits.length>2;
     if(!state.settings.dataMode) state.settings.dataMode='real';
-    state.settings.dataMode='real';
     if(state.settings.lastBackupAt===undefined) state.settings.lastBackupAt='';
     if(state.settings.lastScheduledBackupAt===undefined) state.settings.lastScheduledBackupAt='';
     if(state.settings.backupFileName===undefined) state.settings.backupFileName='';
@@ -719,7 +720,6 @@
     toast('Gift rule removed');
     void save(false,{render:'none'});
   }
-  async function resetTodayRecords(){if(!confirm('Reset all habit records for today?'))return; const k=todayKey(); state.records=state.records.filter(r=>r.date!==k); await save(false,{render:'homeView'}); toast('Today reset')}
   function resetHabitForDate(habitId,k){
     state.records=state.records.filter(r=>!(r.date===k&&r.habitId===habitId));
     haptic();
@@ -970,8 +970,12 @@
       const t=$('#habitReminderToggle');
       const item={id:h.id||uid(),name:$('#habitName').value.trim()||'Untitled Habit',emoji:$('#habitEmoji').value,color:selectedColor,target:Number($('#habitTarget').value),xpReward:Math.max(1,Math.round(Number($('#habitXpReward').value)||5)),frequency:freq,groupId:$('#habitGroup')?.value||null,sortOrder:h.sortOrder??state.habits.length,paused:!!h.paused,archived:false,flexPeriodStart:h.flexPeriodStart||null,reminder:{enabled:!!t?.classList.contains('on'),time:$('#habitReminderTime').value,message:($('#habitReminderMsg')?.value||state.settings.defaultReminderMessage||'Time for {habit}!').slice(0,REMINDER_MSG_LIMIT),daysBeforeDue:Number($('#habitDaysBeforeDue')?.value||1)}};
       if(isEdit){state.habits=state.habits.map(x=>x.id===h.id?item:x)}else state.habits.push(item);
-      closeModal(); toast('Habit saved');
-      void save(false,{render:'all'});
+      renderHabits();
+      renderHome();
+      closeModal();
+      habitModalSave=null;
+      toast('Habit saved');
+      void save(false,{render:'none'});
     };
     if(isEdit){const delBtn=$('#deleteHabitBtn'); if(delBtn) delBtn.dataset.deleteHabitId=h.id;}
   }
@@ -1168,7 +1172,7 @@
     return {current,target,pct:target?Math.min(100,Math.round(current/target*100)):0};
   }
   function renderTopProfile(){
-    const li=levelInfo(); const icon=state.settings.profileIcon||''; const avatarEls=['#topProfileAvatar','#levelProfileAvatar','#settingsProfileAvatar']; avatarEls.forEach(sel=>{const el=$(sel); if(!el)return; if(icon){el.style.backgroundImage=`url(${icon})`; el.textContent='';}else{el.style.backgroundImage=''; el.textContent=li.cur.icon||'🌱';}});
+    const li=levelInfo(); const icon=settingsPendingProfile??state.settings.profileIcon??''; const avatarEls=['#topProfileAvatar','#levelProfileAvatar','#settingsProfileAvatar']; avatarEls.forEach(sel=>{const el=$(sel); if(!el)return; if(icon){el.style.backgroundImage=`url(${icon})`; el.textContent='';}else{el.style.backgroundImage=''; el.textContent=li.cur.icon||'🌱';}});
     $('#topLevel').textContent='Lv '+li.cur.level; $('#topLevelFill').style.width=li.pct+'%'; const pctEl=$('#topLevelPct'); if(pctEl) pctEl.textContent=li.pct+'%'; const badge=$('#topGiftBadge'); if(badge){const ag=activeGiftRule(); badge.textContent=ag?giftCount(ag):0;}
   }
   function renderLevel(){
@@ -1310,7 +1314,19 @@
     });
     $('#addVacationFromLog').onclick=()=>openAddPauseModal(()=>openVacationLog());
   }
-  function renderDataModeSettings(){/* data mode hidden — always real use */}
+  function renderDataModeSettings(){
+    const sw=$('#demoModeSwitch');
+    if(!sw) return;
+    const demo=(state.settings.dataMode||'real')==='demo';
+    sw.classList.toggle('on',demo);
+  }
+  async function toggleDemoMode(){
+    const turningOn=(state.settings.dataMode||'real')!=='demo';
+    const mode=turningOn?'demo':'real';
+    const label=mode==='real'?'real use (clean slate)':'demo data (sample habits and history)';
+    if(!confirm(`Replace all habits, records, and journals with ${label}? Profile and appearance settings are kept.`)) return;
+    await applyDataMode(mode);
+  }
   async function applyDataMode(mode){
     const keep={colorMode:state.settings.colorMode,styleTheme:state.settings.styleTheme,userName:state.settings.userName,profileIcon:state.settings.profileIcon};
     localStorage.setItem('momentumDataMode',mode);
@@ -1321,12 +1337,16 @@
     weekOffset=0; trendCursor=hkNow(); reportCursor=hkNow();
     await save(true,{render:'all'});
     toast(mode==='real'?'Real use mode — start adding habits':'Demo data loaded');
+    resetSettingsDraft();
     renderDataModeSettings();
   }
   function refreshSettingsChrome(){
     renderVacationSettings(); renderSyncActions(); renderDataModeSettings(); renderBackupStatus();
-    const start=$('#trackerStartDate'); if(start) start.value=state.settings.startDate||todayKey();
-    const disp=$('#startDateDisplay'); if(disp) disp.textContent=state.settings.startDate||todayKey();
+    if(!settingsFormDirty()){
+      const start=$('#trackerStartDate'); if(start) start.value=state.settings.startDate||todayKey();
+      const disp=$('#startDateDisplay'); if(disp) disp.textContent=state.settings.startDate||todayKey();
+      $('#reminderSwitch')?.classList.toggle('on',!!state.settings.reminders);
+    }
     const autoSw=$('#autoBackupSwitch');
     if(autoSw){
       autoSw.classList.toggle('on',!!state.settings.autoBackup);
@@ -1335,7 +1355,6 @@
       if(autoLocked) autoSw.setAttribute('data-locked','true');
       else autoSw.removeAttribute('data-locked');
     }
-    $('#reminderSwitch')?.classList.toggle('on',state.settings.reminders);
   }
   function refreshBackupChrome(){ updateStatus(); refreshSettingsChrome(); }
   function drawRewardPanel(tab=rewardActiveTab){
@@ -1356,16 +1375,145 @@
       (r.giftRules||[]).forEach((g,idx)=>{const div=document.createElement('div'); div.className='rule-card'; div.innerHTML=`<div class="rule-card-head"><div class="rule-card-title">Gift rule</div><span class="gift-rule-chip">${g.icon||'🎁'} ${escapeHtml(g.gift||'Gift')}</span></div><div class="rule-grid"><div class="rule-row icon-name"><div class="field"><label>Icon</label><input class="rule-input-icon" data-icon value="${escapeAttr(g.icon||'🎁')}" maxlength="4" placeholder="🍽️"></div><div class="field"><label>Gift name</label><input data-gift value="${escapeAttr(g.gift||'Buffet')}" placeholder="Buffet"></div></div><div class="rule-row"><div class="field"><label>Completion</label><select data-pct>${[50,60,70,80,90,100].map(n=>`<option value="${n}">${n}%+</option>`).join('')}</select></div><div class="field"><label>Streak days</label><select data-days>${[7,14,21,30,45,60,90,120].map(n=>`<option value="${n}">${n} days</option>`).join('')}</select></div></div></div><div class="rule-actions"><button class="btn-text-danger" data-remove type="button">Remove</button></div>`; div.querySelector('[data-pct]').value=g.pct||80; div.querySelector('[data-days]').value=g.days||30; const persist=async()=>{g.icon=div.querySelector('[data-icon]').value.trim()||'🎁'; g.gift=div.querySelector('[data-gift]').value.trim()||'Gift'; g.pct=Number(div.querySelector('[data-pct]').value); g.days=Number(div.querySelector('[data-days]').value); await save(false,{render:'none'});}; div.querySelector('[data-icon]').onchange=persist; div.querySelector('[data-gift]').onchange=persist; div.querySelector('[data-pct]').onchange=persist; div.querySelector('[data-days]').onchange=persist; div.querySelector('[data-remove]').dataset.ruleRemove='gift'; div.querySelector('[data-remove]').dataset.ruleIdx=String(idx); box.appendChild(div);});
     }
   }
+  function snapshotSettingsDraft(){
+    return{
+      userName:(state.settings.userName||'').slice(0,USER_NAME_MAX),
+      colorMode:state.settings.colorMode||'system',
+      profileIcon:state.settings.profileIcon||'',
+      startDate:state.settings.startDate||todayKey(),
+      reminders:!!state.settings.reminders,
+      globalReminderTime:state.settings.globalReminderTime||'20:30',
+      defaultReminderMessage:state.settings.defaultReminderMessage||'Time for {habit}!'
+    };
+  }
+  function readSettingsForm(){
+    return{
+      userName:($('#userNameInput')?.value||'').trim().slice(0,USER_NAME_MAX),
+      colorMode:$('#colorModeSelect')?.value||'system',
+      profileIcon:settingsPendingProfile??state.settings.profileIcon??'',
+      startDate:$('#trackerStartDate')?.value||todayKey(),
+      reminders:!!$('#reminderSwitch')?.classList.contains('on'),
+      globalReminderTime:$('#globalReminderTime')?.value||'20:30',
+      defaultReminderMessage:($('#defaultReminderMessage')?.value||'Time for {habit}!').slice(0,REMINDER_MSG_LIMIT)
+    };
+  }
+  function applySettingsForm(draft){
+    const un=$('#userNameInput'); if(un) un.value=draft.userName||'';
+    const nameCount=$('#userNameCount'); if(nameCount) nameCount.textContent=String((draft.userName||'').length);
+    const cms=$('#colorModeSelect'); if(cms) cms.value=draft.colorMode||'system';
+    const start=$('#trackerStartDate'); if(start) start.value=draft.startDate||todayKey();
+    const disp=$('#startDateDisplay'); if(disp) disp.textContent=draft.startDate||todayKey();
+    $('#reminderSwitch')?.classList.toggle('on',!!draft.reminders);
+    const grt=$('#globalReminderTime'); if(grt) grt.value=draft.globalReminderTime||'20:30';
+    const drm=$('#defaultReminderMessage'); if(drm) drm.value=draft.defaultReminderMessage||'Time for {habit}!';
+    settingsPendingProfile=null;
+    renderTopProfile();
+  }
+  function settingsFormDirty(){
+    if(!settingsDraft) return false;
+    const cur=readSettingsForm();
+    return Object.keys(settingsDraft).some(k=>settingsDraft[k]!==cur[k]);
+  }
+  function updateSettingsSaveBar(){
+    const bar=$('#settingsSaveBar');
+    if(!bar) return;
+    const dirty=settingsFormDirty();
+    bar.hidden=!dirty;
+    document.body.classList.toggle('settings-dirty',dirty);
+  }
+  function resetSettingsDraft(){
+    settingsDraft=snapshotSettingsDraft();
+    settingsPendingProfile=null;
+    applySettingsForm(settingsDraft);
+    updateSettingsSaveBar();
+  }
+  async function saveSettingsForm(){
+    const form=readSettingsForm();
+    if(form.reminders && !state.settings.reminders && 'Notification' in window && Notification.permission==='default'){
+      const perm=await Notification.requestPermission();
+      if(perm==='denied') toast('Browser notifications blocked — reminders will use in-app alerts');
+    }
+    state.settings.userName=form.userName;
+    state.settings.colorMode=form.colorMode;
+    state.settings.profileIcon=form.profileIcon;
+    state.settings.startDate=form.startDate;
+    state.settings.reminders=form.reminders;
+    state.settings.globalReminderTime=form.globalReminderTime;
+    state.settings.defaultReminderMessage=form.defaultReminderMessage;
+    settingsPendingProfile=null;
+    settingsDraft=snapshotSettingsDraft();
+    applyAppearance();
+    $('#greeting').textContent=timeGreeting()+greetName();
+    renderTopProfile();
+    setupReminderLoop();
+    refreshSettingsChrome();
+    updateSettingsSaveBar();
+    await save(false,{render:'none'});
+    toast('Settings saved');
+  }
+  function discardSettingsForm(){
+    if(!settingsDraft) return;
+    applySettingsForm(settingsDraft);
+    applyAppearance();
+    updateSettingsSaveBar();
+    toast('Changes discarded');
+  }
+  function bindSettingsSwitches(){
+    const rem=$('#reminderSwitch');
+    if(rem && !rem.dataset.bound){
+      rem.dataset.bound='1';
+      rem.addEventListener('click',e=>{e.preventDefault(); e.stopPropagation(); toggleRemindersDraft();});
+    }
+    const demo=$('#demoModeSwitch');
+    if(demo && !demo.dataset.bound){
+      demo.dataset.bound='1';
+      demo.addEventListener('click',e=>{e.preventDefault(); e.stopPropagation(); void toggleDemoMode();});
+    }
+  }
+  function bindSettingsFormWatchers(){
+    const markDirty=()=>updateSettingsSaveBar();
+    const un=$('#userNameInput');
+    if(un && !un.dataset.bound){
+      un.dataset.bound='1';
+      un.oninput=()=>{const c=$('#userNameCount'); if(c)c.textContent=String(un.value.length); markDirty();};
+    }
+    const cms=$('#colorModeSelect');
+    if(cms && !cms.dataset.bound){
+      cms.dataset.bound='1';
+      cms.onchange=()=>{applyAppearance(); markDirty();};
+    }
+    const upload=$('#profileIconInput');
+    if(upload && !upload.dataset.bound){
+      upload.dataset.bound='1';
+      upload.onchange=e=>{
+        const file=e.target.files&&e.target.files[0];
+        if(!file) return;
+        const reader=new FileReader();
+        reader.onload=()=>{settingsPendingProfile=reader.result; renderTopProfile(); markDirty();};
+        reader.readAsDataURL(file);
+        e.target.value='';
+      };
+    }
+    const start=$('#trackerStartDate');
+    if(start && !start.dataset.bound){
+      start.dataset.bound='1';
+      start.onchange=()=>{const disp=$('#startDateDisplay'); if(disp) disp.textContent=start.value||todayKey(); markDirty();};
+    }
+    bindReminderSettings();
+  }
   function bindReminderSettings(){
+    const markDirty=()=>updateSettingsSaveBar();
     const grt=$('#globalReminderTime');
     if(grt && !grt.dataset.bound){
       grt.dataset.bound='1';
-      grt.addEventListener('change',async()=>{state.settings.globalReminderTime=grt.value; await save(false,{render:'none'}); setupReminderLoop();});
+      grt.addEventListener('change',markDirty);
+      grt.addEventListener('input',markDirty);
     }
     const drm=$('#defaultReminderMessage');
     if(drm && !drm.dataset.bound){
       drm.dataset.bound='1';
-      drm.addEventListener('change',async()=>{state.settings.defaultReminderMessage=(drm.value||'Time for {habit}!').slice(0,REMINDER_MSG_LIMIT); await save(false,{render:'none'});});
+      drm.addEventListener('change',markDirty);
+      drm.addEventListener('input',markDirty);
     }
   }
   function renderSettings(force=false){
@@ -1377,10 +1525,9 @@
       drawRewardPanel(rewardActiveTab);
       const un=$('#userNameInput'); if(un){un.value=(state.settings.userName||'').slice(0,USER_NAME_MAX); un.maxLength=USER_NAME_MAX;}
       const nameCount=$('#userNameCount'); if(nameCount) nameCount.textContent=String((un?.value||'').length);
-      if(un && !un.dataset.bound){un.dataset.bound='1'; un.oninput=()=>{const c=$('#userNameCount'); if(c)c.textContent=String(un.value.length);}; un.onblur=async()=>{state.settings.userName=(un.value||'').trim().slice(0,USER_NAME_MAX); await save(false,{render:'none'}); $('#greeting').textContent=timeGreeting()+greetName();};}
-      const cms=$('#colorModeSelect'); if(cms){cms.value=state.settings.colorMode||'system'; cms.onchange=async()=>{state.settings.colorMode=cms.value; applyAppearance(); await save(false,{render:'none'}); toast('Theme saved');};}
-      const upload=$('#profileIconInput'); if(upload && !upload.dataset.bound){upload.dataset.bound='1'; upload.onchange=e=>{const file=e.target.files&&e.target.files[0]; if(!file)return; const reader=new FileReader(); reader.onload=async()=>{state.settings.profileIcon=reader.result; await save(false,{render:'none'}); toast('Profile photo saved')}; reader.readAsDataURL(file);};}
-      $('#trackerStartDate').onchange=async()=>{state.settings.startDate=$('#trackerStartDate').value||todayKey(); await save(false,{render:'none'}); toast('Start date saved')};
+      const cms=$('#colorModeSelect'); if(cms) cms.value=state.settings.colorMode||'system';
+      const start=$('#trackerStartDate'); if(start) start.value=state.settings.startDate||todayKey();
+      const disp=$('#startDateDisplay'); if(disp) disp.textContent=state.settings.startDate||todayKey();
     } else {
       $$('#rewardTabs button').forEach(b=>b.classList.toggle('active',b.dataset.tab===rewardActiveTab));
     }
@@ -1394,6 +1541,11 @@
       bindReminderSettings();
     }
     refreshSettingsChrome();
+    renderDataModeSettings();
+    bindSettingsSwitches();
+    bindSettingsFormWatchers();
+    if(force || !settingsDraft) resetSettingsDraft();
+    else applySettingsForm(settingsDraft);
     renderTopProfile();
     renderSettingsVersion();
     const autoSw=$('#autoBackupSwitch');
@@ -1496,21 +1648,66 @@
       return true;
     }catch(e){return false;}
   }
-  async function connectFile(){if(!window.showOpenFilePicker){toast('File connection needs Chrome/Edge on desktop. Use Export/Import instead.');return;} if(await reconnectStoredFile(false)){await flushBackupSync(); refreshBackupChrome(); return;} try{[fileHandle]=await window.showOpenFilePicker({types:[{description:'JSON Backup',accept:{'application/json':['.json']}}]}); const file=await fileHandle.getFile(); const txt=await file.text(); if(txt.trim()){state=JSON.parse(txt); normalizeState(); invalidateSettings();} state.settings.fileConnected=true; state.settings.autoBackup=true; state.settings.dailyBackup=true; state.settings.backupFileName=file.name||'habit-tracker-backup.json'; if(!(await storeFileHandle(fileHandle))) toast('Connected, but this browser may not remember the file after refresh'); await writeBackupFile(true); refreshBackupChrome(); toast('Backup file linked');}catch(e){}}
-  async function createFile(){if(!window.showSaveFilePicker){toast('Create file needs Chrome/Edge on desktop. Use Export instead.');return;} try{fileHandle=await window.showSaveFilePicker({suggestedName:'habit-tracker-backup.json',types:[{description:'JSON Backup',accept:{'application/json':['.json']}}]}); state.settings.fileConnected=true; state.settings.autoBackup=true; state.settings.dailyBackup=true; state.settings.backupFileName=fileHandle.name||'habit-tracker-backup.json'; if(!(await storeFileHandle(fileHandle))) toast('File created, but this browser may not remember it after refresh'); await writeBackupFile(true); refreshBackupChrome(); toast('Backup file created');}catch(e){}}
-  function reminderBody(habit){const tpl=(habit.reminder?.message||state.settings.defaultReminderMessage||'Time for {habit}!').slice(0,REMINDER_MSG_LIMIT); return tpl.replace(/\{habit\}/g,habit.name||'your habit');}
-  async function toggleReminders(){
-    const turningOn=!state.settings.reminders;
-    if(turningOn && 'Notification' in window && Notification.permission==='default'){
-      const perm=await Notification.requestPermission();
-      if(perm!=='granted'){toast('Allow notifications to use reminders'); return;}
+  async function connectFile(){
+    if(!window.showOpenFilePicker){toast('File connection needs Chrome/Edge on desktop. Use Export/Import instead.');return;}
+    if(await reconnectStoredFile(false)){await flushBackupSync(); refreshBackupChrome(); return;}
+    try{
+      [fileHandle]=await window.showOpenFilePicker({types:[{description:'JSON Backup',accept:{'application/json':['.json']}}]});
+      if(fileHandle.requestPermission){
+        const perm=await fileHandle.requestPermission({mode:'readwrite'});
+        if(perm!=='granted'){toast('Write permission denied'); fileHandle=null; return;}
+      }
+      const file=await fileHandle.getFile();
+      const txt=await file.text();
+      if(txt.trim()){state=JSON.parse(txt); normalizeState(); invalidateSettings();}
+      state.settings.fileConnected=true;
+      state.settings.autoBackup=true;
+      state.settings.dailyBackup=true;
+      state.settings.backupFileName=file.name||'habit-tracker-backup.json';
+      if(!(await storeFileHandle(fileHandle))) toast('Connected, but this browser may not remember the file after refresh');
+      const ok=await writeBackupFile(false);
+      if(!ok){toast('Connected, but could not write backup yet');}
+      refreshBackupChrome();
+      toast('Backup file linked');
+    }catch(e){
+      if(e?.name==='AbortError') return;
+      toast('Could not connect backup file');
     }
-    state.settings.reminders=turningOn;
-    $('#reminderSwitch')?.classList.toggle('on',turningOn);
-    await save(false,{render:'none'});
-    setupReminderLoop();
-    refreshSettingsChrome();
-    toast(turningOn?'Reminders on':'Reminders off');
+  }
+  async function createFile(){
+    if(!window.showSaveFilePicker){toast('Create file needs Chrome/Edge on desktop. Use Export instead.');return;}
+    try{
+      fileHandle=await window.showSaveFilePicker({suggestedName:'habit-tracker-backup.json',types:[{description:'JSON Backup',accept:{'application/json':['.json']}}]});
+      if(fileHandle.requestPermission){
+        const perm=await fileHandle.requestPermission({mode:'readwrite'});
+        if(perm!=='granted'){toast('Write permission denied'); fileHandle=null; return;}
+      }
+      state.settings.fileConnected=true;
+      state.settings.autoBackup=true;
+      state.settings.dailyBackup=true;
+      let backupName='habit-tracker-backup.json';
+      try{const f=await fileHandle.getFile(); backupName=f.name||backupName;}catch(e){}
+      state.settings.backupFileName=backupName;
+      if(!(await storeFileHandle(fileHandle))) toast('File created, but this browser may not remember it after refresh');
+      const ok=await writeBackupFile(false);
+      if(!ok){toast('Could not write backup file'); return;}
+      refreshBackupChrome();
+      toast('Backup file created');
+    }catch(e){
+      if(e?.name==='AbortError') return;
+      toast('Could not create backup file');
+    }
+  }
+  function reminderBody(habit){const tpl=(habit.reminder?.message||state.settings.defaultReminderMessage||'Time for {habit}!').slice(0,REMINDER_MSG_LIMIT); return tpl.replace(/\{habit\}/g,habit.name||'your habit');}
+  function toggleRemindersDraft(){
+    const sw=$('#reminderSwitch');
+    if(!sw) return;
+    const turningOn=!sw.classList.contains('on');
+    if(turningOn && 'Notification' in window && Notification.permission==='denied'){
+      toast('Browser notifications blocked — reminders will use in-app alerts');
+    }
+    sw.classList.toggle('on',turningOn);
+    updateSettingsSaveBar();
   }
   async function toggleAutoBackup(){
     if(!fileHandle){
@@ -1566,7 +1763,7 @@
     else if(v==='levelView') renderLevel();
     else if(v==='settingsView') renderSettings();
   }
-  function invalidateSettings(){const rs=$('#rewardSettings'); if(rs) delete rs.dataset.built;}
+  function invalidateSettings(){const rs=$('#rewardSettings'); if(rs) delete rs.dataset.built; settingsDraft=null; settingsPendingProfile=null;}
   function renderAll(){updateStatus(); applyAppearance(); renderHome(); renderHabits(); renderReport(); renderRewards(); renderLevel(); renderSettings(true);}
   function showXpPop(t){
     const shell=$('.app-shell');
@@ -1650,8 +1847,8 @@
     if(e.target.closest('#profileQuick')){showView('levelView'); return;}
     if(e.target.closest('#topSettingsBtn')){showView('settingsView'); return;}
     if(e.target.closest('[data-open-habit]')){openHabitModal(); return;}
-    const remSwitch=e.target.closest('#reminderSwitch');
-    if(remSwitch){ tapAction('reminder',e,()=>void toggleReminders()); return; }
+    if(e.target.closest('#saveSettingsBtn')){ tapAction('saveSettings',e,()=>void saveSettingsForm()); return; }
+    if(e.target.closest('#discardSettingsBtn')){ tapAction('discardSettings',e,discardSettingsForm); return; }
     const autoSwitch=e.target.closest('#autoBackupSwitch');
     if(autoSwitch){ tapAction('autoBackup',e,()=>{ if(autoSwitch.getAttribute('data-locked')==='true'){toast('Connect a backup file first'); return;} void toggleAutoBackup(); }); return; }
     const segBtn=e.target.closest('.segmented button');
@@ -1666,7 +1863,6 @@
     if(e.target.closest('#addVacationBtn')){openAddPauseModal(); return;}
     if(e.target.closest('#viewVacationLogBtn')){openVacationLog(); return;}
     if(e.target.closest('#replayOnboardingBtn')){state.settings.onboardingComplete=false; onboardStep=0; renderOnboarding(); return;}
-    if(e.target.closest('#resetTodayBtn')){resetTodayRecords(); return;}
     if(e.target.closest('#flexHabitToggle')){$('#flexHabitCard')?.classList.toggle('collapsed'); return;}
     if(e.target.closest('#weekPrev')){weekOffset--; renderWeekStrip(); return;}
     if(e.target.closest('#weekNext')){weekOffset++; renderWeekStrip(); return;}

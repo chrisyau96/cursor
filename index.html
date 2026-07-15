@@ -90,7 +90,7 @@
         </div>
 
         <div class="card">
-          <div class="card-head"><h3>Today's Habits</h3><div class="today-achievement"><button class="btn-inline btn-reset" id="resetTodayBtn" type="button" aria-label="Reset today">Reset</button></div></div>
+          <div class="card-head"><h3>Today's Habits</h3></div>
           <div id="todayHabitGroups"></div>
         </div>
 
@@ -207,9 +207,19 @@
           <div class="form-grid" id="reminderSettings" style="margin-top:12px"></div>
         </div>
 
+        <p class="settings-section-label">Debug</p>
+        <div class="card settings-card">
+          <div class="switch-row"><div class="switch-label-wrap"><strong>Demo data</strong><button type="button" class="info-tip" aria-label="Help" data-tip-title="Demo data" data-tip="Loads sample habits and about 40 days of history for testing reports. Turning off switches to real use with a clean slate.">ⓘ</button><div class="small-note">Sample habits and history for testing</div></div><button type="button" class="switch" id="demoModeSwitch" aria-label="Demo data toggle"></button></div>
+        </div>
+
         <p class="settings-section-label">Help</p>
         <div class="card settings-card">
           <button class="btn-secondary settings-action" id="replayOnboardingBtn" type="button">Replay onboarding tour</button>
+        </div>
+
+        <div class="settings-save-bar" id="settingsSaveBar" hidden>
+          <button class="btn-secondary" id="discardSettingsBtn" type="button">Discard</button>
+          <button class="btn-primary" id="saveSettingsBtn" type="button">Save changes</button>
         </div>
 
         <p class="settings-section-label danger-label">Danger zone <button type="button" class="info-tip" aria-label="Help" data-tip-title="Danger zone" data-tip="Erases all habits, records, and settings. Type Confirm to proceed.">ⓘ</button></p>
