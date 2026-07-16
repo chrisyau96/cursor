@@ -150,6 +150,61 @@ await test('Weekly Not Specific hides due weekday field', async () => {
   await page.waitForTimeout(100);
   const hasDue = await page.isVisible('#dueWeekday');
   assert(!hasDue, 'due weekday should be hidden for Not Specific');
+  await page.evaluate(() => document.querySelector('#modalBackdrop')?.classList.remove('show'));
+});
+
+await test('Habit reminder toggle saves on edit', async () => {
+  await page.evaluate(() => {
+    document.querySelector('#onboardBackdrop')?.classList.remove('show');
+    document.querySelector('#modalBackdrop')?.classList.remove('show');
+  });
+  const habitId = await page.evaluate(() => JSON.parse(localStorage.getItem('habitTrackerProductionV7')).habits[0].id);
+  await page.click('.nav-item[data-view="habitsView"]');
+  await page.waitForTimeout(300);
+  await page.locator(`[data-edit][data-habit-id="${habitId}"]`).click();
+  await page.waitForSelector('#habitReminderToggle');
+  await page.locator('#habitReminderToggle').click();
+  await page.waitForTimeout(150);
+  await page.fill('#habitReminderTime', '08:30');
+  await page.click('#saveHabitBtn');
+  await page.waitForTimeout(400);
+  const saved = await page.evaluate((id) => {
+    const h = JSON.parse(localStorage.getItem('habitTrackerProductionV7')).habits.find(x => x.id === id);
+    return h?.reminder;
+  }, habitId);
+  assert(saved?.enabled === true, 'reminder should be enabled after toggle');
+  assert(saved?.time === '08:30', 'reminder time should persist');
+});
+
+await test('Delete habit removes it from list', async () => {
+  await page.evaluate(() => document.querySelector('#modalBackdrop')?.classList.remove('show'));
+  await page.evaluate(() => { window.confirm = () => true; });
+  const targetId = await page.evaluate(() => JSON.parse(localStorage.getItem('habitTrackerProductionV7')).habits.find(h => h.name === 'Test Habit')?.id);
+  assert(targetId, 'seed habit missing');
+  const before = await page.evaluate(() => JSON.parse(localStorage.getItem('habitTrackerProductionV7')).habits.length);
+  await page.click('.nav-item[data-view="habitsView"]');
+  await page.waitForTimeout(300);
+  await page.locator(`[data-edit][data-habit-id="${targetId}"]`).click();
+  await page.waitForSelector('#deleteHabitBtn');
+  await page.click('#deleteHabitBtn');
+  await page.waitForTimeout(500);
+  const after = await page.evaluate(() => JSON.parse(localStorage.getItem('habitTrackerProductionV7')).habits.length);
+  const stillVisible = await page.locator(`[data-habit-id="${targetId}"]`).count();
+  assert(after === before - 1, 'habit should be removed from state');
+  assert(stillVisible === 0, 'habit row should disappear from list');
+});
+
+await test('Report range tabs update compare label', async () => {
+  await page.click('.nav-item[data-view="reportView"]');
+  await page.waitForTimeout(300);
+  await page.locator('#reportRangeTabs button[data-days="30"]').click();
+  await page.waitForTimeout(300);
+  const label = await page.locator('#comparePeriodBox .compare-label').first().textContent();
+  assert(label?.includes('30'), 'compare should use 30-day range, got ' + label);
+  const hasOldFilters = await page.evaluate(() =>
+    !!document.querySelector('#comparePeriodTabs, #habitChartPeriodTabs, #rangeTabs, #calendarHabitFilter, #reportMode')
+  );
+  assert(!hasOldFilters, 'per-card report filters should be removed');
 });
 
 await test('Credit rule chip matches amount select', async () => {

@@ -42,13 +42,11 @@
   let backupSyncInFlight=false;
   let backupSyncQueued=false;
   const BACKUP_DEBOUNCE_MS=2500;
-  let reportCursor=hkNow();
-  let reportMode='month';
+  function currentReportMonth(){const n=hkNow(); return new Date(n.getFullYear(),n.getMonth(),1);}
+  let reportCursor=currentReportMonth();
   let trendDays=7;
   let rewardActiveTab='credit';
   let weekOffset=0;
-  let trendCursor=hkNow();
-  let calendarHabitFilter='';
   let onboardStep=0;
   let lastLevel=1;
   let lastMainView='homeView';
@@ -68,12 +66,11 @@
 
   const ICON_EDIT='<svg viewBox="0 0 24 24" class="ai"><path fill="currentColor" d="M3 17.25V21h3.75L17.81 9.94l-3.75-3.75L3 17.25zM20.71 7.04a1 1 0 0 0 0-1.41l-2.34-2.34a1 1 0 0 0-1.41 0l-1.83 1.83 3.75 3.75 1.83-1.83z"/></svg>';
   const ICON_DEL='<svg viewBox="0 0 24 24" class="ai"><path fill="currentColor" d="M6 7h12l-1 13.1A2 2 0 0 1 16 22H8a2 2 0 0 1-2-1.9L5 7h1zm3-3h6l1 2h4v2H2V6h4l1-2z"/></svg>';
-  let comparePeriod='month';
-  let habitChartPeriod='week';
+  let habitModalDeleteId=null;
   const PREVIEW=3;
   const LAZY_CHUNK=10;
   const REMINDER_MSG_LIMIT=80;
-  const APP_VERSION='v40';
+  const APP_VERSION='v41';
   const iconBtn=(cls,svg,title)=>{const b=document.createElement('button'); b.className='act-btn '+cls; b.innerHTML=svg; b.title=title; b.setAttribute('aria-label',title); return b;};
 
   const USER_NAME_MAX=12;
@@ -289,19 +286,14 @@
     return false;
   }
   function flexWindow(habit,date=hkNow()){ensureFlexPeriod(habit,date); return {start:habit.flexPeriodStart||dateKey(weekStart(date)),end:habitDueDate(habit,date)};}
-  function habitChartRange(period=habitChartPeriod){
-    const now=hkNow();
-    if(period==='week'){
-      const start=new Date(now); start.setDate(start.getDate()-6);
-      return {from:dateKey(start),to:dateKey(now),label:'Last 7 days'};
-    }
-    if(period==='quarter'){
-      const qi=Math.floor(now.getMonth()/3);
-      const start=new Date(now.getFullYear(),qi*3,1);
-      return {from:dateKey(start),to:dateKey(now),label:`Q${qi+1} ${now.getFullYear()}`};
-    }
-    const start=new Date(now.getFullYear(),now.getMonth(),1);
-    return {from:dateKey(start),to:dateKey(now),label:now.toLocaleDateString([],{month:'long',year:'numeric'})};
+  function reportDayRange(){
+    const end=hkNow();
+    const start=new Date(end);
+    start.setDate(start.getDate()-(trendDays-1));
+    return {from:dateKey(start),to:dateKey(end),label:`Last ${trendDays} days`};
+  }
+  function habitChartRange(){
+    return reportDayRange();
   }
   function habitCompletionStats(habit,fromK,toK){
     const f=habit.frequency||{};
@@ -840,7 +832,7 @@
   }
   function renderHabitCompletionChart(){
     const table=$('#habitCompletionTable'), note=$('#habitChartRangeNote'); if(!table)return;
-    const range=habitChartRange(habitChartPeriod);
+    const range=habitChartRange();
     if(note) note.textContent=`Completion rate by frequency target · ${range.label}`;
     const habits=activeHabits().sort((a,b)=>(a.sortOrder||0)-(b.sortOrder||0));
     if(!habits.length){table.innerHTML='<div class="empty">Add habits to see completion rates.</div>'; return;}
@@ -854,6 +846,17 @@
     });
   }
 
+  function deleteHabit(habitId){
+    if(!habitId||!confirm('Delete this habit? Records stay in history.')) return;
+    state.habits=state.habits.filter(x=>x.id!==habitId);
+    habitModalSave=null;
+    habitModalDeleteId=null;
+    closeModal();
+    renderHabits();
+    renderHome();
+    toast('Habit deleted');
+    void save(false,{render:'none'});
+  }
   function openHabitModal(habit=null){
     const isEdit=!!habit;
     const h=habit||{name:'',emoji:'📖',color:COLOURS[0],target:1,xpReward:5,frequency:{mode:'daily',days:[1,2,3,4,5]},reminder:{enabled:false,time:state.settings.globalReminderTime||'20:30',message:''}};
@@ -916,7 +919,6 @@
         $('#customPeriod').onchange=drawCustomSchedule; drawCustomSchedule();
       }
     }
-    $('#freqMode').onchange=()=>{drawFreq(); syncReminderUi();}; drawFreq();
     const t=$('#habitReminderToggle'), time=$('#habitReminderTime'), daysBefore=$('#habitDaysBeforeDue');
     if(t) t.classList.toggle('on',!!h.reminder?.enabled);
     if(daysBefore) daysBefore.value=String(h.reminder?.daysBeforeDue??1);
@@ -925,36 +927,36 @@
       const on=t.classList.contains('on');
       t.classList.toggle('on',on);
       t.disabled=false;
-      if(time) time.disabled=!on;
-      if(daysBefore) daysBefore.disabled=!on;
+      if(time) time.disabled=false;
+      if(daysBefore) daysBefore.disabled=false;
       const daysBeforeField=$('#daysBeforeDueField');
       const setup=$('#weeklySetupType')?.value;
       const weeklyAny=setup==='any';
       if(daysBeforeField) daysBeforeField.style.display=weeklyAny?'none':(setup==='days'&&isNotSpecific(h)?'block':'none');
     }
+    $('#freqMode').onchange=()=>{drawFreq(); syncReminderUi();}; drawFreq();
     syncReminderUi();
-    if(t) t.onclick=async(e)=>{
-      e.preventDefault();
-      e.stopPropagation();
-      const turningOn=!t.classList.contains('on');
-      if(turningOn){
-        if('Notification' in window && Notification.permission==='default'){
-          const perm=await Notification.requestPermission();
-          if(perm!=='granted'){toast('Allow notifications to use reminders'); return;}
+    const bindHabitReminder=()=>{
+      const toggle=$('#habitReminderToggle');
+      if(!toggle||toggle.dataset.bound) return;
+      toggle.dataset.bound='1';
+      toggle.addEventListener('click',e=>{
+        e.preventDefault(); e.stopPropagation();
+        const turningOn=!toggle.classList.contains('on');
+        if(turningOn && 'Notification' in window && Notification.permission==='denied'){
+          toast('Browser notifications blocked — reminders will use in-app alerts');
         }
-        if(!state.settings.reminders){
+        toggle.classList.toggle('on',turningOn);
+        if(turningOn && !state.settings.reminders){
           state.settings.reminders=true;
           setupReminderLoop();
           refreshSettingsChrome();
         }
-        t.classList.add('on');
-        toast('Reminder on for this habit');
-      } else {
-        t.classList.remove('on');
-        toast('Reminder off for this habit');
-      }
-      syncReminderUi();
+        syncReminderUi();
+        toast(turningOn?'Reminder on for this habit':'Reminder off for this habit');
+      });
     };
+    bindHabitReminder();
     habitModalSave=async()=>{
       const mode=$('#freqMode').value; let freq={mode};
       if(mode==='daily'){
@@ -989,17 +991,21 @@
       toast('Habit saved');
       void save(false,{render:'none'});
     };
-    if(isEdit){const delBtn=$('#deleteHabitBtn'); if(delBtn) delBtn.dataset.deleteHabitId=h.id;}
+    if(isEdit){
+      habitModalDeleteId=h.id;
+      $('#deleteHabitBtn')?.addEventListener('click',e=>{e.preventDefault(); e.stopPropagation(); deleteHabit(h.id);});
+    } else habitModalDeleteId=null;
     $('#saveHabitBtn')?.addEventListener('click',e=>{e.preventDefault(); e.stopPropagation(); if(habitModalSave) void habitModalSave();});
   }
 
   /* ---------- REPORT ---------- */
-  function renderReport(){renderComparePeriods(); renderCorrelationInsights(); renderHabitCompletionChart(); drawTrend(); renderCalendar(); populateCalendarFilter();}
-  function trendEndDate(){const c=trendCursor, now=hkNow(); if(c.getFullYear()===now.getFullYear()&&c.getMonth()===now.getMonth()) return now; return new Date(c.getFullYear(),c.getMonth()+1,0);}
-  function updateTrendTitle(){const t=$('#trendTitle'); if(!t)return; const now=hkNow(); const cur=trendCursor.getFullYear()===now.getFullYear()&&trendCursor.getMonth()===now.getMonth(); t.textContent=trendCursor.toLocaleDateString([], {month:'short',year:'numeric'})+(cur?' · to today':'');}
+  function syncReportRangeTabs(){
+    $$('#reportRangeTabs button').forEach(b=>b.classList.toggle('active',Number(b.dataset.days)===trendDays));
+  }
+  function renderReport(){syncReportRangeTabs(); renderComparePeriods(); renderCorrelationInsights(); renderHabitCompletionChart(); drawTrend(); renderCalendar();}
   function drawTrend(){
-    const c=$('#trendCanvas'); if(!c)return; updateTrendTitle(); const ctx=c.getContext('2d'),ratio=devicePixelRatio||1; c.width=c.offsetWidth*ratio; c.height=c.offsetHeight*ratio; ctx.setTransform(ratio,0,0,ratio,0,0); const W=c.offsetWidth,H=c.offsetHeight; ctx.clearRect(0,0,W,H);
-    const labels=[]; const pctVals=[]; const energy=[]; const end=trendEndDate();
+    const c=$('#trendCanvas'); if(!c)return; const ctx=c.getContext('2d'),ratio=devicePixelRatio||1; c.width=c.offsetWidth*ratio; c.height=c.offsetHeight*ratio; ctx.setTransform(ratio,0,0,ratio,0,0); const W=c.offsetWidth,H=c.offsetHeight; ctx.clearRect(0,0,W,H);
+    const labels=[]; const pctVals=[]; const energy=[]; const end=hkNow();
     for(let i=trendDays-1;i>=0;i--){const d=new Date(end);d.setDate(d.getDate()-i);const k=dateKey(d); if(isVacationDay(k)){labels.push(`${d.getMonth()+1}/${d.getDate()}`); pctVals.push(null); energy.push(null); continue;} labels.push(`${d.getMonth()+1}/${d.getDate()}`); pctVals.push(dayPct(d)); energy.push(state.journals[k]?.energy??null);}
     const note=$('#trendNote'); if(note) note.textContent='';
     const cs=getComputedStyle(document.documentElement); const gridCol=(cs.getPropertyValue('--line')||'#eeeeF6').trim(); const axisCol=(cs.getPropertyValue('--faint')||'#7c8199').trim(); const lineCol=(cs.getPropertyValue('--brand')||'#4f46e5').trim();
@@ -1010,10 +1016,14 @@
     ctx.strokeStyle=lineCol;ctx.lineWidth=3;ctx.beginPath(); let started=false; energy.forEach((e,i)=>{if(e==null)return; const x=left+i*bw+bw/2, y=top+plotH-plotH*(e/10); if(!started){ctx.moveTo(x,y);started=true}else ctx.lineTo(x,y)}); if(started) ctx.stroke(); energy.forEach((e,i)=>{if(e==null)return; const x=left+i*bw+bw/2, y=top+plotH-plotH*(e/10); ctx.fillStyle=lineCol; ctx.beginPath(); ctx.arc(x,y,3,0,Math.PI*2); ctx.fill();});
     const labelStep=trendDays<=7?1:trendDays<=14?3:6; ctx.fillStyle=axisCol;ctx.font='10px Inter,Arial'; ctx.textAlign='center'; labels.forEach((l,i)=>{if(i%labelStep!==0&&i!==labels.length-1)return; const x=left+i*bw+bw/2; ctx.fillText(l,x,H-16);}); ctx.textAlign='left';}
   function roundRect(ctx,x,y,w,h,r,fill){ctx.beginPath();ctx.moveTo(x+r,y);ctx.arcTo(x+w,y,x+w,y+h,r);ctx.arcTo(x+w,y+h,x,y+h,r);ctx.arcTo(x,y+h,x,y,r);ctx.arcTo(x,y,x+w,y,r); if(fill)ctx.fill();}
-  function renderCalendar(){const title=$('#reportTitle'); const m=$('#monthReport'), q=$('#quarterReport'); if(!title)return; m.style.display=reportMode==='month'?'block':'none'; q.style.display=reportMode==='quarter'?'grid':'none'; if(reportMode==='month'){title.textContent=reportCursor.toLocaleDateString([], {month:'long',year:'numeric'}); renderMonth(reportCursor,$('#calendarGrid'),$('#calendarWeekdays'));} else {const y=reportCursor.getFullYear(), qi=Math.floor(reportCursor.getMonth()/3); title.textContent=`Q${qi+1} ${y}`; q.innerHTML=''; [0,1,2].forEach(i=>{const d=new Date(y,qi*3+i,1); const wrap=document.createElement('div'); wrap.className='month-mini'; wrap.innerHTML=`<h4>${d.toLocaleDateString([], {month:'long'})}</h4><div class="calendar-weekdays"></div><div class="calendar-grid"></div>`; q.appendChild(wrap); renderMonth(d,wrap.querySelector('.calendar-grid'),wrap.querySelector('.calendar-weekdays'),true);});}}
-  function habitDayPct(habit,date){const target=habit.frequency.mode==='daily'?periodTarget(habit):1; const count=habit.frequency.mode==='daily'?todayHabitCount(habit,date):periodCount(habit,date); return Math.min(100,Math.round(Math.min(count,target)/target*100));}
-  function populateCalendarFilter(){const sel=$('#calendarHabitFilter'); if(!sel)return; const cur=sel.value||calendarHabitFilter; sel.innerHTML='<option value="">All habits</option>'+activeHabits().map(h=>`<option value="${h.id}">${escapeHtml(h.emoji+' '+h.name)}</option>`).join(''); sel.value=cur; sel.onchange=()=>{calendarHabitFilter=sel.value; renderCalendar();};}
-  function renderMonth(date,grid,weekdays,mini=false){weekdays.innerHTML=DOW.map(x=>`<div>${x[0]}</div>`).join(''); grid.innerHTML=''; const y=date.getFullYear(),m=date.getMonth(), first=new Date(y,m,1), days=new Date(y,m+1,0).getDate(); const today=todayKey(); const filt=calendarHabitFilter?state.habits.find(h=>h.id===calendarHabitFilter):null; for(let i=0;i<first.getDay();i++){const e=document.createElement('div');e.className='day-cell empty';grid.appendChild(e)} for(let d=1;d<=days;d++){const dt=new Date(y,m,d),k=dateKey(dt),vac=isVacationDay(k); let p=filt?habitDayPct(filt,dt):dayPct(dt); const j=state.journals[k]; const cell=document.createElement('div'); let cls='day-cell'; if(k>today){cls+=' future'} else if(vac){cls+=' vacation';} else if(p!==null){cls+=' '+pctClass(p);} if(k===today)cls+=' today'; cell.className=cls; cell.innerHTML=`<span>${d}</span>${vac?'<span class="mood-mark pause-mark">⏸</span>':''}${!vac&&j?.mood?`<span class="mood-mark">${j.mood}</span>`:''}${!vac&&j?.energy!==undefined?`<span class="energy-mark">${j.energy}</span>`:''}`; cell.onclick=()=>openDayDetail(k); grid.appendChild(cell);} }
+  function renderCalendar(){
+    const title=$('#reportTitle');
+    const m=$('#monthReport');
+    if(!title||!m) return;
+    title.textContent=reportCursor.toLocaleDateString([], {month:'long',year:'numeric'});
+    renderMonth(reportCursor,$('#calendarGrid'),$('#calendarWeekdays'));
+  }
+  function renderMonth(date,grid,weekdays,mini=false){weekdays.innerHTML=DOW.map(x=>`<div>${x[0]}</div>`).join(''); grid.innerHTML=''; const y=date.getFullYear(),m=date.getMonth(), first=new Date(y,m,1), days=new Date(y,m+1,0).getDate(); const today=todayKey(); for(let i=0;i<first.getDay();i++){const e=document.createElement('div');e.className='day-cell empty';grid.appendChild(e)} for(let d=1;d<=days;d++){const dt=new Date(y,m,d),k=dateKey(dt),vac=isVacationDay(k); let p=dayPct(dt); const j=state.journals[k]; const cell=document.createElement('div'); let cls='day-cell'; if(k>today){cls+=' future'} else if(vac){cls+=' vacation';} else if(p!==null){cls+=' '+pctClass(p);} if(k===today)cls+=' today'; cell.className=cls; cell.innerHTML=`<span>${d}</span>${vac?'<span class="mood-mark pause-mark">⏸</span>':''}${!vac&&j?.mood?`<span class="mood-mark">${j.mood}</span>`:''}${!vac&&j?.energy!==undefined?`<span class="energy-mark">${j.energy}</span>`:''}`; cell.onclick=()=>openDayDetail(k); grid.appendChild(cell);} }
   function openDayDetail(k){const d=parseDate(k); const scheduled=dayScheduledHabits(d); const p=dayPct(d);
     openModal(`Day Detail · ${fmtDate(d)}`,`<div class="small-note">Completion <strong>${p??0}%</strong> · tap +1 to record, ↺ to reset a habit</div><div class="habit-list" id="dayHabitList" style="margin-top:12px"></div><div id="dayJournalBox" style="margin-top:16px"></div>`);
     const list=$('#dayHabitList'); if(!scheduled.length) list.innerHTML='<div class="empty">No habits scheduled on this day.</div>';
@@ -1045,7 +1055,8 @@
   }
   function renderCorrelationInsights(){
     const box=$('#correlationInsights'); if(!box)return;
-    const keys=Object.keys(state.journals).filter(k=>afterStart(k)&&!isVacationDay(k)).sort().slice(-60);
+    const range=reportDayRange();
+    const keys=Object.keys(state.journals).filter(k=>afterStart(k)&&!isVacationDay(k)&&k>=range.from&&k<=range.to).sort();
     if(keys.length<3){box.innerHTML='<div class="empty">Log at least 3 journal entries to see correlations.</div>'; return;}
     let hiE=0,loE=0,hiN=0,loN=0; const moodMap={};
     keys.forEach(k=>{const j=state.journals[k]; const p=dayPct(parseDate(k)); if(p===null) return; if(j.energy>=7){hiE+=p; hiN++;} else if(j.energy<=4){loE+=p; loN++;} if(j.mood){if(!moodMap[j.mood])moodMap[j.mood]={s:0,n:0}; moodMap[j.mood].s+=p; moodMap[j.mood].n++;}});
@@ -1060,16 +1071,13 @@
   }
   function renderComparePeriods(){
     const box=$('#comparePeriodBox'); if(!box)return;
-    const now=hkNow(); let curStart,curEnd,prevStart,prevEnd,curLabel,prevLabel;
-    if(comparePeriod==='week'){
-      const dow=now.getDay(); curEnd=now; curStart=new Date(now); curStart.setDate(now.getDate()-dow);
-      prevEnd=new Date(curStart); prevEnd.setDate(prevEnd.getDate()-1); prevStart=new Date(prevEnd); prevStart.setDate(prevEnd.getDate()-6);
-      curLabel='This week'; prevLabel='Last week';
-    }else{
-      curStart=new Date(now.getFullYear(),now.getMonth(),1); curEnd=now;
-      prevStart=new Date(now.getFullYear(),now.getMonth()-1,1); prevEnd=new Date(now.getFullYear(),now.getMonth(),0);
-      curLabel='This month'; prevLabel='Last month';
-    }
+    const now=hkNow();
+    const curEnd=now;
+    const curStart=new Date(now); curStart.setDate(curStart.getDate()-(trendDays-1));
+    const prevEnd=new Date(curStart); prevEnd.setDate(prevEnd.getDate()-1);
+    const prevStart=new Date(prevEnd); prevStart.setDate(prevStart.getDate()-(trendDays-1));
+    const curLabel=`Last ${trendDays} days`;
+    const prevLabel=`Previous ${trendDays} days`;
     const cur=periodAvgPct(dateKey(curStart),dateKey(curEnd)); const prev=periodAvgPct(dateKey(prevStart),dateKey(prevEnd));
     const delta=cur-prev; const cls=delta>0?'up':delta<0?'down':'flat';
     box.innerHTML=`<div class="compare-grid"><div class="compare-box"><div class="compare-val">${cur}%</div><div class="compare-label">${curLabel}</div></div><div class="compare-box"><div class="compare-val">${prev}%</div><div class="compare-label">${prevLabel}</div></div></div><div class="compare-delta ${cls}">${delta>0?`▲ +${delta} pts`:delta<0?`▼ ${delta} pts`:'— No change'}</div>`;
@@ -1358,7 +1366,7 @@
     normalizeState();
     invalidateSettings();
     fileHandle=null;
-    weekOffset=0; trendCursor=hkNow(); reportCursor=hkNow();
+    weekOffset=0; reportCursor=currentReportMonth();
     await save(true,{render:'all'});
     toast(mode==='real'?'Real use mode — start adding habits':'Demo data loaded');
     resetSettingsDraft();
@@ -1845,10 +1853,7 @@
     const tabs=segBtn.closest('.segmented');
     if(!tabs||segBtn.tagName!=='BUTTON') return false;
     const activate=()=>{tabs.querySelectorAll('button').forEach(b=>b.classList.remove('active')); segBtn.classList.add('active');};
-    if(tabs.id==='comparePeriodTabs'){comparePeriod=segBtn.dataset.period; activate(); renderComparePeriods(); return true;}
-    if(tabs.id==='habitChartPeriodTabs'){habitChartPeriod=segBtn.dataset.period; activate(); renderHabitCompletionChart(); return true;}
-    if(tabs.id==='rangeTabs'){trendDays=Number(segBtn.dataset.days); activate(); drawTrend(); return true;}
-    if(tabs.id==='reportMode'){reportMode=segBtn.dataset.mode; activate(); renderCalendar(); return true;}
+    if(tabs.id==='reportRangeTabs'){trendDays=Number(segBtn.dataset.days); activate(); renderReport(); return true;}
     if(tabs.id==='rewardTabs'){rewardActiveTab=segBtn.dataset.tab; activate(); drawRewardPanel(rewardActiveTab); return true;}
     return false;
   }
@@ -1868,7 +1873,7 @@
     if(e.target.closest('#modalClose')||e.target.id==='modalBackdrop'){closeModal(); return;}
     if(e.target.closest('#savePauseBtn')){ tapAction('savePause',e,()=>void savePausePeriod()); return; }
     if(e.target.closest('#saveHabitBtn')){ tapAction('saveHabit',e,()=>{ if(habitModalSave) void habitModalSave(); }); return; }
-    if(e.target.closest('#deleteHabitBtn')){ tapAction('deleteHabit',e,()=>{ const id=e.target.closest('#deleteHabitBtn')?.dataset.deleteHabitId; if(!id||!confirm('Delete this habit? Records stay in history.'))return; state.habits=state.habits.filter(x=>x.id!==id); closeModal(); toast('Habit deleted'); void save(false,{render:'all'}); }); return; }
+    if(e.target.closest('#deleteHabitBtn')){ tapAction('deleteHabit',e,()=>{ if(habitModalDeleteId) deleteHabit(habitModalDeleteId); }); return; }
     if(e.target.closest('#saveGroupIcon')){ tapAction('saveGroupIcon',e,()=>{ const inp=$('#groupEmojiInput'); const emoji=inp?.value.trim()||'📋'; const gid=inp?.dataset.groupId; const g=state.groups.find(x=>x.id===gid); if(g){ g.emoji=emoji; closeModal(); toast('Group icon updated'); void save(false,{render:'habitsView'}); } }); return; }
     if(e.target.closest('#saveJournalHome')){ tapAction('saveJournalHome',e,()=>{ const k=todayKey(); const mood=$('#homeJournalForm .mood.active')?.dataset.mood||''; const wasNew=!state.journals[k]; state.journals[k]={mood,energy:Number($('#homeEnergy').value),text:$('#homeJournalText').value.trim(),updatedAt:new Date().toISOString()}; if(wasNew) showXpPop('+5 EXP'); toast('Journal saved'); void save(false,{render:'none'}); }); return; }
     if(e.target.closest('#saveJournalModal')){ tapAction('saveJournalModal',e,()=>{ const k=$('#journalDate')?.value||todayKey(); const wasNew=!state.journals[k]; state.journals[k]={mood:$('#modalBody .mood.active')?.dataset.mood||'',energy:Number($('#modalEnergy').value),text:$('#modalJournalText').value.trim(),updatedAt:new Date().toISOString()}; if(wasNew) showXpPop('+5 EXP'); closeModal(); toast('Journal saved'); void save(false,{render:'none'}); }); return; }
@@ -1903,10 +1908,8 @@
     if(e.target.closest('#weekPrev')){weekOffset--; renderWeekStrip(); return;}
     if(e.target.closest('#weekNext')){weekOffset++; renderWeekStrip(); return;}
     if(e.target.closest('#weekToday')){weekOffset=0; renderWeekStrip(); return;}
-    if(e.target.closest('#trendPrev')){trendCursor.setMonth(trendCursor.getMonth()-1); drawTrend(); return;}
-    if(e.target.closest('#trendNext')){const now=hkNow(); const c=new Date(trendCursor); c.setMonth(c.getMonth()+1); if(c.getFullYear()>now.getFullYear()||(c.getFullYear()===now.getFullYear()&&c.getMonth()>now.getMonth())){toast('Already at the latest month');return;} trendCursor=c; drawTrend(); return;}
-    if(e.target.closest('#reportPrev')){reportCursor.setMonth(reportCursor.getMonth()-(reportMode==='month'?1:3)); renderCalendar(); return;}
-    if(e.target.closest('#reportNext')){reportCursor.setMonth(reportCursor.getMonth()+(reportMode==='month'?1:3)); renderCalendar(); return;}
+    if(e.target.closest('#reportPrev')){reportCursor=new Date(reportCursor.getFullYear(),reportCursor.getMonth()-1,1); renderCalendar(); return;}
+    if(e.target.closest('#reportNext')){reportCursor=new Date(reportCursor.getFullYear(),reportCursor.getMonth()+1,1); renderCalendar(); return;}
     if(e.target.closest('#statusToggle')){state.settings.statusRowOpen=!state.settings.statusRowOpen; localStorage.setItem(STORAGE,JSON.stringify(state)); updateStatus(); return;}
     if(e.target.closest('#onboardNext')){if(onboardStep<ONBOARD_STEPS.length-1){onboardStep++; showOnboardStep();} else finishOnboarding(); return;}
     if(e.target.closest('#onboardBack')){if(onboardStep>0){onboardStep--; showOnboardStep();} return;}
