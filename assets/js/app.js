@@ -71,7 +71,7 @@
   const PREVIEW=3;
   const LAZY_CHUNK=10;
   const REMINDER_MSG_LIMIT=80;
-  const APP_VERSION='v42';
+  const APP_VERSION='v43';
   const iconBtn=(cls,svg,title)=>{const b=document.createElement('button'); b.className='act-btn '+cls; b.innerHTML=svg; b.title=title; b.setAttribute('aria-label',title); return b;};
 
   const USER_NAME_MAX=12;
@@ -596,15 +596,24 @@
     let done=0,tot=0; hs.forEach(h=>{const c=completionOfHabit(h,now); done+=Math.min(c.count,c.target); tot+=c.target;});
     const prog=groupEl.querySelector('.group-progress'); if(prog) prog.textContent=`${done}/${tot}`;
   }
+  function invalidateHomeCaches(){
+    const box=$('#todayHabitGroups'); if(box) delete box.dataset.sig;
+    const strip=$('#weekStrip'); if(strip) delete strip.dataset.sig;
+  }
+  function habitRowWrap(habitId,date){
+    const sel=`[data-habit-id="${habitId}"][data-date="${date}"]`;
+    return document.querySelector(`button.check-btn${sel}`)?.closest('.swipe-wrap')
+      || document.querySelector(`button.reset-habit-btn${sel}`)?.closest('.swipe-wrap')
+      || document.querySelector(`.habit-row[data-habit-tap="${habitId}"][data-date="${date}"]`)?.closest('.swipe-wrap');
+  }
   function refreshHomeAfterRecord(habitId, date=todayKey()){
     const now=parseDate(date);
     const homeHabits=activeHabits().filter(h=>showsOnHomeToday(h,now));
-    const box=$('#todayHabitGroups'); if(box) delete box.dataset.sig;
+    invalidateHomeCaches();
     updateHomeSummary(now, homeHabits);
     refreshEconomyDisplays();
     const habit=state.habits.find(h=>h.id===habitId);
-    const btn=document.querySelector(`button.check-btn[data-habit-id="${habitId}"][data-date="${date}"]`);
-    const wrap=btn?.closest('.swipe-wrap');
+    const wrap=habitRowWrap(habitId,date);
     if(habit && wrap){
       const after=wrap.dataset.afterKey?()=>openDayDetail(wrap.dataset.afterKey):null;
       const fresh=todayHabitRow(habit, now, after);
@@ -1867,6 +1876,32 @@
   }
   function setupReminderLoop(){if(reminderTimer)clearInterval(reminderTimer); if(!state.settings.reminders)return; reminderTimer=setInterval(()=>{const now=hkNow(); state.habits.forEach(h=>{if(!shouldRemindHabit(h,now))return; const last=`${h.id}-${todayKey()}-${h.reminder.time}`; if(sessionStorage.getItem(last))return; sessionStorage.setItem(last,'1'); const body=reminderBody(h); if('Notification' in window && Notification.permission==='granted') new Notification('Momentum',{body}); else toast(body);});},30000)}
 
+  async function eraseAllData(){
+    if($('#confirmDeleteInput')?.value!=='Confirm'){toast('Type Confirm first');return;}
+    if(!confirm('Erase all data and start fresh?'))return;
+    const keep={colorMode:state.settings.colorMode,styleTheme:state.settings.styleTheme,userName:state.settings.userName,profileIcon:state.settings.profileIcon};
+    const linkedBackup=!!state.settings.fileConnected;
+    const backupName=state.settings.backupFileName||'';
+    clearTimeout(backupDebounceTimer);
+    backupSyncQueued=false;
+    state=freshState({onboardingComplete:true,keep});
+    if(linkedBackup){
+      state.settings.fileConnected=true;
+      state.settings.autoBackup=true;
+      state.settings.dailyBackup=true;
+      state.settings.backupFileName=backupName;
+    }
+    normalizeState();
+    invalidateSettings();
+    lastLevel=levelInfo().cur.level;
+    weekOffset=0;
+    reportCursor=currentReportMonth();
+    invalidateHomeCaches();
+    const confirmInput=$('#confirmDeleteInput'); if(confirmInput) confirmInput.value='';
+    await save(false,{render:'all'});
+    if(linkedBackup) await flushBackupSync();
+    toast('Data erased');
+  }
   function exportJson(){state.settings.lastExportAt=todayKey(); touchBackupTimestamp(); localStorage.setItem(STORAGE,JSON.stringify(state)); const blob=new Blob([JSON.stringify(state,null,2)],{type:'application/json'}); const a=document.createElement('a'); a.href=URL.createObjectURL(blob); a.download='habit-tracker-backup.json'; a.click(); URL.revokeObjectURL(a.href); updateStatus(); refreshSettingsChrome();}
   function importJson(file){const r=new FileReader(); r.onload=async()=>{try{state=JSON.parse(r.result); normalizeState(); invalidateSettings(); await save(true,{render:'all'}); toast('Imported'); if(!fileHandle) openImportConnectModal();}catch(e){toast('Invalid JSON')}}; r.readAsText(file)}
 
@@ -1990,24 +2025,7 @@
     if(e.target.closest('#onboardBack')){if(onboardStep>0){onboardStep--; showOnboardStep();} return;}
     if(e.target.closest('#onboardClose')){finishOnboarding(); return;}
     if(e.target.closest('#fileStatus')&&!fileHandle&&state.settings.fileConnected){showView('settingsView'); return;}
-    if(e.target.closest('#resetAllBtn')){
-      if($('#confirmDeleteInput')?.value!=='Confirm'){toast('Type Confirm first');return;}
-      if(!confirm('Erase all data and start fresh?'))return;
-      const keep={colorMode:state.settings.colorMode,styleTheme:state.settings.styleTheme,userName:state.settings.userName,profileIcon:state.settings.profileIcon};
-      state=freshState({onboardingComplete:true,keep}); fileHandle=null;
-      localStorage.setItem(STORAGE,JSON.stringify(state)); normalizeState(); invalidateSettings();
-      void save(true,{render:'all'}); toast('Data erased'); return;
-    }
-    const reset=e.target.closest('button[data-reset][data-habit-id], button.reset-habit-btn[data-habit-id]');
-    if(reset){
-      tapAction('reset-'+reset.dataset.habitId,e,()=>{
-        const wrap=reset.closest('.swipe-wrap');
-        const id=reset.dataset.habitId, date=reset.dataset.date||todayKey();
-        resetHabitForDate(id,date);
-        if(wrap?.dataset.afterKey) openDayDetail(wrap.dataset.afterKey);
-      });
-      return;
-    }
+    if(e.target.closest('#resetAllBtn')){ tapAction('eraseAll',e,()=>void eraseAllData()); return; }
     const check=e.target.closest('button.check-btn[data-habit-id]:not(.done):not(:disabled)');
     if(check){
       tapAction('check-'+check.dataset.habitId,e,()=>{
