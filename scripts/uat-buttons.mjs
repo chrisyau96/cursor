@@ -216,6 +216,95 @@ await test('Credit rule chip matches amount select', async () => {
   assert(chip === 'HK$' + amt, `chip ${chip} != HK$${amt}`);
 });
 
+await test('No penalty recorded when credit and EXP are zero', async () => {
+  await page.evaluate(() => {
+    const s = JSON.parse(localStorage.getItem('habitTrackerProductionV7'));
+    s.records = [];
+    s.redemptions = [];
+    s.journals = {};
+    s.settings.vacations = [];
+    s.settings.startDate = '2026-01-01';
+    s.settings.startDate = '2026-07-14';
+    s.settings.rewards.penaltyCredit = 10;
+    s.settings.rewards.penaltyXp = 50;
+    s.settings.rewards.penaltyZeroDays = 1;
+    localStorage.setItem('habitTrackerProductionV7', JSON.stringify(s));
+    location.reload();
+  });
+  await page.waitForLoadState('networkidle');
+  await page.waitForTimeout(500);
+  await page.click('.nav-item[data-view="rewardsView"]');
+  await page.waitForTimeout(300);
+  const creditText = await page.locator('#creditValue').textContent();
+  const ledgerText = await page.locator('#ledgerList').textContent();
+  assert(creditText?.includes('0'), 'credit should remain zero');
+  assert(!ledgerText?.includes('consecutive 0%'), 'penalty should not appear when balance is zero');
+});
+
+await test('Credit balance updates immediately after completion', async () => {
+  await page.evaluate(() => {
+    const s = JSON.parse(localStorage.getItem('habitTrackerProductionV7'));
+    s.records = [];
+    s.redemptions = [];
+    s.journals = {};
+    s.settings.vacations = [];
+    s.settings.startDate = '2026-01-01';
+    s.settings.rewards.creditRules = [{ id: 'c50', pct: 50, amount: 2 }];
+    s.settings.rewards.penaltyCredit = 0;
+    s.settings.rewards.penaltyXp = 0;
+    localStorage.setItem('habitTrackerProductionV7', JSON.stringify(s));
+    location.reload();
+  });
+  await page.waitForLoadState('networkidle');
+  await page.waitForTimeout(500);
+  await page.click('.nav-item[data-view="homeView"]');
+  await page.waitForTimeout(200);
+  const before = await page.locator('#homeCreditValue').textContent();
+  await page.locator('.check-btn:not(.done):not(:disabled)').first().click();
+  await page.waitForTimeout(400);
+  const after = await page.locator('#homeCreditValue').textContent();
+  assert(after.includes('2'), `credit should reflect immediately, before=${before} after=${after}`);
+});
+
+await test('Auto backup sync runs after action', async () => {
+  await page.evaluate(() => {
+    const s = JSON.parse(localStorage.getItem('habitTrackerProductionV7'));
+    s.records = [];
+    s.redemptions = [];
+    window.__backupWrites = 0;
+    localStorage.setItem('habitTrackerProductionV7', JSON.stringify(s));
+    location.reload();
+  });
+  await page.waitForLoadState('networkidle');
+  await page.waitForTimeout(500);
+  await page.evaluate(() => {
+    window.showSaveFilePicker = async () => ({
+      name: 'autosync.json',
+      requestPermission: async () => 'granted',
+      queryPermission: async () => 'granted',
+      getFile: async () => new File(['{}'], 'autosync.json'),
+      createWritable: async () => ({
+        write: async () => { window.__backupWrites = (window.__backupWrites || 0) + 1; },
+        close: async () => {},
+      }),
+    });
+  });
+  await page.click('#topSettingsBtn');
+  await page.locator('[data-sync-action="create"]').scrollIntoViewIfNeeded();
+  await page.click('[data-sync-action="create"]');
+  await page.waitForTimeout(600);
+  await page.locator('#autoBackupSwitch').click();
+  await page.waitForTimeout(200);
+  await page.click('.nav-item[data-view="homeView"]');
+  await page.waitForTimeout(200);
+  await page.locator('.check-btn:not(.done):not(:disabled)').first().click();
+  await page.waitForTimeout(5500);
+  const writes = await page.evaluate(() => window.__backupWrites || 0);
+  const lastBackup = await page.evaluate(() => JSON.parse(localStorage.getItem('habitTrackerProductionV7')).settings.lastBackupAt);
+  assert(writes > 0, 'backup file should be written');
+  assert(!!lastBackup, 'lastBackupAt should be set after auto sync');
+});
+
 await browser.close();
 
 const failed = results.filter(r => !r.ok);

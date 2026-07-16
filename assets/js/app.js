@@ -41,7 +41,8 @@
   let backupDebounceTimer=null;
   let backupSyncInFlight=false;
   let backupSyncQueued=false;
-  const BACKUP_DEBOUNCE_MS=2500;
+  const BACKUP_DEBOUNCE_MS=5000;
+  let backupSyncState='idle';
   function currentReportMonth(){const n=hkNow(); return new Date(n.getFullYear(),n.getMonth(),1);}
   let reportCursor=currentReportMonth();
   let trendDays=7;
@@ -70,7 +71,7 @@
   const PREVIEW=3;
   const LAZY_CHUNK=10;
   const REMINDER_MSG_LIMIT=80;
-  const APP_VERSION='v41';
+  const APP_VERSION='v42';
   const iconBtn=(cls,svg,title)=>{const b=document.createElement('button'); b.className='act-btn '+cls; b.innerHTML=svg; b.title=title; b.setAttribute('aria-label',title); return b;};
 
   const USER_NAME_MAX=12;
@@ -162,7 +163,7 @@
     if(mode==='all') renderAll();
     else if(mode==='active') renderAfterSave(null);
     else if(mode!=='none') renderAfterSave(mode);
-    else { updateStatus(); renderTopProfile(); }
+    else { updateStatus(); renderTopProfile(); refreshEconomyDisplays(); }
     if(!skipSync) queueBackupSync();
   }
   function toast(msg,duration=1600){const t=$('#toast'); if(!t)return; t.textContent=msg; t.classList.add('show'); clearTimeout(toast._timer); toast._timer=setTimeout(()=>t.classList.remove('show'),duration);}
@@ -187,19 +188,46 @@
   }
   function backupEnabled(){return !!state.settings.autoBackup&&!!fileHandle;}
   function maybeRenderBackupStatus(){ if($('#settingsView')?.classList.contains('active')) renderBackupStatus(); }
+  async function ensureBackupConnection(){
+    if(fileHandle && await canWriteBackup()) return true;
+    if(!state.settings.fileConnected) return false;
+    return reconnectStoredFile(true);
+  }
   function queueBackupSync(){
-    if(!backupEnabled()) return;
+    if(!state.settings.autoBackup) return;
     backupSyncQueued=true;
     clearTimeout(backupDebounceTimer);
+    backupSyncDebounceHint();
     backupDebounceTimer=setTimeout(()=>{ void flushBackupSync(); },BACKUP_DEBOUNCE_MS);
   }
+  function backupSyncDebounceHint(){
+    if(!state.settings.autoBackup) return;
+    backupSyncState='queued';
+    updateStatus();
+  }
   async function flushBackupSync(){
-    if(!backupEnabled()) return;
+    if(!state.settings.autoBackup) return;
     if(backupSyncInFlight){ backupSyncQueued=true; return; }
     backupSyncQueued=false;
     backupSyncInFlight=true;
-    try{ await writeBackupFile(true); }
-    finally{
+    backupSyncState='syncing';
+    updateStatus();
+    try{
+      const ready=await ensureBackupConnection();
+      if(!ready){
+        backupSyncState=state.settings.fileConnected?'pending':'idle';
+        updateStatus();
+        return;
+      }
+      let ok=await writeBackupFile(true);
+      if(!ok){
+        await new Promise(r=>setTimeout(r,800));
+        ok=await writeBackupFile(true);
+      }
+      backupSyncState=ok?'ok':'error';
+      updateStatus();
+      maybeRenderBackupStatus();
+    }finally{
       backupSyncInFlight=false;
       if(backupSyncQueued) void flushBackupSync();
     }
@@ -219,10 +247,12 @@
       state.settings.fileConnected=true;
       touchBackupTimestamp();
       localStorage.setItem(STORAGE,JSON.stringify(state));
+      backupSyncState='ok';
       if(silent) maybeRenderBackupStatus();
       else { updateStatus(); refreshSettingsChrome(); }
       return true;
     }catch(e){
+      backupSyncState='error';
       if(!silent){ toast('Backup sync needs reconnection'); state.settings.fileConnected=false; updateStatus(); }
       return false;
     }
@@ -484,18 +514,29 @@
   }
   function autoLedger(){
     ensureRewardShape(); const rewards=state.settings.rewards; const entries=[];
+    const redemptions=state.redemptions||[];
     const dates=[...new Set(state.records.map(r=>r.date).concat(Object.keys(state.journals)))].filter(afterStart).sort();
     dates.forEach(d=>{if(isVacationDay(d))return; const p=dayPct(parseDate(d)); if(p===null)return; (rewards.creditRules||[]).forEach(rule=>{if(p>=Number(rule.pct||100)){entries.push({id:`auto-credit-${rule.id}-${d}`,date:d,type:'credit',amount:Number(rule.amount||0),gift:'',desc:`${rule.pct}% daily completion`,credit:Number(rule.amount||0),xp:rule.pct>=100?30:12});}});});
+    (rewards.giftRules||[]).forEach(rule=>{dates.forEach(d=>{if(isVacationDay(d))return; const streak=streakAt(parseDate(d),Number(rule.pct||80)); if(streak>0 && streak%Number(rule.days||30)===0){entries.push({id:`auto-gift-${rule.id}-${d}`,date:d,type:'gift',amount:1,gift:rule.gift||'Gift',giftIcon:rule.icon||'🎁',giftRuleId:rule.id,desc:`${rule.days} days at ${rule.pct}%+ · ${rule.gift||'Gift'}`,credit:0,xp:120});}});});
+    const ledgerCreditAt=(dk)=>Math.max(0,[...entries,...redemptions].filter(e=>e.date<=dk).reduce((s,e)=>s+(e.credit||0),0));
+    const ledgerXpAt=(dk)=>Math.max(0,recordsXpTotal()+journalXpTotal()+[...entries,...redemptions].filter(e=>e.date<=dk).reduce((s,e)=>s+(e.xp||0),0));
     const start=parseDate(trackerStart()), end=hkNow();
     for(let d=new Date(start); d<=end; d.setDate(d.getDate()+1)){
       if(isVacationDay(dateKey(d))) continue;
       const p=dayPct(d); if(p!==0) continue;
       const zero=zeroStreakAt(d); const every=Math.max(1,Number(rewards.penaltyZeroDays||2));
-      if(zero>=every && zero%every===0){
-        entries.push({id:'auto-penalty-'+dateKey(d),date:dateKey(d),type:'penalty',desc:`${zero} consecutive 0% days`,credit:-Math.abs(Number(rewards.penaltyCredit||0)),xp:-Math.abs(Number(rewards.penaltyXp||0))});
-      }
+      if(zero<every || zero%every!==0) continue;
+      const creditPen=Math.abs(Number(rewards.penaltyCredit||0));
+      const xpPen=Math.abs(Number(rewards.penaltyXp||0));
+      if(creditPen===0 && xpPen===0) continue;
+      const dk=dateKey(d);
+      const creditBal=ledgerCreditAt(dk);
+      const xpBal=ledgerXpAt(dk);
+      const creditDeduct=creditPen>0 && creditBal>0 ? -Math.min(creditPen,creditBal) : 0;
+      const xpDeduct=xpPen>0 && xpBal>0 ? -Math.min(xpPen,xpBal) : 0;
+      if(creditDeduct===0 && xpDeduct===0) continue;
+      entries.push({id:'auto-penalty-'+dk,date:dk,type:'penalty',desc:`${zero} consecutive 0% days`,credit:creditDeduct,xp:xpDeduct});
     }
-    (rewards.giftRules||[]).forEach(rule=>{dates.forEach(d=>{if(isVacationDay(d))return; const streak=streakAt(parseDate(d),Number(rule.pct||80)); if(streak>0 && streak%Number(rule.days||30)===0){entries.push({id:`auto-gift-${rule.id}-${d}`,date:d,type:'gift',amount:1,gift:rule.gift||'Gift',giftIcon:rule.icon||'🎁',giftRuleId:rule.id,desc:`${rule.days} days at ${rule.pct}%+ · ${rule.gift||'Gift'}`,credit:0,xp:120});}});});
     return entries;
   }
   function activeGiftRule(){ensureRewardShape(); const r=state.settings.rewards; return (r.giftRules||[]).find(g=>g.id===r.activeGiftId)||null;}
@@ -509,7 +550,35 @@
   function zeroStreakAt(date){let s=0; const d=new Date(date); for(let i=0;i<366;i++){const k=dateKey(d); if(isVacationDay(k)){d.setDate(d.getDate()-1);continue;} const p=dayPct(d); if(p===0){s++; d.setDate(d.getDate()-1)} else break;} return s;}
 
   function pctClass(p){if(p>=100)return 'perfect'; if(p>=80)return 'good'; if(p>=50)return 'partial'; if(p>0)return 'low'; return 'zero';}
-  function updateStatus(){const sync=$('#syncStatus'), file=$('#fileStatus'), rem=$('#reminderStatus'); if(!sync)return; const connected=!!fileHandle; const backupOn=!!state.settings.autoBackup; const syncActive=backupOn&&connected; const syncPending=backupOn&&!connected; sync.className='status-pill '+(syncActive?'on':syncPending?'warn':''); sync.querySelector('span:last-child').textContent=syncActive?'Auto Backup On':syncPending?'Reconnect backup':'Auto Backup Off'; file.className='status-pill '+(connected?'on':(state.settings.fileConnected?'warn':'')); file.querySelector('span:last-child').textContent=connected?'File Connected':(state.settings.fileConnected?'Reconnect File':'No File'); file.style.cursor=(!connected&&state.settings.fileConnected)?'pointer':''; rem.className='status-pill '+(state.settings.reminders?'on':''); rem.querySelector('span:last-child').textContent=state.settings.reminders?'Reminders On':'Reminders Off'; const wrap=$('#statusRowWrap'); if(wrap) wrap.classList.toggle('open',!!state.settings.statusRowOpen);}
+  function updateStatus(){const sync=$('#syncStatus'), file=$('#fileStatus'), rem=$('#reminderStatus'); if(!sync)return; const connected=!!fileHandle&&backupSyncState!=='pending'; const backupOn=!!state.settings.autoBackup; const syncActive=backupOn&&connected&&backupSyncState!=='error'; const syncPending=backupOn&&(!connected||backupSyncState==='pending'||backupSyncState==='queued'); let syncLabel='Auto Backup Off'; if(backupOn){ if(backupSyncState==='syncing') syncLabel='Syncing…'; else if(backupSyncState==='queued') syncLabel='Sync queued'; else if(backupSyncState==='error') syncLabel='Sync failed'; else if(syncActive) syncLabel=state.settings.lastBackupAt?'Synced':'Auto Backup On'; else syncLabel='Reconnect backup'; } sync.className='status-pill '+(syncActive?'on':syncPending||backupSyncState==='error'?'warn':''); sync.querySelector('span:last-child').textContent=syncLabel; file.className='status-pill '+(connected?'on':(state.settings.fileConnected?'warn':'')); file.querySelector('span:last-child').textContent=connected?'File Connected':(state.settings.fileConnected?'Reconnect File':'No File'); file.style.cursor=(!connected&&state.settings.fileConnected)?'pointer':''; rem.className='status-pill '+(state.settings.reminders?'on':''); rem.querySelector('span:last-child').textContent=state.settings.reminders?'Reminders On':'Reminders Off'; const wrap=$('#statusRowWrap'); if(wrap) wrap.classList.toggle('open',!!state.settings.statusRowOpen);}
+
+  function refreshEconomyDisplays(){
+    const bal=creditTotal();
+    const li=levelInfo();
+    const homeCredit=$('#homeCreditValue'); if(homeCredit) homeCredit.textContent='HK$'+bal;
+    const creditVal=$('#creditValue'); if(creditVal) creditVal.textContent='HK$'+bal;
+    const active=activeGiftRule();
+    const activeAvail=active?giftCount(active):0;
+    const giftVal=$('#giftUnlockValue'); if(giftVal) giftVal.textContent=activeAvail;
+    const giftSub=$('#giftUnlockSub'); if(giftSub) giftSub.textContent=active?('of '+(active.gift||'Gift')):'no gift goal';
+    const levelXp=$('#levelPageXp'); if(levelXp) levelXp.textContent=li.next.level===li.cur.level?`${fmtXp(li.xp)} EXP · Max tier reached`:`${fmtXp(li.xp)} / ${fmtXp(li.next.xp)} EXP · Next: ${li.next.icon} ${li.next.name}`;
+    renderTopProfile();
+    if($('#rewardsView')?.classList.contains('active')){
+      const chip=$('#redeemGrid .chip.orange'); if(chip) chip.textContent='HK$'+bal+' available';
+      const spend=$('#creditSpendAmount'), slider=$('#creditSpendSlider');
+      if(spend && slider){ const v=Math.max(0,Math.min(bal,Number(spend.value||0))); spend.max=bal; slider.max=bal; spend.value=v; slider.value=v; }
+      const spendBtn=$('#spendCreditBtn'); if(spendBtn){ spendBtn.disabled=bal<=0; spendBtn.classList.toggle('btn-dim',bal<=0); }
+    }
+  }
+  function notifyEconomyGains(beforeCredit,beforeXp,habitXpGain=0){
+    const afterCredit=creditTotal();
+    const afterXp=xpTotal();
+    const creditGain=afterCredit-beforeCredit;
+    const ledgerXpGain=afterXp-beforeXp-habitXpGain;
+    if(creditGain>0) toast(`+HK$${creditGain} credit earned`);
+    if(ledgerXpGain>0) showXpPop('+'+fmtXp(ledgerXpGain)+' EXP');
+    refreshEconomyDisplays();
+  }
 
   function updateHomeSummary(now, scheduled){
     let completed=0,total=0; scheduled.forEach(h=>{const c=completionOfHabit(h,now); completed+=Math.min(c.count,c.target); total+=c.target;});
@@ -532,7 +601,7 @@
     const homeHabits=activeHabits().filter(h=>showsOnHomeToday(h,now));
     const box=$('#todayHabitGroups'); if(box) delete box.dataset.sig;
     updateHomeSummary(now, homeHabits);
-    renderTopProfile();
+    refreshEconomyDisplays();
     const habit=state.habits.find(h=>h.id===habitId);
     const btn=document.querySelector(`button.check-btn[data-habit-id="${habitId}"][data-date="${date}"]`);
     const wrap=btn?.closest('.swipe-wrap');
@@ -666,12 +735,15 @@
     const habit=state.habits.find(h=>h.id===habitId); if(!habit)return;
     const dt=parseDate(date); const c=completionOfHabit(habit,dt);
     if(c.count>=c.target){toast('Target already completed'); return;}
+    const beforeCredit=creditTotal();
+    const beforeXp=xpTotal();
     const before=habitPeriodXp(habit,dt);
     state.records.push({id:uid(),habitId,date,at:new Date().toISOString(),note});
     const gained=habitPeriodXp(habit,dt)-before;
     haptic();
     refreshHomeAfterRecord(habitId, date);
     if(gained>0) showXpPop('+'+fmtXp(gained)+' EXP');
+    notifyEconomyGains(beforeCredit,beforeXp,gained);
     const pct=dayPct(dt);
     void save(false,{render:'none'});
     if(pct===100) celebrate('Perfect day! 🎉');
@@ -721,9 +793,12 @@
     void save(false,{render:'none'});
   }
   function resetHabitForDate(habitId,k){
+    const beforeCredit=creditTotal();
+    const beforeXp=xpTotal();
     state.records=state.records.filter(r=>!(r.date===k&&r.habitId===habitId));
     haptic();
     refreshHomeAfterRecord(habitId,k);
+    notifyEconomyGains(beforeCredit,beforeXp,0);
     toast('Habit reset');
     void save(false,{render:'none'});
   }
@@ -1397,7 +1472,7 @@
       const box=$('#creditRulesBox'); box.innerHTML='';
       (r.creditRules||[]).forEach((rule,idx)=>{const div=document.createElement('div'); div.className='rule-card'; div.innerHTML=`<div class="rule-card-head"><div class="rule-card-title">Credit rule</div><span class="gift-rule-chip" data-chip>HK$${rule.amount||0}</span></div><div class="rule-grid"><div class="rule-row"><div class="field"><label>Completion</label><select data-pct>${[50,60,70,80,90,100].map(n=>`<option value="${n}">${n}%+</option>`).join('')}</select></div><div class="field"><label>Amount</label><select data-amount>${[1,2,5,10,20,30,50,100].map(n=>`<option value="${n}">HK$${n}</option>`).join('')}</select></div></div></div><div class="rule-actions"><button class="btn-text-danger" data-remove type="button">Remove</button></div>`; const pctSel=div.querySelector('[data-pct]'); const amtSel=div.querySelector('[data-amount]'); const chip=div.querySelector('[data-chip]'); pctSel.value=String(rule.pct??100); amtSel.value=String(rule.amount??10); const syncChip=()=>{if(chip) chip.textContent='HK$'+amtSel.value;}; syncChip(); const persist=async()=>{const pct=Number(pctSel.value); const dup=(r.creditRules||[]).some((x,i)=>i!==idx&&Number(x.pct)===pct); if(dup){toast('Duplicate completion %'); pctSel.value=String(rule.pct??100); return;} rule.pct=pct; rule.amount=Number(amtSel.value); syncChip(); await save(false,{render:'none'});}; pctSel.onchange=persist; amtSel.onchange=persist; div.querySelector('[data-remove]').dataset.ruleRemove='credit'; div.querySelector('[data-remove]').dataset.ruleIdx=String(idx); box.appendChild(div);});
     } else if(tab==='penalty'){
-      p.innerHTML=`<div class="panel-intro"><div class="panel-intro-title">Penalty rules ${infoTip('Charged once each time you hit consecutive 0% days.','Penalty rules')}</div></div><div class="rule-card"><div class="rule-grid"><div class="field field-full"><label>Trigger</label><select id="penaltyZeroDays">${[1,2,3,4,5,7].map(n=>`<option value="${n}">${n} missed day${n>1?'s':''} in a row</option>`).join('')}</select></div><div class="rule-row"><div class="field"><label>Deduct credit</label><select id="penaltyCredit">${[0,2,5,10,20,30,50].map(n=>`<option value="${n}">HK$${n}</option>`).join('')}</select></div><div class="field"><label>Deduct EXP</label><select id="penaltyXp">${[0,10,20,30,50,100].map(n=>`<option value="${n}">${n} EXP</option>`).join('')}</select></div></div></div></div>`;
+      p.innerHTML=`<div class="panel-intro"><div class="panel-intro-title">Penalty rules ${infoTip('Charged once each time you hit consecutive 0% days. No penalty is recorded when your credit or EXP balance is already 0.','Penalty rules')}</div></div><div class="rule-card"><div class="rule-grid"><div class="field field-full"><label>Trigger</label><select id="penaltyZeroDays">${[1,2,3,4,5,7].map(n=>`<option value="${n}">${n} missed day${n>1?'s':''} in a row</option>`).join('')}</select></div><div class="rule-row"><div class="field"><label>Deduct credit</label><select id="penaltyCredit">${[0,2,5,10,20,30,50].map(n=>`<option value="${n}">HK$${n}</option>`).join('')}</select></div><div class="field"><label>Deduct EXP</label><select id="penaltyXp">${[0,10,20,30,50,100].map(n=>`<option value="${n}">${n} EXP</option>`).join('')}</select></div></div></div></div>`;
       $('#penaltyZeroDays').value=r.penaltyZeroDays||2; $('#penaltyCredit').value=r.penaltyCredit||5; $('#penaltyXp').value=r.penaltyXp||20;
       const persist=async()=>{r.penaltyZeroDays=Number($('#penaltyZeroDays').value); r.penaltyCredit=Number($('#penaltyCredit').value); r.penaltyXp=Number($('#penaltyXp').value); await save(false,{render:'none'});};
       $('#penaltyZeroDays').onchange=persist; $('#penaltyCredit').onchange=persist; $('#penaltyXp').onchange=persist;
@@ -1976,10 +2051,11 @@
     else if(document.visibilityState==='visible') void tryReconnectOnReturn();
   });
   async function tryReconnectOnReturn(){
-    if(fileHandle||!state.settings.fileConnected) return;
-    if(await restoreFileConnection()){
+    if(!state.settings.fileConnected) return;
+    if(await ensureBackupConnection()){
       refreshBackupChrome();
-      if(await canWriteBackup()) void flushBackupSync();
+      updateStatus();
+      if(state.settings.autoBackup) void flushBackupSync();
     }
   }
   window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change',()=>{if((state.settings.colorMode||'system')==='system') applyAppearance();});
@@ -1991,10 +2067,11 @@
   setupReminderLoop();
   void (async function boot(){
     const connected=await restoreFileConnection();
+    if(connected && !(await canWriteBackup())) await reconnectStoredFile(true);
     renderAll();
     renderOnboarding();
     refreshBackupChrome();
     renderSettingsVersion();
-    if(connected && await canWriteBackup()) void flushBackupSync();
+    if(state.settings.autoBackup && await ensureBackupConnection()) void flushBackupSync();
   })();
 })();
