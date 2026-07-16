@@ -118,24 +118,25 @@
       </section>
 
       <section class="view" id="reportView">
-        <div class="section-title"><h2>Report</h2></div>
+        <div class="section-title report-header">
+          <h2>Report</h2>
+          <div class="segmented" id="reportRangeTabs"><button type="button" data-days="7" class="active">7D</button><button type="button" data-days="14">14D</button><button type="button" data-days="30">30D</button></div>
+        </div>
         <div class="card">
-          <div class="card-head"><h3>Compare Periods</h3><button type="button" class="info-tip card-tip" aria-label="Help" data-tip-title="Compare Periods" data-tip="Compares average daily habit completion % between the current and previous period. Pause days are excluded.">ⓘ</button><div class="segmented" id="comparePeriodTabs"><button type="button" data-period="week">Week</button><button type="button" data-period="month" class="active">Month</button></div></div>
+          <div class="card-head"><h3>Compare Periods</h3><button type="button" class="info-tip card-tip" aria-label="Help" data-tip-title="Compare Periods" data-tip="Compares average daily habit completion % for the selected range vs the previous range of the same length. Pause days are excluded.">ⓘ</button></div>
           <div id="comparePeriodBox"></div>
         </div>
         <div class="card"><div class="card-head"><h3>Insights</h3></div><div id="correlationInsights"></div></div>
         <div class="card" id="habitCompletionCard">
-          <div class="card-head"><h3>Completion Rate</h3><div class="segmented" id="habitChartPeriodTabs"><button type="button" data-period="week" class="active">Week</button><button type="button" data-period="month">Month</button><button type="button" data-period="quarter">Quarter</button></div></div>
+          <div class="card-head"><h3>Completion Rate</h3></div>
           <p class="small-note" id="habitChartRangeNote"></p>
           <div class="habit-completion-table" id="habitCompletionTable"></div>
         </div>
-        <div class="card"><div class="card-head"><h3>Performance Trend</h3><button type="button" class="info-tip card-tip" aria-label="Help" data-tip-title="Performance Trend" data-tip="Bars show daily habit completion. The line shows your journal energy. Use ‹ › to review other months.">ⓘ</button><div class="segmented" id="rangeTabs"><button type="button" data-days="7" class="active">7D</button><button type="button" data-days="14">14D</button><button type="button" data-days="30">30D</button></div></div><div class="report-toolbar"><button class="round-nav" id="trendPrev">‹</button><div class="report-title" id="trendTitle">This month</div><button class="round-nav" id="trendNext">›</button></div><div class="canvas-wrap"><canvas id="trendCanvas"></canvas></div></div>
+        <div class="card"><div class="card-head"><h3>Performance Trend</h3><button type="button" class="info-tip card-tip" aria-label="Help" data-tip-title="Performance Trend" data-tip="Bars show daily habit completion for the selected range. The line shows your journal energy.">ⓘ</button></div><div class="canvas-wrap"><canvas id="trendCanvas"></canvas></div></div>
         <div class="card">
-          <div class="card-head"><h3>Calendar Review</h3><div class="segmented" id="reportMode"><button type="button" data-mode="month" class="active">Month</button><button type="button" data-mode="quarter">Quarter</button></div></div>
-          <div class="field" style="margin-bottom:10px"><label>Habit filter</label><select id="calendarHabitFilter"><option value="">All habits</option></select></div>
+          <div class="card-head"><h3>Calendar Review</h3></div>
           <div class="report-toolbar"><button class="round-nav" id="reportPrev">‹</button><div class="report-title" id="reportTitle">Month</div><button class="round-nav" id="reportNext">›</button></div>
           <div id="monthReport"><div class="calendar-weekdays" id="calendarWeekdays"></div><div class="calendar-grid" id="calendarGrid"></div></div>
-          <div id="quarterReport" class="quarter-grid" style="display:none"></div>
           <div class="legend"><span><i class="band-perfect"></i>100%</span><span><i class="band-good"></i>80%+</span><span><i class="band-partial"></i>50%+</span><span><i class="band-low"></i>1%+</span><span><i class="band-zero"></i>0%</span><span><i class="band-vacation"></i>Vacation</span><span><i class="band-future"></i>Future</span></div>
         </div>
       </section>
