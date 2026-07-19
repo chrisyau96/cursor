@@ -540,6 +540,11 @@ button,.nav-item,.switch,.wcell,.check-btn,.icon-btn,.act-btn,.btn-primary,.btn-
 
 .today-header{align-items:center}
 .today-header-main{flex:1;min-width:0}
+.today-pause-banner{display:flex;align-items:flex-start;gap:10px;padding:12px 14px;margin:0 0 12px;border-radius:16px;background:var(--vacation-bg);border:1px dashed var(--line);color:var(--ink)}
+.today-pause-banner[hidden]{display:none!important}
+.today-pause-icon{font-size:18px;line-height:1;margin-top:1px}
+.today-pause-copy{min-width:0}
+.today-pause-copy strong{display:block;font-size:14px}
 .today-ring{width:52px;height:52px;position:relative;flex:0 0 auto}
 .today-ring svg{width:100%;height:100%;transform:rotate(-90deg)}
 .today-ring .ring-bg{fill:none;stroke:var(--line);stroke-width:3}
