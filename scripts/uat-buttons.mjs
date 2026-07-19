@@ -8,10 +8,20 @@ import { chromium } from 'playwright';
 const BASE = process.argv[2] || 'http://127.0.0.1:8765/index.html';
 const results = [];
 
+function hkDateKey() {
+  return new Intl.DateTimeFormat('en-CA', {
+    timeZone: 'Asia/Hong_Kong',
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+  }).format(new Date());
+}
+
 function demoState() {
   const uid = () => Date.now().toString(36) + Math.random().toString(36).slice(2, 7);
   const habitId = uid();
   const giftRuleId = uid();
+  const today = hkDateKey();
   return {
     habits: [{
       id: habitId, name: 'Test Habit', emoji: '📖', color: '#4f46e5', target: 1, xpReward: 5,
@@ -19,7 +29,7 @@ function demoState() {
       reminder: { enabled: false, time: '20:30', message: '' },
       sortOrder: 0, paused: false, archived: false, groupId: null,
     }],
-    records: [{ id: uid(), habitId, date: new Date().toISOString().slice(0, 10), at: new Date().toISOString(), note: '' }],
+    records: [{ id: uid(), habitId, date: today, at: new Date().toISOString(), note: '' }],
     journals: {}, redemptions: [],
     redemptions_pre: [],
     groups: [],
@@ -83,10 +93,14 @@ await page.waitForTimeout(800);
 await test('Today habit reset button clears record', async () => {
   const before = await page.evaluate(() => JSON.parse(localStorage.getItem('habitTrackerProductionV7')).records.length);
   assert(before > 0, 'need a record');
+  const beforeClass = await page.locator('.check-btn').first().getAttribute('class');
+  assert(beforeClass?.includes('done'), 'habit should start completed');
   await page.locator('.reset-habit-btn').first().click();
   await page.waitForTimeout(400);
   const after = await page.evaluate(() => JSON.parse(localStorage.getItem('habitTrackerProductionV7')).records.length);
+  const afterClass = await page.locator('.check-btn').first().getAttribute('class');
   assert(after < before, 'record should be removed');
+  assert(!afterClass?.includes('done'), 'habit should visually reset to incomplete');
 });
 
 await test('Redeem gift works and shows celebration', async () => {
@@ -243,12 +257,26 @@ await test('No penalty recorded when credit and EXP are zero', async () => {
 
 await test('Credit balance updates immediately after completion', async () => {
   await page.evaluate(() => {
+    const uid = () => Date.now().toString(36) + Math.random().toString(36).slice(2, 7);
+    const habitId = uid();
+    const today = new Intl.DateTimeFormat('en-CA', {
+      timeZone: 'Asia/Hong_Kong',
+      year: 'numeric',
+      month: '2-digit',
+      day: '2-digit',
+    }).format(new Date());
     const s = JSON.parse(localStorage.getItem('habitTrackerProductionV7'));
+    s.habits = [{
+      id: habitId, name: 'Credit Test', emoji: '📖', color: '#4f46e5', target: 1, xpReward: 5,
+      frequency: { mode: 'daily', days: [0, 1, 2, 3, 4, 5, 6], schedule: { type: 'days' } },
+      reminder: { enabled: false, time: '20:30', message: '' },
+      sortOrder: 0, paused: false, archived: false, groupId: null,
+    }];
     s.records = [];
     s.redemptions = [];
     s.journals = {};
     s.settings.vacations = [];
-    s.settings.startDate = '2026-01-01';
+    s.settings.startDate = today;
     s.settings.rewards.creditRules = [{ id: 'c50', pct: 50, amount: 2 }];
     s.settings.rewards.penaltyCredit = 0;
     s.settings.rewards.penaltyXp = 0;
@@ -266,12 +294,44 @@ await test('Credit balance updates immediately after completion', async () => {
   assert(after.includes('2'), `credit should reflect immediately, before=${before} after=${after}`);
 });
 
+await test('Erase all data clears habits, records, and UI', async () => {
+  page.on('dialog', d => d.accept());
+  await page.click('#topSettingsBtn');
+  await page.fill('#confirmDeleteInput', 'Confirm');
+  await page.click('#resetAllBtn');
+  await page.waitForTimeout(700);
+  const stored = await page.evaluate(() => {
+    const s = JSON.parse(localStorage.getItem('habitTrackerProductionV7'));
+    return { habits: s.habits.length, records: s.records.length };
+  });
+  assert(stored.habits === 0, 'habits should be cleared');
+  assert(stored.records === 0, 'records should be cleared');
+  await page.click('.nav-item[data-view="habitsView"]');
+  await page.waitForTimeout(300);
+  const habitRows = await page.locator('#allHabitList .habit-row').count();
+  const activityRows = await page.locator('#recentActivityLog .activity').count();
+  assert(habitRows === 0, 'habit list should be empty');
+  assert(activityRows === 0, 'recent records should be empty');
+  await page.click('.nav-item[data-view="homeView"]');
+  await page.waitForTimeout(200);
+  const todayRows = await page.locator('#todayHabitGroups .habit-row').count();
+  assert(todayRows === 0, 'today habits should be empty after erase');
+});
+
 await test('Auto backup sync runs after action', async () => {
   await page.evaluate(() => {
     const s = JSON.parse(localStorage.getItem('habitTrackerProductionV7'));
     s.records = [];
     s.redemptions = [];
+    s.settings.vacations = [];
+    s.habits = [{
+      id: 'sync-habit', name: 'Sync Habit', emoji: '📖', color: '#4f46e5', target: 1, xpReward: 5,
+      frequency: { mode: 'daily', days: [0, 1, 2, 3, 4, 5, 6], schedule: { type: 'days' } },
+      reminder: { enabled: false, time: '20:30', message: '' },
+      sortOrder: 0, paused: false, archived: false, groupId: null,
+    }];
     window.__backupWrites = 0;
+    window.__backupPayloads = [];
     localStorage.setItem('habitTrackerProductionV7', JSON.stringify(s));
     location.reload();
   });
@@ -284,7 +344,11 @@ await test('Auto backup sync runs after action', async () => {
       queryPermission: async () => 'granted',
       getFile: async () => new File(['{}'], 'autosync.json'),
       createWritable: async () => ({
-        write: async () => { window.__backupWrites = (window.__backupWrites || 0) + 1; },
+        write: async (data) => {
+          window.__backupWrites = (window.__backupWrites || 0) + 1;
+          window.__backupPayloads = window.__backupPayloads || [];
+          window.__backupPayloads.push(typeof data === 'string' ? data : '');
+        },
         close: async () => {},
       }),
     });
