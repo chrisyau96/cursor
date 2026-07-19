@@ -71,7 +71,7 @@
   const PREVIEW=3;
   const LAZY_CHUNK=10;
   const REMINDER_MSG_LIMIT=80;
-  const APP_VERSION='v44';
+  const APP_VERSION='v45';
   const iconBtn=(cls,svg,title)=>{const b=document.createElement('button'); b.className='act-btn '+cls; b.innerHTML=svg; b.title=title; b.setAttribute('aria-label',title); return b;};
 
   const USER_NAME_MAX=12;
@@ -640,13 +640,18 @@
     }
     if(date===todayKey()){ renderWeekStrip(); renderFlexibleHabits(now); }
   }
+  function homeTodaySig(now, homeHabits){
+    const groupSig=sortedGroups().map(g=>g.id+':'+(g.sortOrder||0)+':'+(g.name||'')).join('|');
+    const habitSig=homeHabits.map(h=>`${h.id}:${h.groupId||''}:${h.sortOrder||0}:${completionOfHabit(h,now).count}`).join(',');
+    return dateKey(now)+'|'+groupSig+'|'+habitSig;
+  }
   function renderHome(){
     const now=hkNow(); const homeHabits=activeHabits().filter(h=>showsOnHomeToday(h,now));
     $('#greeting').textContent=timeGreeting()+greetName();
     $('#todayEntryStamp').textContent=fmtDate(now);
     updateHomeSummary(now, homeHabits);
     const box=$('#todayHabitGroups');
-    const sig=dateKey(now)+'|'+homeHabits.map(h=>h.id+':'+completionOfHabit(h,now).count).join(',');
+    const sig=homeTodaySig(now, homeHabits);
     if(box && box.dataset.sig!==sig){box.dataset.sig=sig; renderTodayHabitGroups(now, homeHabits);}
     const strip=$('#weekStrip');
     const weekSig=weekOffset+'|'+todayKey();
@@ -745,10 +750,7 @@
     card.style.display='block';
     const unfinished=flex.reduce((s,h)=>s+Math.max(0,periodTarget(h)-completionOfHabit(h,now).count),0);
     $('#flexHabitSummary').textContent=`${unfinished} unfinished target${unfinished===1?'':'s'} this period`;
-    const hasRecords=flex.some(h=>periodCount(h,now)>0);
-    card.classList.toggle('collapsed',!hasRecords);
     list.innerHTML=''; flex.forEach(h=>list.appendChild(todayHabitRow(h,now)));
-    $('#flexHabitToggle').onclick=()=>card.classList.toggle('collapsed');
   }
   function nextGiftInfo(){
     const g=activeGiftRule(); if(!g) return {icon:'🎁',label:'No gift goal set',pct:0};
@@ -937,7 +939,7 @@
     sortedGroups().forEach(g=>{
       const div=document.createElement('div'); div.className='group-manage-item'; div.dataset.groupId=g.id;
       div.innerHTML=`<div class="sort-btns group-sort"><button type="button" data-gup data-group-id="${g.id}" aria-label="Move up">↑</button><button type="button" data-gdown data-group-id="${g.id}" aria-label="Move down">↓</button></div><button type="button" class="group-icon-btn" data-gicon data-group-id="${g.id}" title="Change icon">${g.emoji||'📋'}</button><input value="${escapeAttr(g.name)}" data-gname data-group-id="${g.id}" aria-label="Group name"><button class="group-del-btn" type="button" data-gdel data-group-id="${g.id}" aria-label="Delete group">×</button>`;
-      div.querySelector('[data-gname]').onchange=e=>{const grp=state.groups.find(x=>x.id===g.id); if(grp){grp.name=e.target.value.trim()||'Group'; void save(false,{render:'none'});}};
+      div.querySelector('[data-gname]').onchange=e=>{const grp=state.groups.find(x=>x.id===g.id); if(grp){grp.name=e.target.value.trim()||'Group'; invalidateHomeCaches(); renderHome(); void save(false,{render:'none'});}};
       box.appendChild(div);
     });
   }
@@ -1115,8 +1117,10 @@
       const t=$('#habitReminderToggle');
       const item={id:h.id||uid(),name:$('#habitName').value.trim()||'Untitled Habit',emoji:$('#habitEmoji').value,color:selectedColor,target:Number($('#habitTarget').value),xpReward:Math.max(1,Math.round(Number($('#habitXpReward').value)||5)),frequency:freq,groupId:$('#habitGroup')?.value||null,sortOrder:h.sortOrder??state.habits.length,paused:!!h.paused,archived:false,flexPeriodStart:h.flexPeriodStart||null,reminder:{enabled:!!t?.classList.contains('on'),time:$('#habitReminderTime').value,message:($('#habitReminderMsg')?.value||state.settings.defaultReminderMessage||'Time for {habit}!').slice(0,REMINDER_MSG_LIMIT),daysBeforeDue:Number($('#habitDaysBeforeDue')?.value||1)}};
       if(isEdit){state.habits=state.habits.map(x=>x.id===h.id?item:x)}else state.habits.push(item);
+      invalidateHomeCaches();
       renderHabits();
       renderHome();
+      renderRecentActivity();
       closeModal();
       habitModalSave=null;
       toast('Habit saved');
@@ -1423,7 +1427,9 @@
   }
   function addGroup(){
     state.groups.push({id:uid(),name:'New Group',emoji:'📋',color:COLOURS[state.groups.length%COLOURS.length],sortOrder:state.groups.length});
+    invalidateHomeCaches();
     renderGroupManager();
+    renderHome();
     toast('Group added');
     void save(false,{render:'none'});
   }
@@ -2062,7 +2068,7 @@
     if(e.target.closest('#addVacationBtn')){openAddPauseModal(); return;}
     if(e.target.closest('#viewVacationLogBtn')){openVacationLog(); return;}
     if(e.target.closest('#replayOnboardingBtn')){state.settings.onboardingComplete=false; onboardStep=0; renderOnboarding(); return;}
-    if(e.target.closest('#flexHabitToggle')){$('#flexHabitCard')?.classList.toggle('collapsed'); return;}
+    if(e.target.closest('#flexHabitToggle')){ e.preventDefault(); e.stopPropagation(); $('#flexHabitCard')?.classList.toggle('collapsed'); return; }
     if(e.target.closest('#weekPrev')){weekOffset--; renderWeekStrip(); return;}
     if(e.target.closest('#weekNext')){weekOffset++; renderWeekStrip(); return;}
     if(e.target.closest('#weekToday')){weekOffset=0; renderWeekStrip(); return;}

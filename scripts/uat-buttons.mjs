@@ -278,6 +278,82 @@ await test('Habit sort buttons reorder habits', async () => {
   assert(alpha.sortOrder > beta.sortOrder, 'Alpha sortOrder should be greater than Beta');
 });
 
+await test('Assigning habit group refreshes Today grouping', async () => {
+  const ids = await page.evaluate(() => {
+    const uid = () => Date.now().toString(36) + Math.random().toString(36).slice(2, 7);
+    const gid = uid();
+    const habitId = uid();
+    const today = new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Hong_Kong', year: 'numeric', month: '2-digit', day: '2-digit' }).format(new Date());
+    const s = JSON.parse(localStorage.getItem('habitTrackerProductionV7'));
+    s.groups = [{ id: gid, name: 'Morning', emoji: '🌅', color: '#ea580c', sortOrder: 0 }];
+    s.habits = [{
+      id: habitId, name: 'Grouped Habit', emoji: '📖', color: '#4f46e5', target: 1, xpReward: 5,
+      frequency: { mode: 'daily', days: [0, 1, 2, 3, 4, 5, 6], schedule: { type: 'days' } },
+      reminder: { enabled: false, time: '20:30', message: '' },
+      sortOrder: 0, paused: false, archived: false, groupId: null,
+    }];
+    s.records = [];
+    s.settings.startDate = today;
+    s.settings.onboardingComplete = true;
+    localStorage.setItem('habitTrackerProductionV7', JSON.stringify(s));
+    return { habitId, groupId: gid };
+  });
+  await page.reload({ waitUntil: 'networkidle' });
+  await page.waitForTimeout(600);
+  await page.click('.nav-item[data-view="homeView"]');
+  await page.waitForTimeout(300);
+  const beforeGrouped = await page.locator('#todayHabitGroups .group-name').filter({ hasText: 'Morning' }).count();
+  assert(beforeGrouped === 0, 'habit should start ungrouped on Today');
+  await page.click('.nav-item[data-view="habitsView"]');
+  await page.waitForTimeout(300);
+  await page.locator(`[data-edit][data-habit-id="${ids.habitId}"]`).click();
+  await page.waitForSelector('#habitGroup');
+  await page.selectOption('#habitGroup', ids.groupId);
+  await page.click('#saveHabitBtn');
+  await page.waitForTimeout(500);
+  await page.click('.nav-item[data-view="homeView"]');
+  await page.waitForTimeout(300);
+  const afterGrouped = await page.locator('#todayHabitGroups .group-name').filter({ hasText: 'Morning' }).count();
+  assert(afterGrouped === 1, 'Today page should show Morning group after assigning habit');
+});
+
+await test('Not Specific habits card starts expanded and toggles', async () => {
+  await page.evaluate(() => {
+    const uid = () => Date.now().toString(36) + Math.random().toString(36).slice(2, 7);
+    const today = new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Hong_Kong', year: 'numeric', month: '2-digit', day: '2-digit' }).format(new Date());
+    const s = JSON.parse(localStorage.getItem('habitTrackerProductionV7'));
+    s.groups = [];
+    s.habits = [{
+      id: 'flex-habit', name: 'Flex Habit', emoji: '📖', color: '#4f46e5', target: 1, xpReward: 5,
+      frequency: { mode: 'daily', schedule: { type: 'any' }, days: [] },
+      reminder: { enabled: false, time: '20:30', message: '' },
+      sortOrder: 0, paused: false, archived: false, groupId: null,
+    }];
+    s.records = [];
+    s.settings.startDate = today;
+    s.settings.onboardingComplete = true;
+    localStorage.setItem('habitTrackerProductionV7', JSON.stringify(s));
+    location.reload();
+  });
+  await page.waitForLoadState('networkidle');
+  await page.waitForTimeout(600);
+  await page.click('.nav-item[data-view="homeView"]');
+  await page.waitForTimeout(300);
+  await page.waitForSelector('#flexHabitCard', { state: 'attached' });
+  const expanded = await page.evaluate(() => !document.querySelector('#flexHabitCard')?.classList.contains('collapsed'));
+  const visibleRows = await page.locator('#flexHabitGroups .habit-row').count();
+  assert(expanded, 'Not Specific card should start expanded');
+  assert(visibleRows === 1, 'flex habit row should be visible');
+  await page.locator('#flexHabitToggle').click();
+  await page.waitForTimeout(400);
+  const collapsed = await page.evaluate(() => document.querySelector('#flexHabitCard')?.classList.contains('collapsed'));
+  assert(collapsed, 'toggle should collapse card');
+  await page.locator('#flexHabitToggle').click();
+  await page.waitForTimeout(400);
+  const expandedAgain = await page.evaluate(() => !document.querySelector('#flexHabitCard')?.classList.contains('collapsed'));
+  assert(expandedAgain, 'toggle should expand card again');
+});
+
 await test('Weekly Review section removed from home', async () => {
   await page.click('.nav-item[data-view="homeView"]');
   await page.waitForTimeout(200);
