@@ -71,7 +71,7 @@
   const PREVIEW=3;
   const LAZY_CHUNK=10;
   const REMINDER_MSG_LIMIT=80;
-  const APP_VERSION='v43';
+  const APP_VERSION='v44';
   const iconBtn=(cls,svg,title)=>{const b=document.createElement('button'); b.className='act-btn '+cls; b.innerHTML=svg; b.title=title; b.setAttribute('aria-label',title); return b;};
 
   const USER_NAME_MAX=12;
@@ -213,6 +213,8 @@
     backupSyncState='syncing';
     updateStatus();
     try{
+      try{const raw=localStorage.getItem(STORAGE); if(raw) state=JSON.parse(raw);}catch(e){}
+      normalizeState();
       const ready=await ensureBackupConnection();
       if(!ready){
         backupSyncState=state.settings.fileConnected?'pending':'idle';
@@ -241,12 +243,24 @@
     if(!fileHandle) return false;
     if(!(await canWriteBackup())) return false;
     try{
+      try{const raw=localStorage.getItem(STORAGE); if(raw) state=JSON.parse(raw);}catch(e){}
+      normalizeState();
       const w=await fileHandle.createWritable();
       await w.write(JSON.stringify(state,null,2));
       await w.close();
       state.settings.fileConnected=true;
       touchBackupTimestamp();
-      localStorage.setItem(STORAGE,JSON.stringify(state));
+      try{
+        const stored=JSON.parse(localStorage.getItem(STORAGE)||'{}');
+        stored.settings=stored.settings||{};
+        stored.settings.fileConnected=true;
+        stored.settings.lastBackupAt=state.settings.lastBackupAt;
+        localStorage.setItem(STORAGE,JSON.stringify(stored));
+        localStorage.setItem(BACKUP_MIRROR,JSON.stringify(stored));
+      }catch(e){
+        localStorage.setItem(STORAGE,JSON.stringify(state));
+        localStorage.setItem(BACKUP_MIRROR,JSON.stringify(state));
+      }
       backupSyncState='ok';
       if(silent) maybeRenderBackupStatus();
       else { updateStatus(); refreshSettingsChrome(); }
@@ -637,7 +651,7 @@
     const strip=$('#weekStrip');
     const weekSig=weekOffset+'|'+todayKey();
     if(strip && strip.dataset.sig!==weekSig){strip.dataset.sig=weekSig; renderWeekStrip();}
-    renderFlexibleHabits(now); renderHomeJournal(); renderQuote(); renderTopProfile(); renderWeeklyReviewCard();
+    renderFlexibleHabits(now); renderHomeJournal(); renderQuote(); renderTopProfile();
     const wt=$('#weekToday'); if(wt) wt.style.display=weekOffset===0?'none':'inline-grid';
   }
   function renderTodayHabitGroups(now, homeHabits){
@@ -879,18 +893,51 @@
   function renderQuote(){const el=$('#dailyQuote'); if(!el)return; const q=[['Commit to the LORD whatever you do, and he will establish your plans.','Proverbs 16:3'],['Small actions become identity when repeated.','Habit principle'],['Discipline today, freedom tomorrow.','Reminder']][hkNow().getDate()%3]; el.innerHTML=`<div class="quote-text">${q[0]}</div><div class="quote-ref">${q[1]}</div>`;}
 
   /* ---------- HABITS ---------- */
+  function moveGroup(groupId,delta){
+    const sorted=sortedGroups();
+    const gi=sorted.findIndex(g=>g.id===groupId);
+    if(gi<0) return;
+    const nj=gi+delta;
+    if(nj<0||nj>=sorted.length) return;
+    const g=sorted[gi], o=sorted[nj];
+    const t=g.sortOrder??gi;
+    g.sortOrder=o.sortOrder??nj;
+    o.sortOrder=t;
+    void save(false,{render:'habitsView'});
+    renderHome();
+    haptic();
+  }
+  function deleteGroup(groupId){
+    if(!groupId||!confirm('Delete this group? Habits will move to Ungrouped.')) return;
+    state.habits.forEach(h=>{if(h.groupId===groupId) h.groupId=null;});
+    state.groups=state.groups.filter(x=>x.id!==groupId);
+    void save(false,{render:'habitsView'});
+    renderHome();
+    toast('Group deleted');
+    haptic();
+  }
+  function moveHabit(habitId,delta){
+    const habits=activeHabits().sort((a,b)=>(a.sortOrder||0)-(b.sortOrder||0));
+    const idx=habits.findIndex(h=>h.id===habitId);
+    if(idx<0) return;
+    const nj=idx+delta;
+    if(nj<0||nj>=habits.length) return;
+    const h=habits[idx], o=habits[nj];
+    const t=h.sortOrder??idx;
+    h.sortOrder=o.sortOrder??nj;
+    o.sortOrder=t;
+    void save(false,{render:'habitsView'});
+    renderHome();
+    haptic();
+  }
   function renderGroupManager(){
     const box=$('#groupManager'); if(!box)return;
     if(!state.groups.length){box.innerHTML='<div class="empty">No groups yet. Add a group like Morning, Afternoon, or Evening before creating habits.</div>'; return;}
     box.innerHTML='';
-    sortedGroups().forEach((g,gi)=>{
-      const div=document.createElement('div'); div.className='group-manage-item';
-      div.innerHTML=`<div class="sort-btns group-sort"><button type="button" data-gup aria-label="Move up">↑</button><button type="button" data-gdown aria-label="Move down">↓</button></div><button type="button" class="group-icon-btn" data-gicon title="Change icon">${g.emoji||'📋'}</button><input value="${escapeAttr(g.name)}" data-gname aria-label="Group name"><button class="group-del-btn" type="button" data-gdel aria-label="Delete group">×</button>`;
-      div.querySelector('[data-gname]').onchange=e=>{g.name=e.target.value.trim()||'Group'; save(false,{render:'none'});};
-      div.querySelector('[data-gicon]').onclick=()=>openGroupIconPicker(g);
-      div.querySelector('[data-gup]').onclick=()=>{if(gi>0){const o=state.groups[gi-1]; g.sortOrder=(o.sortOrder||gi)-1; o.sortOrder=(g.sortOrder||gi)+1; save(false,{render:'habitsView'});}};
-      div.querySelector('[data-gdown]').onclick=()=>{if(gi<state.groups.length-1){const o=state.groups[gi+1]; g.sortOrder=(o.sortOrder||gi)+1; o.sortOrder=(g.sortOrder||gi)-1; save(false,{render:'habitsView'});}};
-      div.querySelector('[data-gdel]').onclick=()=>{if(confirm('Delete this group? Habits will move to Ungrouped.')){state.habits.forEach(h=>{if(h.groupId===g.id)h.groupId=null;}); state.groups=state.groups.filter(x=>x.id!==g.id); save(false,{render:'habitsView'});}};
+    sortedGroups().forEach(g=>{
+      const div=document.createElement('div'); div.className='group-manage-item'; div.dataset.groupId=g.id;
+      div.innerHTML=`<div class="sort-btns group-sort"><button type="button" data-gup data-group-id="${g.id}" aria-label="Move up">↑</button><button type="button" data-gdown data-group-id="${g.id}" aria-label="Move down">↓</button></div><button type="button" class="group-icon-btn" data-gicon data-group-id="${g.id}" title="Change icon">${g.emoji||'📋'}</button><input value="${escapeAttr(g.name)}" data-gname data-group-id="${g.id}" aria-label="Group name"><button class="group-del-btn" type="button" data-gdel data-group-id="${g.id}" aria-label="Delete group">×</button>`;
+      div.querySelector('[data-gname]').onchange=e=>{const grp=state.groups.find(x=>x.id===g.id); if(grp){grp.name=e.target.value.trim()||'Group'; void save(false,{render:'none'});}};
       box.appendChild(div);
     });
   }
@@ -1121,22 +1168,8 @@
   function renderJournals(){const box=$('#journalHistory'); if(!box)return; const items=Object.keys(state.journals).sort((a,b)=>b.localeCompare(a)).map(k=>({date:k})); renderPreview(box,items,x=>journalNode(x.date),'Journal History');}
   function openJournalEditor(k=todayKey()){const j=state.journals[k]||{mood:'',energy:5,text:''}; openModal('Edit Journal',`<div class="form-grid journal-area"><div class="field"><label>Date</label><input type="date" id="journalDate" value="${k}"></div><div class="field"><label>Mood</label><div class="mood-row">${MOODS.map(m=>`<button class="mood ${j.mood===m?'active':''}" data-mood="${m}">${m}</button>`).join('')}</div></div><div class="field"><label>Energy Score</label><div class="energy-panel"><div class="range-value" id="modalEnergyValue">${j.energy}</div><div class="energy-scale"><input type="range" min="0" max="10" value="${j.energy}" id="modalEnergy"><div class="ticks">${Array.from({length:11},(_,i)=>`<span style="left:calc(10px + ${i}/10*(100% - 20px))">${i}</span>`).join('')}</div></div></div></div><div class="field"><label>Reflection</label><textarea id="modalJournalText">${escapeHtml(j.text||'')}</textarea></div><div class="modal-actions"><button class="btn-secondary" data-close>Cancel</button><button class="btn-primary" id="saveJournalModal">Save</button></div></div>`); $$('.mood').forEach(b=>b.onclick=()=>{$$('.mood').forEach(x=>x.classList.remove('active')); b.classList.add('active')}); $('#modalEnergy').oninput=e=>$('#modalEnergyValue').textContent=e.target.value; $('#saveJournalModal').onclick=async()=>{const nk=$('#journalDate').value||k; const wasNew=!state.journals[k]&&!state.journals[nk]; if(nk!==k) delete state.journals[k]; state.journals[nk]={mood:$('#modalBody .mood.active')?.dataset.mood||'',energy:Number($('#modalEnergy').value),text:$('#modalJournalText').value.trim(),updatedAt:new Date().toISOString()}; await save(false,{render:'none'}); if(wasNew) showXpPop('+5 EXP'); closeModal(); toast('Journal saved')};}
 
-  /* ---------- INSIGHTS / REVIEW / CELEBRATE ---------- */
+  /* ---------- INSIGHTS / CELEBRATE ---------- */
   function periodAvgPct(fromK,toK){let sum=0,n=0; const a=parseDate(fromK), b=parseDate(toK); for(let d=new Date(a); d<=b; d.setDate(d.getDate()+1)){const k=dateKey(d); if(isVacationDay(k)||!afterStart(k)) continue; const p=dayPct(d); if(p===null) continue; sum+=p; n++;} return n?Math.round(sum/n):0;}
-  function renderWeeklyReviewCard(){
-    const card=$('#weeklyReviewCard'), body=$('#weeklyReviewBody'); if(!card||!body)return;
-    const now=hkNow(); if(now.getDay()!==0 && now.getDay()!==6){card.style.display='none'; return;}
-    card.style.display='block';
-    const end=new Date(now); const start=new Date(now); start.setDate(start.getDate()-6);
-    const from=dateKey(start), to=dateKey(end);
-    const avg=periodAvgPct(from,to);
-    const prevEnd=new Date(start); prevEnd.setDate(prevEnd.getDate()-1); const prevStart=new Date(prevEnd); prevStart.setDate(prevStart.getDate()-6);
-    const prevAvg=periodAvgPct(dateKey(prevStart),dateKey(prevEnd));
-    const delta=avg-prevAvg;
-    const journals=Object.keys(state.journals).filter(k=>k>=from&&k<=to);
-    const best=activeHabits().map(h=>{let c=0; for(let d=new Date(start); d<=end; d.setDate(d.getDate()+1)){const k=dateKey(d); if(todayHabitCount(h,d)>=periodTarget(h)||(h.frequency.mode!=='daily'&&periodCount(h,d)>0)) c++;} return {h,c};}).sort((a,b)=>b.c-a.c)[0];
-    body.innerHTML=`<div class="insight-row"><div class="insight-ico">📅</div><div class="insight-text"><strong>This week: ${avg}% avg</strong>${delta>0?`Up ${delta} pts vs last week`:delta<0?`Down ${Math.abs(delta)} pts vs last week`:'Same as last week'}</div></div><div class="insight-row"><div class="insight-ico">${best?.h?.emoji||'⭐'}</div><div class="insight-text"><strong>Most consistent: ${escapeHtml(best?.h?.name||'—')}</strong>${best?best.c+' active days':'—'}</div></div><div class="insight-row"><div class="insight-ico">📓</div><div class="insight-text"><strong>${journals.length} journal entries</strong>Open Report for deeper insights.</div></div>`;
-  }
   function renderCorrelationInsights(){
     const box=$('#correlationInsights'); if(!box)return;
     const range=reportDayRange();
@@ -1310,8 +1343,6 @@
     $('#redeemGrid').innerHTML=`<div class="gift-card credit-spend" style="grid-column:1/-1"><div class="card-head"><h3>Credit Rewards</h3><span class="chip orange">HK$${bal} available</span></div><div class="redeem-form"><div class="field"><label>Redeemed For</label><input id="creditSpendText" placeholder="e.g. headphone, game, coffee"></div><div class="field"><label>Credit Amount</label><input id="creditSpendAmount" type="number" min="0" max="${bal}" step="1" value="${Math.min(10,bal)}"><input id="creditSpendSlider" type="range" min="0" max="${bal}" step="1" value="${Math.min(10,bal)}"><div class="inline-hint">Use the number box or slider, up to your balance.</div></div><button class="btn-primary ${canRedeemCredit?'':'btn-dim'}" id="spendCreditBtn" ${canRedeemCredit?'':'disabled'}>Redeem Credit</button></div></div>` + giftCardHtml;
 
     const slider=$('#creditSpendSlider'), amount=$('#creditSpendAmount'); if(slider&&amount){slider.oninput=()=>amount.value=slider.value; amount.oninput=()=>{let v=Math.max(0,Math.min(bal,Number(amount.value||0))); amount.value=v; slider.value=v;};}
-    $('#spendCreditBtn')?.addEventListener('click',e=>{e.preventDefault(); e.stopPropagation(); void spendCreditReward();});
-    $('#redeemGiftBtn')?.addEventListener('click',e=>{e.preventDefault(); e.stopPropagation(); void redeemGiftReward();});
     renderPreview($('#ledgerList'),ledger(),ledgerNode,'Reward Ledger');
   }
   async function spendCreditReward(){
@@ -1322,7 +1353,10 @@
     if(amt<=0){toast('Enter credit amount');return;}
     if(creditTotal()<amt){toast('Not enough credits');return;}
     state.redemptions.push({id:uid(),date:todayKey(),type:'redeemCredit',desc:'Credit spend · '+what,credit:-amt,xp:0,what});
-    await save(false,{render:'rewardsView'}); toast('Credit redeemed');
+    celebrate('Credit redeemed! HK$'+amt+' · '+what);
+    await save(false,{render:'rewardsView'});
+    refreshEconomyDisplays();
+    toast('Credit redeemed');
   }
   async function redeemGiftReward(){
     const g=activeGiftRule(); if(!g) return;
@@ -1913,9 +1947,10 @@
     if(v==='homeView') renderHome();
     else if(v==='habitsView') renderHabits();
     else if(v==='reportView') renderReport();
-    else if(v==='rewardsView') renderRewards();
+    else if(v==='rewardsView'){ renderRewards(); refreshEconomyDisplays(); }
     else if(v==='levelView') renderLevel();
     else if(v==='settingsView') renderSettings();
+    else refreshEconomyDisplays();
   }
   function invalidateSettings(){const rs=$('#rewardSettings'); if(rs) delete rs.dataset.built; settingsDraft=null; settingsPendingProfile=null;}
   function renderAll(){updateStatus(); applyAppearance(); renderHome(); renderHabits(); renderReport(); renderRewards(); renderLevel(); renderSettings(true);}
@@ -1954,6 +1989,7 @@
     const host=$('.view-host');
     if(host && prev!==view) host.scrollTop=0;
     if(view==='homeView') renderHome();
+    if(view==='habitsView') renderHabits();
     if(view==='reportView')renderReport();
     if(view==='rewardsView')renderRewards();
     if(view==='levelView')renderLevel();
@@ -2010,6 +2046,18 @@
     if(e.target.closest('#redeemGiftBtn')){ tapAction('redeemGift',e,()=>void redeemGiftReward()); return; }
     if(e.target.closest('#homeJournalViewAll')){openJournalListModal(); return;}
     if(e.target.closest('#addGroupBtn')){ tapAction('addGroup',e,addGroup); return; }
+    const groupDel=e.target.closest('[data-gdel][data-group-id]');
+    if(groupDel){ tapAction('gdel-'+groupDel.dataset.groupId,e,()=>deleteGroup(groupDel.dataset.groupId)); return; }
+    const groupUp=e.target.closest('[data-gup][data-group-id]');
+    if(groupUp){ tapAction('gup-'+groupUp.dataset.groupId,e,()=>moveGroup(groupUp.dataset.groupId,-1)); return; }
+    const groupDown=e.target.closest('[data-gdown][data-group-id]');
+    if(groupDown){ tapAction('gdown-'+groupDown.dataset.groupId,e,()=>moveGroup(groupDown.dataset.groupId,1)); return; }
+    const groupIcon=e.target.closest('[data-gicon][data-group-id]');
+    if(groupIcon){ tapAction('gicon-'+groupIcon.dataset.groupId,e,()=>{ const g=state.groups.find(x=>x.id===groupIcon.dataset.groupId); if(g) openGroupIconPicker(g); }); return; }
+    const habitUp=e.target.closest('[data-up][data-habit-id]');
+    if(habitUp){ tapAction('habit-up-'+habitUp.dataset.habitId,e,()=>moveHabit(habitUp.dataset.habitId,-1)); return; }
+    const habitDown=e.target.closest('[data-down][data-habit-id]');
+    if(habitDown){ tapAction('habit-down-'+habitDown.dataset.habitId,e,()=>moveHabit(habitDown.dataset.habitId,1)); return; }
     if(e.target.closest('#addHabitBtn')){openHabitModal(); return;}
     if(e.target.closest('#addVacationBtn')){openAddPauseModal(); return;}
     if(e.target.closest('#viewVacationLogBtn')){openVacationLog(); return;}

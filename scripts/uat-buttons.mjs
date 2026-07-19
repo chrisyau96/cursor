@@ -67,6 +67,7 @@ function assert(cond, msg) {
 
 const browser = await chromium.launch();
 const page = await browser.newPage({ viewport: { width: 480, height: 900 } });
+page.on('dialog', d => d.accept());
 
 await page.goto(BASE, { waitUntil: 'networkidle' });
 const seed = demoState();
@@ -208,6 +209,112 @@ await test('Delete habit removes it from list', async () => {
   assert(stillVisible === 0, 'habit row should disappear from list');
 });
 
+await test('Delete group removes it and ungroups habits', async () => {
+  await page.waitForTimeout(600);
+  const groupSeed = await page.evaluate(() => {
+    const uid = () => Date.now().toString(36) + Math.random().toString(36).slice(2, 7);
+    const gid = uid();
+    const s = JSON.parse(localStorage.getItem('habitTrackerProductionV7'));
+    s.groups = [{ id: gid, name: 'UAT Group', emoji: '📋', color: '#4f46e5', sortOrder: 0 }];
+    s.habits = [
+      { id: uid(), name: 'Alpha', emoji: '📖', color: '#4f46e5', target: 1, xpReward: 5, frequency: { mode: 'daily', days: [0,1,2,3,4,5,6] }, reminder: { enabled: false, time: '20:30', message: '' }, sortOrder: 0, paused: false, archived: false, groupId: gid },
+      { id: uid(), name: 'Beta', emoji: '🏃', color: '#059669', target: 1, xpReward: 5, frequency: { mode: 'daily', days: [0,1,2,3,4,5,6] }, reminder: { enabled: false, time: '20:30', message: '' }, sortOrder: 1, paused: false, archived: false, groupId: gid },
+    ];
+    s.settings.onboardingComplete = true;
+    localStorage.setItem('habitTrackerProductionV7', JSON.stringify(s));
+    return gid;
+  });
+  assert(groupSeed, 'group seed failed');
+  await page.reload({ waitUntil: 'networkidle' });
+  await page.waitForTimeout(800);
+  const storedGroups = await page.evaluate(() => JSON.parse(localStorage.getItem('habitTrackerProductionV7')).groups.length);
+  assert(storedGroups === 1, 'expected one group in storage, got ' + storedGroups);
+  await page.click('.nav-item[data-view="habitsView"]');
+  await page.waitForTimeout(500);
+  let beforeGroups = 0;
+  for (let i = 0; i < 12; i++) {
+    beforeGroups = await page.locator('#groupManager .group-manage-item').count();
+    if (beforeGroups > 0) break;
+    await page.waitForTimeout(250);
+  }
+  assert(beforeGroups === 1, 'expected one group');
+  await page.locator('[data-gdel]').first().click();
+  await page.waitForTimeout(500);
+  const after = await page.evaluate(() => {
+    const s = JSON.parse(localStorage.getItem('habitTrackerProductionV7'));
+    return { groups: s.groups.length, ungrouped: s.habits.every(h => !h.groupId) };
+  });
+  const groupRows = await page.locator('#groupManager .group-manage-item').count();
+  assert(after.groups === 0, 'group should be removed from state');
+  assert(after.ungrouped, 'habits should be ungrouped');
+  assert(groupRows === 0, 'group row should disappear from UI');
+});
+
+await test('Habit sort buttons reorder habits', async () => {
+  await page.evaluate(() => {
+    const uid = () => Date.now().toString(36) + Math.random().toString(36).slice(2, 7);
+    const s = JSON.parse(localStorage.getItem('habitTrackerProductionV7'));
+    s.groups = [];
+    s.habits = [
+      { id: 'habit-a', name: 'Alpha', emoji: '📖', color: '#4f46e5', target: 1, xpReward: 5, frequency: { mode: 'daily', days: [0,1,2,3,4,5,6] }, reminder: { enabled: false, time: '20:30', message: '' }, sortOrder: 0, paused: false, archived: false, groupId: null },
+      { id: 'habit-b', name: 'Beta', emoji: '🏃', color: '#059669', target: 1, xpReward: 5, frequency: { mode: 'daily', days: [0,1,2,3,4,5,6] }, reminder: { enabled: false, time: '20:30', message: '' }, sortOrder: 1, paused: false, archived: false, groupId: null },
+    ];
+    localStorage.setItem('habitTrackerProductionV7', JSON.stringify(s));
+    location.reload();
+  });
+  await page.waitForLoadState('networkidle');
+  await page.waitForTimeout(500);
+  await page.click('.nav-item[data-view="habitsView"]');
+  await page.waitForTimeout(300);
+  const before = await page.locator('#allHabitList .habit-row .habit-name').first().textContent();
+  assert(before === 'Alpha', 'Alpha should be first');
+  await page.locator('[data-down][data-habit-id="habit-a"]').click();
+  await page.waitForTimeout(400);
+  const after = await page.locator('#allHabitList .habit-row .habit-name').first().textContent();
+  const orders = await page.evaluate(() => JSON.parse(localStorage.getItem('habitTrackerProductionV7')).habits.map(h => ({ id: h.id, sortOrder: h.sortOrder })));
+  assert(after === 'Beta', 'Beta should be first after moving Alpha down');
+  const alpha = orders.find(o => o.id === 'habit-a');
+  const beta = orders.find(o => o.id === 'habit-b');
+  assert(alpha.sortOrder > beta.sortOrder, 'Alpha sortOrder should be greater than Beta');
+});
+
+await test('Weekly Review section removed from home', async () => {
+  await page.click('.nav-item[data-view="homeView"]');
+  await page.waitForTimeout(200);
+  const exists = await page.locator('#weeklyReviewCard').count();
+  assert(exists === 0, 'Weekly Review card should be removed from home');
+});
+
+await test('Redeem credit updates balance and celebrates', async () => {
+  await page.evaluate(() => {
+    const today = new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Hong_Kong', year: 'numeric', month: '2-digit', day: '2-digit' }).format(new Date());
+    const s = JSON.parse(localStorage.getItem('habitTrackerProductionV7'));
+    s.settings.vacations = [];
+    s.records = [{ id: 'rec1', habitId: s.habits[0]?.id || 'habit-b', date: today, at: new Date().toISOString(), note: '' }];
+    s.redemptions = [];
+    s.settings.startDate = today;
+    s.settings.rewards.creditRules = [{ id: 'c50', pct: 50, amount: 10 }];
+    localStorage.setItem('habitTrackerProductionV7', JSON.stringify(s));
+    location.reload();
+  });
+  await page.waitForLoadState('networkidle');
+  await page.waitForTimeout(500);
+  await page.click('.nav-item[data-view="rewardsView"]');
+  await page.waitForTimeout(300);
+  const before = await page.locator('#creditValue').textContent();
+  assert(before?.includes('10'), 'should have HK$10 credit, got ' + before);
+  await page.fill('#creditSpendText', 'Coffee');
+  await page.fill('#creditSpendAmount', '4');
+  await page.locator('#spendCreditBtn').click();
+  await page.waitForTimeout(600);
+  const after = await page.locator('#creditValue').textContent();
+  const celebrated = await page.evaluate(() => !!document.querySelector('#celebrateLayer .celebrate-banner, #celebrateLayer .confetti'));
+  const redeemed = await page.evaluate(() => JSON.parse(localStorage.getItem('habitTrackerProductionV7')).redemptions.some(r => r.type === 'redeemCredit'));
+  assert(redeemed, 'credit redemption should be saved');
+  assert(after?.includes('6'), `balance should drop to HK$6, got ${after}`);
+  assert(celebrated, 'celebration effect should show for credit redemption');
+});
+
 await test('Report range tabs update compare label', async () => {
   await page.click('.nav-item[data-view="reportView"]');
   await page.waitForTimeout(300);
@@ -295,7 +402,6 @@ await test('Credit balance updates immediately after completion', async () => {
 });
 
 await test('Erase all data clears habits, records, and UI', async () => {
-  page.on('dialog', d => d.accept());
   await page.click('#topSettingsBtn');
   await page.fill('#confirmDeleteInput', 'Confirm');
   await page.click('#resetAllBtn');
