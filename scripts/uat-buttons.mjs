@@ -551,6 +551,39 @@ await test('Auto backup sync runs after action', async () => {
   assert(!!lastBackup, 'lastBackupAt should be set after auto sync');
 });
 
+await test('Reward rule edits show save bar until saved', async () => {
+  await page.click('#topSettingsBtn');
+  await page.waitForSelector('#creditRulesBox [data-amount]');
+  await page.waitForTimeout(200);
+  assert(await page.locator('#settingsSaveBar').isHidden(), 'save bar should be hidden initially');
+  const amount = page.locator('#creditRulesBox [data-amount]').first();
+  await amount.selectOption('5');
+  await amount.dispatchEvent('change');
+  await page.waitForTimeout(200);
+  assert(!(await page.locator('#settingsSaveBar').isHidden()), 'save bar should appear after reward edit');
+  await page.click('#saveSettingsBtn');
+  await page.waitForTimeout(400);
+  assert(await page.locator('#settingsSaveBar').isHidden(), 'save bar should hide after save');
+});
+
+await test('Today shows paused banner during pause period', async () => {
+  const today = hkDateKey();
+  await page.evaluate((t) => {
+    const s = JSON.parse(localStorage.getItem('habitTrackerProductionV7'));
+    s.settings.vacations = [{ id: 'pause1', from: t, to: t, label: 'Holiday' }];
+    s.settings.onboardingComplete = true;
+    localStorage.setItem('habitTrackerProductionV7', JSON.stringify(s));
+    location.reload();
+  }, today);
+  await page.waitForLoadState('networkidle');
+  await page.waitForTimeout(600);
+  await page.click('.nav-item[data-view="homeView"]');
+  await page.waitForTimeout(300);
+  assert(await page.locator('#todayPauseBanner').isVisible(), 'pause banner should be visible');
+  const ring = await page.locator('#todayRingText').textContent();
+  assert(ring?.includes('⏸'), 'today ring should show pause icon');
+});
+
 await browser.close();
 
 const failed = results.filter(r => !r.ok);

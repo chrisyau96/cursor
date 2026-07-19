@@ -32,6 +32,7 @@
   let fileHandle=null;
   let pauseModalDone=null;
   let settingsDraft=null;
+  let rewardsDraft=null;
   let settingsPendingProfile=null;
   let habitModalSave=null;
   let lastTapKey='', lastTapAt=0;
@@ -71,7 +72,7 @@
   const PREVIEW=3;
   const LAZY_CHUNK=10;
   const REMINDER_MSG_LIMIT=80;
-  const APP_VERSION='v45';
+  const APP_VERSION='v46';
   const iconBtn=(cls,svg,title)=>{const b=document.createElement('button'); b.className='act-btn '+cls; b.innerHTML=svg; b.title=title; b.setAttribute('aria-label',title); return b;};
 
   const USER_NAME_MAX=12;
@@ -213,8 +214,11 @@
     backupSyncState='syncing';
     updateStatus();
     try{
-      try{const raw=localStorage.getItem(STORAGE); if(raw) state=JSON.parse(raw);}catch(e){}
-      normalizeState();
+      if(!settingsDirty()){
+        try{const raw=localStorage.getItem(STORAGE); if(raw) state=JSON.parse(raw);}catch(e){}
+        normalizeState();
+        if($('#settingsView')?.classList.contains('active')) drawRewardPanel(rewardActiveTab);
+      }
       const ready=await ensureBackupConnection();
       if(!ready){
         backupSyncState=state.settings.fileConnected?'pending':'idle';
@@ -243,10 +247,17 @@
     if(!fileHandle) return false;
     if(!(await canWriteBackup())) return false;
     try{
-      try{const raw=localStorage.getItem(STORAGE); if(raw) state=JSON.parse(raw);}catch(e){}
-      normalizeState();
+      let payload;
+      if(settingsDirty()){
+        const raw=localStorage.getItem(STORAGE);
+        payload=raw?JSON.parse(raw):state;
+      }else{
+        try{const raw=localStorage.getItem(STORAGE); if(raw) state=JSON.parse(raw);}catch(e){}
+        normalizeState();
+        payload=state;
+      }
       const w=await fileHandle.createWritable();
-      await w.write(JSON.stringify(state,null,2));
+      await w.write(JSON.stringify(payload,null,2));
       await w.close();
       state.settings.fileConnected=true;
       touchBackupTimestamp();
@@ -595,14 +606,29 @@
   }
 
   function updateHomeSummary(now, scheduled){
+    const paused=isVacationDay(dateKey(now));
     let completed=0,total=0; scheduled.forEach(h=>{const c=completionOfHabit(h,now); completed+=Math.min(c.count,c.target); total+=c.target;});
     const todayPctVal=total?Math.round(completed/total*100):0;
     const ring=$('#todayRingFill'), ringText=$('#todayRingText');
-    if(ring){const circ=97.4; ring.style.strokeDashoffset=String(circ-(circ*todayPctVal/100)); ring.style.stroke=todayPctVal>=100?'var(--green)':todayPctVal>=80?'var(--brand)':'var(--orange)';}
-    if(ringText) ringText.textContent=todayPctVal+'%';
+    if(ring){
+      const circ=97.4;
+      if(paused){ ring.style.strokeDashoffset=String(circ); ring.style.stroke='var(--b-vacation)'; }
+      else { ring.style.strokeDashoffset=String(circ-(circ*todayPctVal/100)); ring.style.stroke=todayPctVal>=100?'var(--green)':todayPctVal>=80?'var(--brand)':'var(--orange)'; }
+    }
+    if(ringText) ringText.textContent=paused?'⏸':todayPctVal+'%';
     $('#homeCreditValue').textContent='HK$'+creditTotal(); $('#homeCreditSub').textContent='available to redeem';
     const cur100=streakAt(now,100), best=longestPerfectStreak(); $('#homeStreakValue').textContent=`${cur100} / ${best}`; $('#homeStreakSub').textContent='current / best 100% streak';
     const ng=nextGiftInfo(); $('#homeNextGiftIcon').textContent=ng.icon; $('#homeNextGiftSub').textContent=ng.label; $('#homeNextGiftFill').style.width=ng.pct+'%';
+  }
+  function renderTodayPauseBanner(now=hkNow()){
+    const banner=$('#todayPauseBanner'); if(!banner) return;
+    const k=dateKey(now);
+    const vac=isVacationDay(k);
+    if(!vac){ banner.hidden=true; return; }
+    const v=(state.settings.vacations||[]).find(x=>k>=x.from&&k<=x.to);
+    banner.hidden=false;
+    const sub=$('#todayPauseSub');
+    if(sub) sub.textContent=v?`${v.label||'Pause'} · ${v.from} → ${v.to}`:'Tracking is frozen for today.';
   }
   function refreshGroupProgress(groupEl, groupId, scheduled, now){
     if(!groupEl)return;
@@ -656,7 +682,7 @@
     const strip=$('#weekStrip');
     const weekSig=weekOffset+'|'+todayKey();
     if(strip && strip.dataset.sig!==weekSig){strip.dataset.sig=weekSig; renderWeekStrip();}
-    renderFlexibleHabits(now); renderHomeJournal(); renderQuote(); renderTopProfile();
+    renderFlexibleHabits(now); renderHomeJournal(); renderQuote(); renderTopProfile(); renderTodayPauseBanner(now);
     const wt=$('#weekToday'); if(wt) wt.style.display=weekOffset===0?'none':'inline-grid';
   }
   function renderTodayHabitGroups(now, homeHabits){
@@ -789,8 +815,7 @@
     r.creditRules.push({id:uid(),pct,amount:pct>=100?10:2});
     drawRewardPanel('credit');
     flashRuleCard($('#creditRulesBox'));
-    toast('Credit rule added');
-    void save(false,{render:'none'});
+    markSettingsDirty();
   }
   function addGiftRule(){
     ensureRewardShape(); const r=state.settings.rewards;
@@ -798,24 +823,21 @@
     r.giftRules.push({id:uid(),gift:'Buffet',icon:'🍽️',pct:80,days:30});
     drawRewardPanel('gift');
     flashRuleCard($('#giftRulesBox'));
-    toast('Gift rule added');
-    void save(false,{render:'none'});
+    markSettingsDirty();
   }
   function removeCreditRule(idx){
     const r=state.settings.rewards;
     if(!r.creditRules?.[idx]) return;
     r.creditRules.splice(idx,1);
     drawRewardPanel('credit');
-    toast('Credit rule removed');
-    void save(false,{render:'none'});
+    markSettingsDirty();
   }
   function removeGiftRule(idx){
     const r=state.settings.rewards;
     if(!r.giftRules?.[idx]) return;
     r.giftRules.splice(idx,1);
     drawRewardPanel('gift');
-    toast('Gift rule removed');
-    void save(false,{render:'none'});
+    markSettingsDirty();
   }
   function resetHabitForDate(habitId,k){
     const beforeCredit=creditTotal();
@@ -1443,6 +1465,8 @@
     pauseModalDone=null;
     closeModal();
     renderVacationSettings();
+    invalidateHomeCaches();
+    renderHome();
     toast('Pause period added');
     void save(false,{render:'none'});
     if(done) done();
@@ -1465,7 +1489,7 @@
       div.querySelector('[data-from]').onchange=e=>{v.from=e.target.value; save(false,{render:'none'}); renderVacationSettings();};
       div.querySelector('[data-to]').onchange=e=>{v.to=e.target.value; save(false,{render:'none'}); renderVacationSettings();};
       div.querySelector('[data-label]').onchange=e=>{v.label=e.target.value; save(false,{render:'none'});};
-      div.querySelector('[data-rm]').onclick=()=>{state.settings.vacations.splice(realIdx,1); save(false,{render:'none'}); toast('Pause period removed'); openVacationLog();};
+      div.querySelector('[data-rm]').onclick=()=>{state.settings.vacations.splice(realIdx,1); save(false,{render:'none'}); invalidateHomeCaches(); renderHome(); toast('Pause period removed'); openVacationLog();};
       box.appendChild(div);
     });
     $('#addVacationFromLog').onclick=()=>openAddPauseModal(()=>openVacationLog());
@@ -1519,18 +1543,34 @@
     if(tab==='credit'){
       p.innerHTML=`<div class="panel-intro"><div class="panel-intro-title">Credit rules ${infoTip('Each completion level can be used once. A 100% day also earns every lower level\'s reward.','Credit rules')}</div></div><div id="creditRulesBox"></div><button class="btn-secondary add-rule-btn" id="addCreditRule" type="button">+ Add credit rule</button>`;
       const box=$('#creditRulesBox'); box.innerHTML='';
-      (r.creditRules||[]).forEach((rule,idx)=>{const div=document.createElement('div'); div.className='rule-card'; div.innerHTML=`<div class="rule-card-head"><div class="rule-card-title">Credit rule</div><span class="gift-rule-chip" data-chip>HK$${rule.amount||0}</span></div><div class="rule-grid"><div class="rule-row"><div class="field"><label>Completion</label><select data-pct>${[50,60,70,80,90,100].map(n=>`<option value="${n}">${n}%+</option>`).join('')}</select></div><div class="field"><label>Amount</label><select data-amount>${[1,2,5,10,20,30,50,100].map(n=>`<option value="${n}">HK$${n}</option>`).join('')}</select></div></div></div><div class="rule-actions"><button class="btn-text-danger" data-remove type="button">Remove</button></div>`; const pctSel=div.querySelector('[data-pct]'); const amtSel=div.querySelector('[data-amount]'); const chip=div.querySelector('[data-chip]'); pctSel.value=String(rule.pct??100); amtSel.value=String(rule.amount??10); const syncChip=()=>{if(chip) chip.textContent='HK$'+amtSel.value;}; syncChip(); const persist=async()=>{const pct=Number(pctSel.value); const dup=(r.creditRules||[]).some((x,i)=>i!==idx&&Number(x.pct)===pct); if(dup){toast('Duplicate completion %'); pctSel.value=String(rule.pct??100); return;} rule.pct=pct; rule.amount=Number(amtSel.value); syncChip(); await save(false,{render:'none'});}; pctSel.onchange=persist; amtSel.onchange=persist; div.querySelector('[data-remove]').dataset.ruleRemove='credit'; div.querySelector('[data-remove]').dataset.ruleIdx=String(idx); box.appendChild(div);});
+      (r.creditRules||[]).forEach((rule,idx)=>{const div=document.createElement('div'); div.className='rule-card'; div.innerHTML=`<div class="rule-card-head"><div class="rule-card-title">Credit rule</div><span class="gift-rule-chip" data-chip>HK$${rule.amount||0}</span></div><div class="rule-grid"><div class="rule-row"><div class="field"><label>Completion</label><select data-pct>${[50,60,70,80,90,100].map(n=>`<option value="${n}">${n}%+</option>`).join('')}</select></div><div class="field"><label>Amount</label><select data-amount>${[1,2,5,10,20,30,50,100].map(n=>`<option value="${n}">HK$${n}</option>`).join('')}</select></div></div></div><div class="rule-actions"><button class="btn-text-danger" data-remove type="button">Remove</button></div>`; const pctSel=div.querySelector('[data-pct]'); const amtSel=div.querySelector('[data-amount]'); const chip=div.querySelector('[data-chip]'); pctSel.value=String(rule.pct??100); amtSel.value=String(rule.amount??10); const syncChip=()=>{if(chip) chip.textContent='HK$'+amtSel.value;}; syncChip(); const persist=()=>{const rules=state.settings.rewards.creditRules||[]; const cur=rules[idx]; if(!cur)return; const pct=Number(pctSel.value); const dup=rules.some((x,i)=>i!==idx&&Number(x.pct)===pct); if(dup){toast('Duplicate completion %'); pctSel.value=String(cur.pct??100); return;} cur.pct=pct; cur.amount=Number(amtSel.value); syncChip(); markSettingsDirty();}; pctSel.onchange=persist; amtSel.onchange=persist; div.querySelector('[data-remove]').dataset.ruleRemove='credit'; div.querySelector('[data-remove]').dataset.ruleIdx=String(idx); box.appendChild(div);});
     } else if(tab==='penalty'){
       p.innerHTML=`<div class="panel-intro"><div class="panel-intro-title">Penalty rules ${infoTip('Charged once each time you hit consecutive 0% days. No penalty is recorded when your credit or EXP balance is already 0.','Penalty rules')}</div></div><div class="rule-card"><div class="rule-grid"><div class="field field-full"><label>Trigger</label><select id="penaltyZeroDays">${[1,2,3,4,5,7].map(n=>`<option value="${n}">${n} missed day${n>1?'s':''} in a row</option>`).join('')}</select></div><div class="rule-row"><div class="field"><label>Deduct credit</label><select id="penaltyCredit">${[0,2,5,10,20,30,50].map(n=>`<option value="${n}">HK$${n}</option>`).join('')}</select></div><div class="field"><label>Deduct EXP</label><select id="penaltyXp">${[0,10,20,30,50,100].map(n=>`<option value="${n}">${n} EXP</option>`).join('')}</select></div></div></div></div>`;
       $('#penaltyZeroDays').value=r.penaltyZeroDays||2; $('#penaltyCredit').value=r.penaltyCredit||5; $('#penaltyXp').value=r.penaltyXp||20;
-      const persist=async()=>{r.penaltyZeroDays=Number($('#penaltyZeroDays').value); r.penaltyCredit=Number($('#penaltyCredit').value); r.penaltyXp=Number($('#penaltyXp').value); await save(false,{render:'none'});};
+      const persist=()=>{r.penaltyZeroDays=Number($('#penaltyZeroDays').value); r.penaltyCredit=Number($('#penaltyCredit').value); r.penaltyXp=Number($('#penaltyXp').value); markSettingsDirty();};
       $('#penaltyZeroDays').onchange=persist; $('#penaltyCredit').onchange=persist; $('#penaltyXp').onchange=persist;
     } else {
       p.innerHTML=`<div class="panel-intro"><div class="panel-intro-title">Gift rules ${infoTip('Unlock a gift for keeping a streak. Earned gifts appear on the Rewards page.','Gift rules')}</div></div><div id="giftRulesBox"></div><button class="btn-secondary add-rule-btn" id="addGiftRule" type="button">+ Add gift rule</button>`;
       const box=$('#giftRulesBox'); box.innerHTML='';
-      (r.giftRules||[]).forEach((g,idx)=>{const div=document.createElement('div'); div.className='rule-card'; div.innerHTML=`<div class="rule-card-head"><div class="rule-card-title">Gift rule</div><span class="gift-rule-chip">${g.icon||'🎁'} ${escapeHtml(g.gift||'Gift')}</span></div><div class="rule-grid"><div class="rule-row icon-name"><div class="field"><label>Icon</label><input class="rule-input-icon" data-icon value="${escapeAttr(g.icon||'🎁')}" maxlength="4" placeholder="🍽️"></div><div class="field"><label>Gift name</label><input data-gift value="${escapeAttr(g.gift||'Buffet')}" placeholder="Buffet"></div></div><div class="rule-row"><div class="field"><label>Completion</label><select data-pct>${[50,60,70,80,90,100].map(n=>`<option value="${n}">${n}%+</option>`).join('')}</select></div><div class="field"><label>Streak days</label><select data-days>${[7,14,21,30,45,60,90,120].map(n=>`<option value="${n}">${n} days</option>`).join('')}</select></div></div></div><div class="rule-actions"><button class="btn-text-danger" data-remove type="button">Remove</button></div>`; div.querySelector('[data-pct]').value=g.pct||80; div.querySelector('[data-days]').value=g.days||30; const persist=async()=>{g.icon=div.querySelector('[data-icon]').value.trim()||'🎁'; g.gift=div.querySelector('[data-gift]').value.trim()||'Gift'; g.pct=Number(div.querySelector('[data-pct]').value); g.days=Number(div.querySelector('[data-days]').value); await save(false,{render:'none'});}; div.querySelector('[data-icon]').onchange=persist; div.querySelector('[data-gift]').onchange=persist; div.querySelector('[data-pct]').onchange=persist; div.querySelector('[data-days]').onchange=persist; div.querySelector('[data-remove]').dataset.ruleRemove='gift'; div.querySelector('[data-remove]').dataset.ruleIdx=String(idx); box.appendChild(div);});
+      (r.giftRules||[]).forEach((g,idx)=>{const div=document.createElement('div'); div.className='rule-card'; div.innerHTML=`<div class="rule-card-head"><div class="rule-card-title">Gift rule</div><span class="gift-rule-chip">${g.icon||'🎁'} ${escapeHtml(g.gift||'Gift')}</span></div><div class="rule-grid"><div class="rule-row icon-name"><div class="field"><label>Icon</label><input class="rule-input-icon" data-icon value="${escapeAttr(g.icon||'🎁')}" maxlength="4" placeholder="🍽️"></div><div class="field"><label>Gift name</label><input data-gift value="${escapeAttr(g.gift||'Buffet')}" placeholder="Buffet"></div></div><div class="rule-row"><div class="field"><label>Completion</label><select data-pct>${[50,60,70,80,90,100].map(n=>`<option value="${n}">${n}%+</option>`).join('')}</select></div><div class="field"><label>Streak days</label><select data-days>${[7,14,21,30,45,60,90,120].map(n=>`<option value="${n}">${n} days</option>`).join('')}</select></div></div></div><div class="rule-actions"><button class="btn-text-danger" data-remove type="button">Remove</button></div>`; div.querySelector('[data-pct]').value=g.pct||80; div.querySelector('[data-days]').value=g.days||30; const persist=()=>{const rules=state.settings.rewards.giftRules||[]; const cur=rules[idx]; if(!cur)return; cur.icon=div.querySelector('[data-icon]').value.trim()||'🎁'; cur.gift=div.querySelector('[data-gift]').value.trim()||'Gift'; cur.pct=Number(div.querySelector('[data-pct]').value); cur.days=Number(div.querySelector('[data-days]').value); markSettingsDirty();}; div.querySelector('[data-icon]').onchange=persist; div.querySelector('[data-gift]').onchange=persist; div.querySelector('[data-pct]').onchange=persist; div.querySelector('[data-days]').onchange=persist; div.querySelector('[data-icon]').oninput=persist; div.querySelector('[data-gift]').oninput=persist; div.querySelector('[data-remove]').dataset.ruleRemove='gift'; div.querySelector('[data-remove]').dataset.ruleIdx=String(idx); box.appendChild(div);});
     }
   }
+  function cloneRewards(){ ensureRewardShape(); return JSON.parse(JSON.stringify(state.settings.rewards)); }
+  function snapshotRewardsDraft(){ rewardsDraft=cloneRewards(); }
+  function rewardsFormDirty(){
+    if(!rewardsDraft) return false;
+    ensureRewardShape();
+    return JSON.stringify(state.settings.rewards)!==JSON.stringify(rewardsDraft);
+  }
+  function applyRewardsDraft(){
+    if(!rewardsDraft) return;
+    ensureRewardShape();
+    state.settings.rewards=JSON.parse(JSON.stringify(rewardsDraft));
+    drawRewardPanel(rewardActiveTab);
+    refreshEconomyDisplays();
+    if($('#rewardsView')?.classList.contains('active')) renderGiftRedeem();
+  }
+  function markSettingsDirty(){ updateSettingsSaveBar(); }
   function snapshotSettingsDraft(){
     return{
       userName:(state.settings.userName||'').slice(0,USER_NAME_MAX),
@@ -1570,15 +1610,17 @@
     const cur=readSettingsForm();
     return Object.keys(settingsDraft).some(k=>settingsDraft[k]!==cur[k]);
   }
+  function settingsDirty(){ return settingsFormDirty() || rewardsFormDirty(); }
   function updateSettingsSaveBar(){
     const bar=$('#settingsSaveBar');
     if(!bar) return;
-    const dirty=settingsFormDirty();
+    const dirty=settingsDirty();
     bar.hidden=!dirty;
     document.body.classList.toggle('settings-dirty',dirty);
   }
   function resetSettingsDraft(){
     settingsDraft=snapshotSettingsDraft();
+    snapshotRewardsDraft();
     settingsPendingProfile=null;
     applySettingsForm(settingsDraft);
     updateSettingsSaveBar();
@@ -1598,6 +1640,7 @@
     state.settings.defaultReminderMessage=form.defaultReminderMessage;
     settingsPendingProfile=null;
     settingsDraft=snapshotSettingsDraft();
+    snapshotRewardsDraft();
     $('#reminderSwitch')?.classList.toggle('on',!!form.reminders);
     applyAppearance();
     $('#greeting').textContent=timeGreeting()+greetName();
@@ -1605,12 +1648,15 @@
     setupReminderLoop();
     updateSettingsSaveBar();
     refreshSettingsChrome();
+    refreshEconomyDisplays();
+    if($('#rewardsView')?.classList.contains('active')) renderGiftRedeem();
     await save(false,{render:'none'});
+    if(state.settings.autoBackup) void flushBackupSync();
     toast('Settings saved');
   }
   function discardSettingsForm(){
-    if(!settingsDraft) return;
-    applySettingsForm(settingsDraft);
+    if(settingsDraft) applySettingsForm(settingsDraft);
+    if(rewardsDraft) applyRewardsDraft();
     applyAppearance();
     updateSettingsSaveBar();
     toast('Changes discarded');
@@ -1697,6 +1743,7 @@
       const disp=$('#startDateDisplay'); if(disp) disp.textContent=state.settings.startDate||todayKey();
     } else {
       $$('#rewardTabs button').forEach(b=>b.classList.toggle('active',b.dataset.tab===rewardActiveTab));
+      if(!settingsDirty()) drawRewardPanel(rewardActiveTab);
     }
     const remBox=$('#reminderSettings');
     if(remBox && !remBox.querySelector('#globalReminderTime')){
@@ -1958,7 +2005,7 @@
     else if(v==='settingsView') renderSettings();
     else refreshEconomyDisplays();
   }
-  function invalidateSettings(){const rs=$('#rewardSettings'); if(rs) delete rs.dataset.built; settingsDraft=null; settingsPendingProfile=null;}
+  function invalidateSettings(){const rs=$('#rewardSettings'); if(rs) delete rs.dataset.built; settingsDraft=null; rewardsDraft=null; settingsPendingProfile=null;}
   function renderAll(){updateStatus(); applyAppearance(); renderHome(); renderHabits(); renderReport(); renderRewards(); renderLevel(); renderSettings(true);}
   function showXpPop(t){
     const shell=$('.app-shell');
