@@ -42,7 +42,7 @@
   let backupDebounceTimer=null;
   let backupSyncInFlight=false;
   let backupSyncQueued=false;
-  const BACKUP_DEBOUNCE_MS=5000;
+  const BACKUP_DEBOUNCE_MS=2000;
   let backupSyncState='idle';
   let backupTimestampPending=null;
   function currentReportMonth(){const n=hkNow(); return new Date(n.getFullYear(),n.getMonth(),1);}
@@ -73,7 +73,7 @@
   const PREVIEW=3;
   const LAZY_CHUNK=10;
   const REMINDER_MSG_LIMIT=80;
-  const APP_VERSION='v47';
+  const APP_VERSION='v48';
   const iconBtn=(cls,svg,title)=>{const b=document.createElement('button'); b.className='act-btn '+cls; b.innerHTML=svg; b.title=title; b.setAttribute('aria-label',title); return b;};
 
   const USER_NAME_MAX=12;
@@ -190,7 +190,25 @@
   }
   function backupEnabled(){return !!state.settings.autoBackup&&!!fileHandle;}
   function maybeRenderBackupStatus(){ if($('#settingsView')?.classList.contains('active')) renderBackupStatus(); }
+  function backupPayload(){
+    if(settingsDirty()){
+      const raw=localStorage.getItem(STORAGE);
+      const payload=raw?JSON.parse(raw):JSON.parse(JSON.stringify(state));
+      payload.settings=payload.settings||{};
+      payload.settings.fileConnected=!!state.settings.fileConnected;
+      payload.settings.autoBackup=!!state.settings.autoBackup;
+      payload.settings.dailyBackup=!!state.settings.dailyBackup;
+      if(state.settings.backupFileName) payload.settings.backupFileName=state.settings.backupFileName;
+      if(state.settings.lastBackupAt) payload.settings.lastBackupAt=state.settings.lastBackupAt;
+      return payload;
+    }
+    return state;
+  }
   async function ensureBackupConnection(){
+    if(!fileHandle && state.settings.fileConnected){
+      const stored=await loadStoredFileHandle();
+      if(stored) applyStoredFileHandle(stored);
+    }
     if(fileHandle && await canWriteBackup()) return true;
     if(!state.settings.fileConnected) return false;
     return reconnectStoredFile(true);
@@ -210,16 +228,11 @@
   async function flushBackupSync(){
     if(!state.settings.autoBackup) return;
     if(backupSyncInFlight){ backupSyncQueued=true; return; }
-    backupSyncQueued=false;
     backupSyncInFlight=true;
+    backupSyncQueued=false;
     backupSyncState='syncing';
     updateStatus();
     try{
-      if(!settingsDirty()){
-        try{const raw=localStorage.getItem(STORAGE); if(raw) state=JSON.parse(raw);}catch(e){}
-        normalizeState();
-        if($('#settingsView')?.classList.contains('active')) drawRewardPanel(rewardActiveTab);
-      }
       const ready=await ensureBackupConnection();
       if(!ready){
         backupSyncState=state.settings.fileConnected?'pending':'idle';
@@ -248,18 +261,14 @@
     if(!fileHandle) return false;
     if(!(await canWriteBackup())) return false;
     try{
-      let payload;
-      if(settingsDirty()){
-        const raw=localStorage.getItem(STORAGE);
-        payload=raw?JSON.parse(raw):state;
-      }else{
-        try{const raw=localStorage.getItem(STORAGE); if(raw) state=JSON.parse(raw);}catch(e){}
-        normalizeState();
-        payload=state;
-      }
+      const payload=backupPayload();
       const syncedAt=new Date().toISOString();
       payload.settings=payload.settings||{};
       payload.settings.lastBackupAt=syncedAt;
+      payload.settings.fileConnected=true;
+      payload.settings.autoBackup=!!state.settings.autoBackup;
+      payload.settings.dailyBackup=!!state.settings.dailyBackup;
+      if(state.settings.backupFileName) payload.settings.backupFileName=state.settings.backupFileName;
       const w=await fileHandle.createWritable();
       await w.write(JSON.stringify(payload,null,2));
       backupTimestampPending=syncedAt;
@@ -562,7 +571,7 @@
     ensureRewardShape(); const rewards=state.settings.rewards; const entries=[];
     const redemptions=state.redemptions||[];
     const dates=[...new Set(state.records.map(r=>r.date).concat(Object.keys(state.journals)))].filter(afterStart).sort();
-    dates.forEach(d=>{if(isVacationDay(d))return; const p=dayPct(parseDate(d)); if(p===null)return; (rewards.creditRules||[]).forEach(rule=>{if(p>=Number(rule.pct||100)){entries.push({id:`auto-credit-${rule.id}-${d}`,date:d,type:'credit',amount:Number(rule.amount||0),gift:'',desc:`${rule.pct}% daily completion`,credit:Number(rule.amount||0),xp:rule.pct>=100?30:12});}});});
+    dates.forEach(d=>{if(isVacationDay(d))return; const p=dayPct(parseDate(d)); if(p===null)return; (rewards.creditRules||[]).forEach(rule=>{if(p>=Number(rule.pct||100)){entries.push({id:`auto-credit-${rule.id}-${d}`,date:d,type:'credit',amount:Number(rule.amount||0),gift:'',desc:`${rule.pct}% daily completion`,credit:Number(rule.amount||0),xp:0});}});});
     (rewards.giftRules||[]).forEach(rule=>{dates.forEach(d=>{if(isVacationDay(d))return; const streak=streakAt(parseDate(d),Number(rule.pct||80)); if(streak>0 && streak%Number(rule.days||30)===0){entries.push({id:`auto-gift-${rule.id}-${d}`,date:d,type:'gift',amount:1,gift:rule.gift||'Gift',giftIcon:rule.icon||'🎁',giftRuleId:rule.id,desc:`${rule.days} days at ${rule.pct}%+ · ${rule.gift||'Gift'}`,credit:0,xp:120});}});});
     const ledgerCreditAt=(dk)=>Math.max(0,[...entries,...redemptions].filter(e=>e.date<=dk).reduce((s,e)=>s+(e.credit||0),0));
     const ledgerXpAt=(dk)=>Math.max(0,recordsXpTotal()+journalXpTotal()+[...entries,...redemptions].filter(e=>e.date<=dk).reduce((s,e)=>s+(e.xp||0),0));
@@ -1900,6 +1909,7 @@
       state.settings.dailyBackup=true;
       state.settings.backupFileName=file.name||'habit-tracker-backup.json';
       if(!(await storeFileHandle(fileHandle))) toast('Connected, but this browser may not remember the file after refresh');
+      await save(true,{render:'none'});
       const ok=await writeBackupFile(false);
       if(!ok){toast('Connected, but could not write backup yet');}
       refreshBackupChrome();
@@ -1925,6 +1935,7 @@
       try{const f=await fileHandle.getFile(); backupName=f.name||backupName;}catch(e){}
       state.settings.backupFileName=backupName;
       if(!(await storeFileHandle(fileHandle))) toast('File created, but this browser may not remember it after refresh');
+      await save(true,{render:'none'});
       const ok=await writeBackupFile(false);
       if(!ok){toast('Could not write backup file'); return;}
       refreshBackupChrome();
@@ -2195,6 +2206,7 @@
   window.addEventListener('pagehide',()=>{
     clearTimeout(backupDebounceTimer);
     if(backupTimestampPending) persistBackupTimestamp(backupTimestampPending);
+    if(state.settings.autoBackup) void flushBackupSync();
   });
   async function tryReconnectOnReturn(){
     if(!state.settings.fileConnected) return;

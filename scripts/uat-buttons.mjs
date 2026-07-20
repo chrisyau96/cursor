@@ -153,8 +153,9 @@ await test('Create backup file (mocked picker)', async () => {
   await page.locator('[data-sync-action="create"]').scrollIntoViewIfNeeded();
   await page.click('[data-sync-action="create"]');
   await page.waitForTimeout(600);
-  const connected = await page.evaluate(() => JSON.parse(localStorage.getItem('habitTrackerProductionV7')).settings.fileConnected);
-  assert(connected, 'backup file should be connected');
+  const settings = await page.evaluate(() => JSON.parse(localStorage.getItem('habitTrackerProductionV7')).settings);
+  assert(settings.fileConnected, 'backup file should be connected');
+  assert(settings.autoBackup === true, 'auto backup should remain enabled after create');
 });
 
 await test('Weekly Not Specific hides due weekday field', async () => {
@@ -539,12 +540,13 @@ await test('Auto backup sync runs after action', async () => {
   await page.locator('[data-sync-action="create"]').scrollIntoViewIfNeeded();
   await page.click('[data-sync-action="create"]');
   await page.waitForTimeout(600);
-  await page.locator('#autoBackupSwitch').click();
+  const autoOn = await page.evaluate(() => document.querySelector('#autoBackupSwitch')?.classList.contains('on'));
+  if (!autoOn) await page.locator('#autoBackupSwitch').click();
   await page.waitForTimeout(200);
   await page.click('.nav-item[data-view="homeView"]');
   await page.waitForTimeout(200);
   await page.locator('.check-btn:not(.done):not(:disabled)').first().click();
-  await page.waitForTimeout(5500);
+  await page.waitForTimeout(3000);
   const writes = await page.evaluate(() => window.__backupWrites || 0);
   const lastBackup = await page.evaluate(() => JSON.parse(localStorage.getItem('habitTrackerProductionV7')).settings.lastBackupAt);
   const fileBackupTs = await page.evaluate(() => {
@@ -554,6 +556,46 @@ await test('Auto backup sync runs after action', async () => {
   assert(writes > 0, 'backup file should be written');
   assert(!!lastBackup, 'lastBackupAt should be set after auto sync');
   assert(!!fileBackupTs, 'backup payload should include lastBackupAt');
+  const autoBackupOn = await page.evaluate(() => JSON.parse(localStorage.getItem('habitTrackerProductionV7')).settings.autoBackup);
+  assert(autoBackupOn === true, 'auto backup should stay enabled after sync');
+});
+
+await test('Credit rules award credits only, not completion EXP', async () => {
+  await page.evaluate(() => {
+    const uid = () => Date.now().toString(36) + Math.random().toString(36).slice(2, 7);
+    const habitId = uid();
+    localStorage.setItem('habitTrackerProductionV7', JSON.stringify({
+      habits: [{
+        id: habitId, name: 'XP Check', emoji: '📖', color: '#4f46e5', target: 1, xpReward: 5,
+        frequency: { mode: 'daily', days: [0, 1, 2, 3, 4, 5, 6], schedule: { type: 'days' } },
+        reminder: { enabled: false, time: '20:30', message: '' },
+        sortOrder: 0, paused: false, archived: false, groupId: null,
+      }],
+      records: [], journals: {}, redemptions: [], groups: [],
+      settings: {
+        startDate: '2026-01-01', userName: 'UAT', onboardingComplete: true, vacations: [],
+        rewards: {
+          creditRules: [{ id: uid(), pct: 50, amount: 2 }, { id: uid(), pct: 100, amount: 10 }],
+          giftRules: [], penaltyCredit: 5, penaltyXp: 20, penaltyZeroDays: 2,
+        },
+      },
+    }));
+    location.reload();
+  });
+  await page.waitForLoadState('networkidle');
+  await page.waitForTimeout(500);
+  await page.click('.nav-item[data-view="homeView"]');
+  await page.locator('.check-btn:not(.done):not(:disabled)').first().click();
+  await page.waitForTimeout(400);
+  const credit = await page.locator('#homeCreditValue').textContent();
+  assert(credit?.includes('12'), `100% day should still earn stacked credits, got: ${credit}`);
+  await page.click('.nav-item[data-view="rewardsView"]');
+  await page.waitForTimeout(300);
+  const ledger = await page.locator('#ledgerList').textContent();
+  assert(ledger?.includes('50% daily completion'), '50% credit rule should appear in ledger');
+  assert(ledger?.includes('100% daily completion'), '100% credit rule should appear in ledger');
+  assert(!ledger?.includes('12 EXP'), '50% credit rule must not grant EXP');
+  assert(!ledger?.includes('30 EXP'), '100% credit rule must not grant EXP');
 });
 
 await test('Reward rule edits show save bar until saved', async () => {
