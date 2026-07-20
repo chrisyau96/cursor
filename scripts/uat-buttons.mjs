@@ -547,8 +547,13 @@ await test('Auto backup sync runs after action', async () => {
   await page.waitForTimeout(5500);
   const writes = await page.evaluate(() => window.__backupWrites || 0);
   const lastBackup = await page.evaluate(() => JSON.parse(localStorage.getItem('habitTrackerProductionV7')).settings.lastBackupAt);
+  const fileBackupTs = await page.evaluate(() => {
+    const raw = window.__backupPayloads?.at(-1) || '{}';
+    try { return JSON.parse(raw)?.settings?.lastBackupAt || ''; } catch { return ''; }
+  });
   assert(writes > 0, 'backup file should be written');
   assert(!!lastBackup, 'lastBackupAt should be set after auto sync');
+  assert(!!fileBackupTs, 'backup payload should include lastBackupAt');
 });
 
 await test('Reward rule edits show save bar until saved', async () => {

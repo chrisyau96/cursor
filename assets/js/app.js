@@ -44,6 +44,7 @@
   let backupSyncQueued=false;
   const BACKUP_DEBOUNCE_MS=5000;
   let backupSyncState='idle';
+  let backupTimestampPending=null;
   function currentReportMonth(){const n=hkNow(); return new Date(n.getFullYear(),n.getMonth(),1);}
   let reportCursor=currentReportMonth();
   let trendDays=7;
@@ -72,7 +73,7 @@
   const PREVIEW=3;
   const LAZY_CHUNK=10;
   const REMINDER_MSG_LIMIT=80;
-  const APP_VERSION='v46';
+  const APP_VERSION='v47';
   const iconBtn=(cls,svg,title)=>{const b=document.createElement('button'); b.className='act-btn '+cls; b.innerHTML=svg; b.title=title; b.setAttribute('aria-label',title); return b;};
 
   const USER_NAME_MAX=12;
@@ -256,25 +257,18 @@
         normalizeState();
         payload=state;
       }
+      const syncedAt=new Date().toISOString();
+      payload.settings=payload.settings||{};
+      payload.settings.lastBackupAt=syncedAt;
       const w=await fileHandle.createWritable();
       await w.write(JSON.stringify(payload,null,2));
+      backupTimestampPending=syncedAt;
+      persistBackupTimestamp(syncedAt);
       await w.close();
-      state.settings.fileConnected=true;
-      touchBackupTimestamp();
-      try{
-        const stored=JSON.parse(localStorage.getItem(STORAGE)||'{}');
-        stored.settings=stored.settings||{};
-        stored.settings.fileConnected=true;
-        stored.settings.lastBackupAt=state.settings.lastBackupAt;
-        localStorage.setItem(STORAGE,JSON.stringify(stored));
-        localStorage.setItem(BACKUP_MIRROR,JSON.stringify(stored));
-      }catch(e){
-        localStorage.setItem(STORAGE,JSON.stringify(state));
-        localStorage.setItem(BACKUP_MIRROR,JSON.stringify(state));
-      }
       backupSyncState='ok';
-      if(silent) maybeRenderBackupStatus();
-      else { updateStatus(); refreshSettingsChrome(); }
+      updateStatus();
+      maybeRenderBackupStatus();
+      if(!silent) refreshSettingsChrome();
       return true;
     }catch(e){
       backupSyncState='error';
@@ -286,7 +280,34 @@
   function weekKey(date){return dateKey(weekStart(date));}
   function fmtDueShort(k){const d=parseDate(k); return d.toLocaleDateString(undefined,{month:'short',day:'numeric'});}
   function isNotSpecific(habit){const f=habit.frequency||{}; if(f.mode==='daily') return f.schedule?.type==='any'; return !f.schedule||f.schedule.type==='any';}
-  function touchBackupTimestamp(){state.settings.lastBackupAt=new Date().toISOString();}
+  function touchBackupTimestamp(){return persistBackupTimestamp();}
+  function persistBackupTimestamp(iso){
+    const ts=iso||new Date().toISOString();
+    state.settings.lastBackupAt=ts;
+    state.settings.fileConnected=true;
+    try{
+      const stored=JSON.parse(localStorage.getItem(STORAGE)||'{}');
+      stored.settings=stored.settings||{};
+      stored.settings.lastBackupAt=ts;
+      stored.settings.fileConnected=true;
+      localStorage.setItem(STORAGE,JSON.stringify(stored));
+      localStorage.setItem(BACKUP_MIRROR,JSON.stringify(stored));
+    }catch(e){
+      localStorage.setItem(STORAGE,JSON.stringify(state));
+      localStorage.setItem(BACKUP_MIRROR,JSON.stringify(state));
+    }
+    backupTimestampPending=null;
+    return ts;
+  }
+  async function reconcileBackupTimestampFromFile(){
+    if(!fileHandle) return;
+    try{
+      const data=JSON.parse(await (await fileHandle.getFile()).text());
+      const fileTs=data?.settings?.lastBackupAt||'';
+      const localTs=state.settings.lastBackupAt||'';
+      if(fileTs && (!localTs || fileTs>localTs)) persistBackupTimestamp(fileTs);
+    }catch(e){}
+  }
   function formatBackupTime(iso){if(!iso)return'—'; try{const d=new Date(iso); return d.toLocaleString(undefined,{year:'numeric',month:'short',day:'numeric',hour:'2-digit',minute:'2-digit'});}catch(e){return'—';}}
   function habitDueDate(habit,date=hkNow()){
     const f=habit.frequency||{};
@@ -2166,8 +2187,14 @@
   }
   window.addEventListener('resize',()=>{if($('#onboardBackdrop')?.classList.contains('show')) positionOnboardCallout(ONBOARD_STEPS[onboardStep]);});
   document.addEventListener('visibilitychange',()=>{
-    if(document.visibilityState==='hidden') void flushBackupSync();
-    else if(document.visibilityState==='visible') void tryReconnectOnReturn();
+    if(document.visibilityState==='hidden'){
+      clearTimeout(backupDebounceTimer);
+      void flushBackupSync();
+    }else if(document.visibilityState==='visible') void tryReconnectOnReturn();
+  });
+  window.addEventListener('pagehide',()=>{
+    clearTimeout(backupDebounceTimer);
+    if(backupTimestampPending) persistBackupTimestamp(backupTimestampPending);
   });
   async function tryReconnectOnReturn(){
     if(!state.settings.fileConnected) return;
@@ -2187,6 +2214,7 @@
   void (async function boot(){
     const connected=await restoreFileConnection();
     if(connected && !(await canWriteBackup())) await reconnectStoredFile(true);
+    if(fileHandle) await reconcileBackupTimestampFromFile();
     renderAll();
     renderOnboarding();
     refreshBackupChrome();
