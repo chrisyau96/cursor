@@ -17,6 +17,18 @@ function hkDateKey() {
   }).format(new Date());
 }
 
+function hkYesterdayKey() {
+  const parts = new Intl.DateTimeFormat('en-CA', {
+    timeZone: 'Asia/Hong_Kong',
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+  }).formatToParts(new Date()).reduce((a, x) => { a[x.type] = x.value; return a; }, {});
+  const dt = new Date(Number(parts.year), Number(parts.month) - 1, Number(parts.day));
+  dt.setDate(dt.getDate() - 1);
+  return `${dt.getFullYear()}-${String(dt.getMonth() + 1).padStart(2, '0')}-${String(dt.getDate()).padStart(2, '0')}`;
+}
+
 function demoState() {
   const uid = () => Date.now().toString(36) + Math.random().toString(36).slice(2, 7);
   const habitId = uid();
@@ -596,6 +608,43 @@ await test('Credit rules award credits only, not completion EXP', async () => {
   assert(ledger?.includes('100% daily completion'), '100% credit rule should appear in ledger');
   assert(!ledger?.includes('12 EXP'), '50% credit rule must not grant EXP');
   assert(!ledger?.includes('30 EXP'), '100% credit rule must not grant EXP');
+});
+
+await test('Today view resets for a new day', async () => {
+  const yesterday = hkYesterdayKey();
+  const today = hkDateKey();
+  await page.evaluate((yesterday) => {
+    const uid = () => Date.now().toString(36) + Math.random().toString(36).slice(2, 7);
+    const habitId = uid();
+    localStorage.setItem('habitTrackerProductionV7', JSON.stringify({
+      habits: [{
+        id: habitId, name: 'Daily Reset', emoji: '📖', color: '#4f46e5', target: 1, xpReward: 5,
+        frequency: { mode: 'daily', days: [0, 1, 2, 3, 4, 5, 6], schedule: { type: 'days' } },
+        reminder: { enabled: false, time: '20:30', message: '' },
+        sortOrder: 0, paused: false, archived: false, groupId: null,
+      }],
+      records: [{ id: uid(), habitId, date: yesterday, at: new Date().toISOString(), note: '' }],
+      journals: {}, redemptions: [], groups: [],
+      settings: {
+        startDate: '2026-01-01', onboardingComplete: true, vacations: [],
+        rewards: {
+          creditRules: [{ id: uid(), pct: 50, amount: 2 }, { id: uid(), pct: 100, amount: 10 }],
+          giftRules: [], penaltyCredit: 5, penaltyXp: 20, penaltyZeroDays: 2,
+        },
+      },
+    }));
+    location.reload();
+  }, yesterday);
+  await page.waitForLoadState('networkidle');
+  await page.waitForTimeout(500);
+  await page.click('.nav-item[data-view="homeView"]');
+  await page.waitForTimeout(300);
+  const meta = await page.locator('#todayHabitGroups .habit-meta span').first().textContent();
+  const dataDate = await page.locator('#todayHabitGroups .check-btn').first().getAttribute('data-date');
+  const done = await page.locator('#todayHabitGroups .check-btn').first().getAttribute('class');
+  assert(meta?.startsWith('0/'), `today should start fresh, got ${meta}`);
+  assert(!done?.includes('done'), 'yesterday completion should not mark today done');
+  assert(dataDate === today, `records should target today (${today}), got ${dataDate}`);
 });
 
 await test('Reward rule edits show save bar until saved', async () => {
