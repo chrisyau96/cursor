@@ -75,7 +75,7 @@
   const PREVIEW=3;
   const LAZY_CHUNK=10;
   const REMINDER_MSG_LIMIT=80;
-  const APP_VERSION='v50';
+  const APP_VERSION='v51';
   const iconBtn=(cls,svg,title)=>{const b=document.createElement('button'); b.className='act-btn '+cls; b.innerHTML=svg; b.title=title; b.setAttribute('aria-label',title); return b;};
 
   const USER_NAME_MAX=12;
@@ -290,6 +290,17 @@
   function weekStart(date){const d=new Date(date); d.setHours(0,0,0,0); d.setDate(d.getDate()-d.getDay()); return d;}
   function weekKey(date){return dateKey(weekStart(date));}
   function fmtDueShort(k){const d=parseDate(k); return d.toLocaleDateString(undefined,{month:'short',day:'numeric'});}
+  function daysUntilDue(dueKey,now=hkNow()){
+    const today=parseDate(dateKey(now));
+    const due=parseDate(dueKey);
+    return Math.round((due-today)/86400000);
+  }
+  function fmtDueRelative(dueKey,now=hkNow()){
+    const diff=daysUntilDue(dueKey,now);
+    if(diff<=0) return 'today';
+    if(diff===1) return 'tmr';
+    return `in ${diff+1} days`;
+  }
   function isNotSpecific(habit){const f=habit.frequency||{}; if(f.mode==='daily') return f.schedule?.type==='any'; return !f.schedule||f.schedule.type==='any';}
   function touchBackupTimestamp(){return persistBackupTimestamp();}
   function persistBackupTimestamp(iso){
@@ -490,7 +501,7 @@
   function periodTarget(habit){const f=habit.frequency||{}; return Number(habit.target||f.times||1);}
   function frequencyLabel(habit){
     const f=habit.frequency||{};
-    const dueTxt=isNotSpecific(habit)?` · Due ${fmtDueShort(habitDueDate(habit))}`:'';
+    const dueTxt=isNotSpecific(habit)?` · Due ${fmtDueRelative(habitDueDate(habit))}`:'';
     if(f.mode==='daily'){
       if(f.schedule?.type==='any') return `Weekly · Not Specific${dueTxt}`;
       return `Weekly · ${periodTarget(habit)}x/week`;
@@ -499,7 +510,7 @@
     if(f.mode==='custom')return `${(f.period||'period').replace(/^./,c=>c.toUpperCase())} · ${periodTarget(habit)}x${scheduleLabel(f)}${dueTxt}`;
     return 'Weekly';
   }
-  function habitDueMarkup(h,now=hkNow()){return isNotSpecific(h)?`<span class="mini-dot"></span><span class="due-tag">Due ${fmtDueShort(habitDueDate(h,now))}</span>`:'';}
+  function habitDueMarkup(h,now=hkNow()){return isNotSpecific(h)?`<span class="mini-dot"></span><span class="due-tag">Due ${fmtDueRelative(habitDueDate(h,now),now)}</span>`:'';}
   function isFlexibleHabit(habit,date=hkNow()){if(habit.paused||habit.archived||!afterStart(dateKey(date))) return false; if(!isNotSpecific(habit)) return false; ensureFlexPeriod(habit,date); if(!periodMonthAllowed(habit.frequency,date)) return false; return periodCount(habit,date)<periodTarget(habit);}
   function showsOnHomeToday(habit,date=hkNow()){if(habit.paused||habit.archived)return false;
     if(!afterStart(dateKey(date))) return false;

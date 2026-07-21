@@ -367,6 +367,58 @@ await test('Not Specific habits card starts expanded and toggles', async () => {
   assert(expandedAgain, 'toggle should expand card again');
 });
 
+await test('Not Specific habits show relative due dates', async () => {
+  const today = hkDateKey();
+  await page.evaluate((today) => {
+    const s = JSON.parse(localStorage.getItem('habitTrackerProductionV7'));
+    s.groups = [];
+    s.habits = [{
+      id: 'flex-habit', name: 'Flex Habit', emoji: '📖', color: '#4f46e5', target: 1, xpReward: 5,
+      frequency: { mode: 'daily', schedule: { type: 'any' }, days: [] },
+      reminder: { enabled: false, time: '20:30', message: '' },
+      sortOrder: 0, paused: false, archived: false, groupId: null,
+    }];
+    s.records = [];
+    s.settings.startDate = today;
+    s.settings.onboardingComplete = true;
+    localStorage.setItem('habitTrackerProductionV7', JSON.stringify(s));
+  }, today);
+  await page.reload({ waitUntil: 'domcontentloaded' });
+  await page.waitForSelector('.nav-item[data-view="homeView"]');
+  await page.waitForTimeout(600);
+  await page.click('.nav-item[data-view="homeView"]');
+  await page.waitForTimeout(300);
+  const flexDue = (await page.locator('#flexHabitGroups .due-tag').first().textContent()) || '';
+  assert(/^Due (today|tmr|in \d+ days)$/.test(flexDue.trim()), `flex card should use relative due text, got "${flexDue.trim()}"`);
+  assert(!/[A-Za-z]{3}\s+\d/.test(flexDue), `flex card should not show absolute date, got "${flexDue.trim()}"`);
+  await page.click('.nav-item[data-view="habitsView"]');
+  await page.waitForTimeout(300);
+  const habitMeta = (await page.locator('#allHabitList .habit-meta').first().textContent()) || '';
+  assert(habitMeta.includes('Due '), `habits list should include due label, got "${habitMeta}"`);
+  assert(!/[A-Za-z]{3}\s+\d/.test(habitMeta), `habits list should not show absolute date, got "${habitMeta}"`);
+
+  const parts = new Intl.DateTimeFormat('en-CA', {
+    timeZone: 'Asia/Hong_Kong', year: 'numeric', month: '2-digit', day: '2-digit',
+  }).formatToParts(new Date()).reduce((a, x) => { a[x.type] = x.value; return a; }, {});
+  const todayDate = new Date(Number(parts.year), Number(parts.month) - 1, Number(parts.day));
+  const dueKey = (offset) => {
+    const due = new Date(todayDate);
+    due.setDate(due.getDate() + offset);
+    return `${due.getFullYear()}-${String(due.getMonth() + 1).padStart(2, '0')}-${String(due.getDate()).padStart(2, '0')}`;
+  };
+  const labelFor = (dueKeyStr) => {
+    const [y, m, d] = dueKeyStr.split('-').map(Number);
+    const due = new Date(y, m - 1, d);
+    const diff = Math.round((due - todayDate) / 86400000);
+    if (diff <= 0) return 'today';
+    if (diff === 1) return 'tmr';
+    return `in ${diff + 1} days`;
+  };
+  assert(labelFor(dueKey(0)) === 'today', 'due today should read as today');
+  assert(labelFor(dueKey(1)) === 'tmr', 'due tomorrow should read as tmr');
+  assert(labelFor(dueKey(2)) === 'in 3 days', 'due in two calendar days should read as in 3 days');
+});
+
 await test('Weekly Review section removed from home', async () => {
   await page.click('.nav-item[data-view="homeView"]');
   await page.waitForTimeout(200);
