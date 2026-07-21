@@ -53,6 +53,8 @@
   let onboardStep=0;
   let lastLevel=1;
   let lastMainView='homeView';
+  let lastRenderedTodayKey=todayKey();
+  let dayRolloverTimer=null;
   const MAIN_VIEWS=new Set(['homeView','habitsView','reportView','rewardsView']);
   let state=load(); normalizeState();
   const ONBOARD_STEPS=[
@@ -73,7 +75,7 @@
   const PREVIEW=3;
   const LAZY_CHUNK=10;
   const REMINDER_MSG_LIMIT=80;
-  const APP_VERSION='v48';
+  const APP_VERSION='v49';
   const iconBtn=(cls,svg,title)=>{const b=document.createElement('button'); b.className='act-btn '+cls; b.innerHTML=svg; b.title=title; b.setAttribute('aria-label',title); return b;};
 
   const USER_NAME_MAX=12;
@@ -524,6 +526,37 @@
   }
   function dayPct(date){const scheduled=dayScheduledHabits(date); if(!scheduled.length) return null; let points=0,total=0; scheduled.forEach(h=>{const target=(h.frequency.mode==='daily')?periodTarget(h):1; const count=(h.frequency.mode==='daily')?todayHabitCount(h,date):(periodCount(h,date)>0?1:0); points+=Math.min(count,target); total+=target;}); return total?Math.round(points/total*100):null;}
   function completionOfHabit(habit,date=hkNow()){const target=periodTarget(habit); const count=periodCount(habit,date); return {count,target,pct:Math.min(100,Math.round(count/target*100)),done:count>=target};}
+  function todayViewCompletion(habit,date=hkNow()){
+    const f=habit.frequency||{};
+    if(f.mode==='daily'){
+      const count=todayHabitCount(habit,date);
+      const target=periodTarget(habit);
+      return {count,target,pct:target?Math.min(100,Math.round(count/target*100)):0,done:count>=target};
+    }
+    return completionOfHabit(habit,date);
+  }
+  function scheduleDayRolloverCheck(){
+    clearTimeout(dayRolloverTimer);
+    const now=hkNow();
+    const next=new Date(now.getFullYear(),now.getMonth(),now.getDate()+1,0,0,1);
+    dayRolloverTimer=setTimeout(()=>{ refreshForDayChange(true); scheduleDayRolloverCheck(); },Math.max(1000,next-now));
+  }
+  function refreshForDayChange(force=false){
+    const today=todayKey();
+    if(!force && today===lastRenderedTodayKey) return false;
+    lastRenderedTodayKey=today;
+    invalidateHomeCaches();
+    weekOffset=0;
+    const active=$('.view.active')?.id||'homeView';
+    if(active==='homeView') renderHome();
+    else if(active==='reportView') renderReport();
+    else if(active==='rewardsView'){ renderRewards(); refreshEconomyDisplays(); }
+    else if(active==='habitsView') renderHabits();
+    else if(active==='levelView') renderLevel();
+    else renderHome();
+    updateStatus();
+    return true;
+  }
   function habitXpKey(habit,date){return habit.id+'|'+currentPeriodKey(habit,date);}
   function habitXpPerTap(habit){const total=Math.max(1,Math.round(Number(habit.xpReward)||5)); const target=Math.max(1,periodTarget(habit)); return Math.max(1,Math.round(total/target));}
   function habitPeriodXp(habit,date){
@@ -637,7 +670,7 @@
 
   function updateHomeSummary(now, scheduled){
     const paused=isVacationDay(dateKey(now));
-    let completed=0,total=0; scheduled.forEach(h=>{const c=completionOfHabit(h,now); completed+=Math.min(c.count,c.target); total+=c.target;});
+    let completed=0,total=0; scheduled.forEach(h=>{const c=todayViewCompletion(h,now); completed+=Math.min(c.count,c.target); total+=c.target;});
     const todayPctVal=total?Math.round(completed/total*100):0;
     const ring=$('#todayRingFill'), ringText=$('#todayRingText');
     if(ring){
@@ -663,7 +696,7 @@
   function refreshGroupProgress(groupEl, groupId, scheduled, now){
     if(!groupEl)return;
     const hs=groupId==='_ungrouped'?scheduled.filter(h=>!h.groupId):scheduled.filter(h=>h.groupId===groupId);
-    let done=0,tot=0; hs.forEach(h=>{const c=completionOfHabit(h,now); done+=Math.min(c.count,c.target); tot+=c.target;});
+    let done=0,tot=0; hs.forEach(h=>{const c=todayViewCompletion(h,now); done+=Math.min(c.count,c.target); tot+=c.target;});
     const prog=groupEl.querySelector('.group-progress'); if(prog) prog.textContent=`${done}/${tot}`;
   }
   function invalidateHomeCaches(){
@@ -698,11 +731,12 @@
   }
   function homeTodaySig(now, homeHabits){
     const groupSig=sortedGroups().map(g=>g.id+':'+(g.sortOrder||0)+':'+(g.name||'')).join('|');
-    const habitSig=homeHabits.map(h=>`${h.id}:${h.groupId||''}:${h.sortOrder||0}:${completionOfHabit(h,now).count}`).join(',');
+    const habitSig=homeHabits.map(h=>`${h.id}:${h.groupId||''}:${h.sortOrder||0}:${todayViewCompletion(h,now).count}`).join(',');
     return dateKey(now)+'|'+groupSig+'|'+habitSig;
   }
   function renderHome(){
     const now=hkNow(); const homeHabits=activeHabits().filter(h=>showsOnHomeToday(h,now));
+    lastRenderedTodayKey=dateKey(now);
     $('#greeting').textContent=timeGreeting()+greetName();
     $('#todayEntryStamp').textContent=fmtDate(now);
     updateHomeSummary(now, homeHabits);
@@ -726,7 +760,7 @@
   }
   function renderHabitGroupBlock(group, habits, now){
     const wrap=document.createElement('div'); wrap.className='habit-group';
-    let done=0,tot=0; habits.forEach(h=>{const c=completionOfHabit(h,now); done+=Math.min(c.count,c.target); tot+=c.target;});
+    let done=0,tot=0; habits.forEach(h=>{const c=todayViewCompletion(h,now); done+=Math.min(c.count,c.target); tot+=c.target;});
     const head=document.createElement('div'); head.className='group-head';
     head.innerHTML=`<div class="group-icon" style="background:${group.color}22;color:${group.color}">${group.emoji||'📋'}</div><div class="group-name">${escapeHtml(group.name||'Group')}</div><div class="group-progress">${done}/${tot}</div>`;
     wrap.classList.add('habit-group-block');
@@ -765,7 +799,7 @@
     const label=$('#weekLabel'); if(label){const endd=new Date(start); endd.setDate(start.getDate()+6); label.textContent = weekOffset===0?'This week':`${start.getMonth()+1}/${start.getDate()} – ${endd.getMonth()+1}/${endd.getDate()}`;}
   }
   function todayHabitRow(h,now=hkNow(),after=null){
-    const k=dateKey(now); const c=completionOfHabit(h,now);
+    const k=dateKey(now); const c=todayViewCompletion(h,now);
     const wrap=document.createElement('div'); wrap.className='swipe-wrap';
     const actions=document.createElement('div'); actions.className='swipe-actions';
     actions.innerHTML=`<button class="swipe-act undo" data-swipe-undo type="button">Undo</button><button class="swipe-act edit" data-swipe-edit type="button">Edit</button>`;
@@ -814,7 +848,8 @@
   }
   async function addRecord(habitId,note='',date=todayKey()){
     const habit=state.habits.find(h=>h.id===habitId); if(!habit)return;
-    const dt=parseDate(date); const c=completionOfHabit(habit,dt);
+    const dt=parseDate(date);
+    const c=(habit.frequency?.mode==='daily')?todayViewCompletion(habit,dt):completionOfHabit(habit,dt);
     if(c.count>=c.target){toast('Target already completed'); return;}
     const beforeCredit=creditTotal();
     const beforeXp=xpTotal();
@@ -2201,8 +2236,13 @@
     if(document.visibilityState==='hidden'){
       clearTimeout(backupDebounceTimer);
       void flushBackupSync();
-    }else if(document.visibilityState==='visible') void tryReconnectOnReturn();
+    }else if(document.visibilityState==='visible'){
+      refreshForDayChange();
+      void tryReconnectOnReturn();
+    }
   });
+  window.addEventListener('pageshow',()=>{ refreshForDayChange(); });
+  window.addEventListener('focus',()=>{ refreshForDayChange(); });
   window.addEventListener('pagehide',()=>{
     clearTimeout(backupDebounceTimer);
     if(backupTimestampPending) persistBackupTimestamp(backupTimestampPending);
@@ -2223,6 +2263,8 @@
   lastLevel=levelInfo().cur.level;
   applyAppearance();
   setupReminderLoop();
+  scheduleDayRolloverCheck();
+  setInterval(()=>{ if(document.visibilityState==='visible') refreshForDayChange(); },60000);
   void (async function boot(){
     const connected=await restoreFileConnection();
     if(connected && !(await canWriteBackup())) await reconnectStoredFile(true);
