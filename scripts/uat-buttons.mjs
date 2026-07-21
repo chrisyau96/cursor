@@ -427,17 +427,31 @@ await test('Weekly Review section removed from home', async () => {
 });
 
 await test('Redeem credit updates balance and celebrates', async () => {
-  await page.evaluate(() => {
-    const today = new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Hong_Kong', year: 'numeric', month: '2-digit', day: '2-digit' }).format(new Date());
+  const today = hkDateKey();
+  await page.evaluate((today) => {
+    const uid = () => Date.now().toString(36) + Math.random().toString(36).slice(2, 7);
+    const habitId = uid();
     const s = JSON.parse(localStorage.getItem('habitTrackerProductionV7'));
-    s.settings.vacations = [];
-    s.records = [{ id: 'rec1', habitId: s.habits[0]?.id || 'habit-b', date: today, at: new Date().toISOString(), note: '' }];
+    s.habits = [{
+      id: habitId, name: 'Credit Habit', emoji: '📖', color: '#4f46e5', target: 1, xpReward: 5,
+      frequency: { mode: 'daily', days: [0, 1, 2, 3, 4, 5, 6], schedule: { type: 'days' } },
+      reminder: { enabled: false, time: '20:30', message: '' },
+      sortOrder: 0, paused: false, archived: false, groupId: null,
+    }];
+    s.records = [{ id: 'rec1', habitId, date: today, at: new Date().toISOString(), note: '' }];
     s.redemptions = [];
     s.settings.startDate = today;
+    s.settings.vacations = [];
+    s.settings.onboardingComplete = true;
+    s.settings.rewards = s.settings.rewards || {};
     s.settings.rewards.creditRules = [{ id: 'c50', pct: 50, amount: 10 }];
+    s.settings.rewards.giftRules = s.settings.rewards.giftRules || [];
+    s.settings.rewards.penaltyCredit = s.settings.rewards.penaltyCredit ?? 5;
+    s.settings.rewards.penaltyXp = s.settings.rewards.penaltyXp ?? 20;
+    s.settings.rewards.penaltyZeroDays = s.settings.rewards.penaltyZeroDays ?? 2;
     localStorage.setItem('habitTrackerProductionV7', JSON.stringify(s));
     location.reload();
-  });
+  }, today);
   await page.waitForLoadState('networkidle');
   await page.waitForTimeout(500);
   await page.click('.nav-item[data-view="rewardsView"]');
@@ -481,16 +495,17 @@ await test('Calendar and week views use 0/50/100 completion colors', async () =>
   await page.waitForTimeout(200);
   const homeLegend = await page.locator('.week-legend').textContent();
   assert(!homeLegend?.includes('80%'), 'home legend should not include 80% tier');
-  assert(!homeLegend?.includes('1%+'), 'home legend should not include 1% tier');
-  assert(homeLegend?.includes('50%+'), 'home legend should include 50% tier');
-  assert(homeLegend?.includes('100%+'), 'home legend should include 100% tier');
+  assert(!homeLegend?.includes('1%'), 'home legend should not include 1% tier');
+  assert(homeLegend?.includes('50%'), 'home legend should include 50% tier');
+  assert(homeLegend?.includes('100%'), 'home legend should include 100% tier');
+  assert(!homeLegend?.includes('50%+'), 'home legend should not use plus sign');
 
   await page.click('.nav-item[data-view="reportView"]');
   await page.waitForTimeout(300);
   const reportLegend = await page.locator('#monthReport').locator('xpath=..').locator('.legend').textContent();
   assert(!reportLegend?.includes('80%'), 'report legend should not include 80% tier');
-  assert(!reportLegend?.includes('1%+'), 'report legend should not include 1% tier');
-  assert(reportLegend?.includes('50%+'), 'report legend should include 50% tier');
+  assert(!reportLegend?.includes('1%'), 'report legend should not include 1% tier');
+  assert(reportLegend?.includes('50%'), 'report legend should include 50% tier');
 });
 
 await test('Credit rule chip matches amount select', async () => {
@@ -790,6 +805,40 @@ await test('Today shows paused banner during pause period', async () => {
   assert(await page.locator('#todayPauseBanner').isVisible(), 'pause banner should be visible');
   const ring = await page.locator('#todayRingText').textContent();
   assert(ring?.includes('⏸'), 'today ring should show pause icon');
+});
+
+await test('Week strip updates instantly after today habit reset', async () => {
+  const today = hkDateKey();
+  await page.evaluate((today) => {
+    const uid = () => Date.now().toString(36) + Math.random().toString(36).slice(2, 7);
+    const h1 = uid();
+    const h2 = uid();
+    const s = JSON.parse(localStorage.getItem('habitTrackerProductionV7'));
+    s.habits = [
+      { id: h1, name: 'Habit A', emoji: '📖', color: '#4f46e5', target: 1, xpReward: 5, frequency: { mode: 'daily', days: [0, 1, 2, 3, 4, 5, 6], schedule: { type: 'days' } }, reminder: { enabled: false, time: '20:30', message: '' }, sortOrder: 0, paused: false, archived: false, groupId: null },
+      { id: h2, name: 'Habit B', emoji: '🏃', color: '#2563eb', target: 1, xpReward: 5, frequency: { mode: 'daily', days: [0, 1, 2, 3, 4, 5, 6], schedule: { type: 'days' } }, reminder: { enabled: false, time: '20:30', message: '' }, sortOrder: 1, paused: false, archived: false, groupId: null },
+    ];
+    s.records = [{ id: uid(), habitId: h1, date: today, at: new Date().toISOString(), note: '' }];
+    s.settings.startDate = today;
+    s.settings.onboardingComplete = true;
+    s.settings.vacations = [];
+    localStorage.setItem('habitTrackerProductionV7', JSON.stringify(s));
+  }, today);
+  await page.reload({ waitUntil: 'domcontentloaded' });
+  await page.waitForSelector('.nav-item[data-view="homeView"]');
+  await page.waitForTimeout(600);
+  await page.click('.nav-item[data-view="homeView"]');
+  await page.waitForTimeout(300);
+  const beforeBand = await page.locator('#weekStrip .wcell.today .wnum').getAttribute('class');
+  assert(beforeBand?.includes('band-partial'), `today should start at 50% color, got ${beforeBand}`);
+  await page.locator('#todayHabitGroups .check-btn:not(.done)').first().click();
+  await page.waitForTimeout(400);
+  const afterCompleteBand = await page.locator('#weekStrip .wcell.today .wnum').getAttribute('class');
+  assert(afterCompleteBand?.includes('band-perfect'), `today should turn 100% color after completion, got ${afterCompleteBand}`);
+  await page.locator('#todayHabitGroups .reset-habit-btn').first().click();
+  await page.waitForTimeout(400);
+  const afterResetBand = await page.locator('#weekStrip .wcell.today .wnum').getAttribute('class');
+  assert(afterResetBand?.includes('band-partial'), `today should return to 50% color after reset, got ${afterResetBand}`);
 });
 
 await browser.close();

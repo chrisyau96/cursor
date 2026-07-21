@@ -75,7 +75,7 @@
   const PREVIEW=3;
   const LAZY_CHUNK=10;
   const REMINDER_MSG_LIMIT=80;
-  const APP_VERSION='v52';
+  const APP_VERSION='v53';
   const iconBtn=(cls,svg,title)=>{const b=document.createElement('button'); b.className='act-btn '+cls; b.innerHTML=svg; b.title=title; b.setAttribute('aria-label',title); return b;};
 
   const USER_NAME_MAX=12;
@@ -525,17 +525,19 @@
   function todayHabitCount(habit,date=hkNow()){const k=dateKey(date); return state.records.filter(r=>r.habitId===habit.id && r.date===k).length}
   function dayScheduledHabits(date){
     if(!afterStart(dateKey(date))) return [];
-    const k=dateKey(date);
-    const seen=new Set(), out=[];
-    activeHabits().forEach(h=>{
-      if(seen.has(h.id)) return;
-      if(showsOnHomeToday(h,date) || state.records.some(r=>r.habitId===h.id&&r.date===k)){
-        seen.add(h.id); out.push(h);
-      }
-    });
-    return out;
+    return activeHabits().filter(h=>showsOnHomeToday(h,date));
   }
-  function dayPct(date){const scheduled=dayScheduledHabits(date); if(!scheduled.length) return null; let points=0,total=0; scheduled.forEach(h=>{const target=(h.frequency.mode==='daily')?periodTarget(h):1; const count=(h.frequency.mode==='daily')?todayHabitCount(h,date):(periodCount(h,date)>0?1:0); points+=Math.min(count,target); total+=target;}); return total?Math.round(points/total*100):null;}
+  function dayPct(date){
+    const scheduled=dayScheduledHabits(date);
+    if(!scheduled.length) return null;
+    let points=0,total=0;
+    scheduled.forEach(h=>{
+      const c=todayViewCompletion(h,date);
+      points+=Math.min(c.count,c.target);
+      total+=c.target;
+    });
+    return total?Math.round(points/total*100):null;
+  }
   function completionOfHabit(habit,date=hkNow()){const target=periodTarget(habit); const count=periodCount(habit,date); return {count,target,pct:Math.min(100,Math.round(count/target*100)),done:count>=target};}
   function todayViewCompletion(habit,date=hkNow()){
     const f=habit.frequency||{};
@@ -700,7 +702,7 @@
     if(ring){
       const circ=97.4;
       if(paused){ ring.style.strokeDashoffset=String(circ); ring.style.stroke='var(--b-vacation)'; }
-      else { ring.style.strokeDashoffset=String(circ-(circ*todayPctVal/100)); ring.style.stroke=todayPctVal>=100?'var(--green)':todayPctVal>=80?'var(--brand)':'var(--orange)'; }
+      else { ring.style.strokeDashoffset=String(circ-(circ*todayPctVal/100)); ring.style.stroke=todayPctVal>=100?'var(--green)':todayPctVal>=50?'var(--brand)':'var(--orange)'; }
     }
     if(ringText) ringText.textContent=paused?'⏸':todayPctVal+'%';
     $('#homeCreditValue').textContent='HK$'+creditTotal(); $('#homeCreditSub').textContent='available to redeem';
@@ -727,6 +729,41 @@
     const box=$('#todayHabitGroups'); if(box) delete box.dataset.sig;
     const strip=$('#weekStrip'); if(strip) delete strip.dataset.sig;
   }
+  function isDateInVisibleWeek(k){
+    const base=hkNow();
+    base.setDate(base.getDate()+weekOffset*7);
+    const start=new Date(base);
+    start.setDate(start.getDate()-start.getDay());
+    const end=new Date(start);
+    end.setDate(start.getDate()+6);
+    const d=parseDate(k);
+    return d>=start && d<=end;
+  }
+  function weekStripSig(){
+    const base=hkNow();
+    base.setDate(base.getDate()+weekOffset*7);
+    const start=new Date(base);
+    start.setDate(start.getDate()-start.getDay());
+    const parts=[];
+    for(let i=0;i<7;i++){
+      const d=new Date(start);
+      d.setDate(start.getDate()+i);
+      parts.push(dayPct(d)??'x');
+    }
+    return weekOffset+'|'+todayKey()+'|'+parts.join(',');
+  }
+  function refreshCompletionViews(changedDate=todayKey()){
+    const strip=$('#weekStrip');
+    if(strip && isDateInVisibleWeek(changedDate)){
+      delete strip.dataset.sig;
+      renderWeekStrip();
+      strip.dataset.sig=weekStripSig();
+    }
+    if($('#calendarGrid')) renderCalendar();
+    if($('.view.active')?.id==='reportView') drawTrend();
+    const modal=$('#modalBackdrop');
+    if(modal?.classList.contains('show') && $('#dayHabitList')) openDayDetail(changedDate);
+  }
   function habitRowWrap(habitId,date){
     const sel=`[data-habit-id="${habitId}"][data-date="${date}"]`;
     return document.querySelector(`button.check-btn${sel}`)?.closest('.swipe-wrap')
@@ -734,24 +771,26 @@
       || document.querySelector(`.habit-row[data-habit-tap="${habitId}"][data-date="${date}"]`)?.closest('.swipe-wrap');
   }
   function refreshHomeAfterRecord(habitId, date=todayKey()){
-    const now=parseDate(date);
-    const homeHabits=activeHabits().filter(h=>showsOnHomeToday(h,now));
+    const recordDate=parseDate(date);
+    const todayNow=hkNow();
+    const todayHabits=activeHabits().filter(h=>showsOnHomeToday(h,todayNow));
     invalidateHomeCaches();
-    updateHomeSummary(now, homeHabits);
+    updateHomeSummary(todayNow, todayHabits);
     refreshEconomyDisplays();
     const habit=state.habits.find(h=>h.id===habitId);
     const wrap=habitRowWrap(habitId,date);
     if(habit && wrap){
       const after=wrap.dataset.afterKey?()=>openDayDetail(wrap.dataset.afterKey):null;
-      const fresh=todayHabitRow(habit, now, after);
+      const fresh=todayHabitRow(habit, recordDate, after);
       const groupEl=wrap.closest('.habit-group');
       wrap.replaceWith(fresh);
       const gid=habit.groupId||'_ungrouped';
-      refreshGroupProgress(groupEl||fresh.closest('.habit-group'), gid, homeHabits, now);
-    }else{
-      renderTodayHabitGroups(now, homeHabits);
+      refreshGroupProgress(groupEl||fresh.closest('.habit-group'), gid, todayHabits, todayNow);
+    }else if(date===todayKey()){
+      renderTodayHabitGroups(todayNow, todayHabits);
     }
-    if(date===todayKey()){ renderWeekStrip(); renderFlexibleHabits(now); }
+    if(date===todayKey()) renderFlexibleHabits(todayNow);
+    refreshCompletionViews(date);
   }
   function homeTodaySig(now, homeHabits){
     const groupSig=sortedGroups().map(g=>g.id+':'+(g.sortOrder||0)+':'+(g.name||'')).join('|');
@@ -768,7 +807,7 @@
     const sig=homeTodaySig(now, homeHabits);
     if(box && box.dataset.sig!==sig){box.dataset.sig=sig; renderTodayHabitGroups(now, homeHabits);}
     const strip=$('#weekStrip');
-    const weekSig=weekOffset+'|'+todayKey();
+    const weekSig=weekStripSig();
     if(strip && strip.dataset.sig!==weekSig){strip.dataset.sig=weekSig; renderWeekStrip();}
     renderFlexibleHabits(now); renderHomeJournal(); renderQuote(); renderTopProfile(); renderTodayPauseBanner(now);
     const wt=$('#weekToday'); if(wt) wt.style.display=weekOffset===0?'none':'inline-grid';
@@ -889,7 +928,7 @@
     if(pct===100) celebrate('Perfect day! 🎉');
     toast('Recorded');
   }
-  async function removeRecord(id){state.records=state.records.filter(r=>r.id!==id); await save(false,{render:'none'}); toast('Record removed')}
+  async function removeRecord(id){const rec=state.records.find(r=>r.id===id); state.records=state.records.filter(r=>r.id!==id); await save(false,{render:'none'}); if(rec) refreshHomeAfterRecord(rec.habitId,rec.date); toast('Record removed')}
   async function removeRedemption(id){state.redemptions=state.redemptions.filter(r=>r.id!==id); await save(false,{render:'none'}); toast('Redemption removed')}
   function flashRuleCard(box){
     const cards=box?.querySelectorAll('.rule-card');
@@ -1258,7 +1297,7 @@
     const left=34,right=12,top=18,bottom=42,plotW=W-left-right,plotH=H-top-bottom,bw=plotW/trendDays;
     ctx.strokeStyle=gridCol; ctx.lineWidth=1; ctx.fillStyle=axisCol; ctx.font='10px Inter,Arial'; for(let i=0;i<=4;i++){const y=top+plotH*i/4; ctx.beginPath();ctx.moveTo(left,y);ctx.lineTo(W-right,y);ctx.stroke(); ctx.fillText((100-i*25)+'%',4,y+3);}
     const barW=Math.max(2,Math.min(bw*0.62,26)); const radius=Math.min(6,barW/2);
-    pctVals.forEach((v,i)=>{ if(v===null||v===undefined) return; const x=left+i*bw+(bw-barW)/2; const bh=plotH*(v/100); ctx.fillStyle=v>=100?'rgba(22,163,74,.9)':v>=80?'rgba(134,239,172,.95)':v>=50?'rgba(253,230,138,.95)':v>0?'rgba(254,202,202,.95)':'rgba(248,113,113,.85)'; roundRect(ctx,x,top+plotH-bh,barW,Math.max(2,bh),radius,true);});
+    pctVals.forEach((v,i)=>{ if(v===null||v===undefined) return; const x=left+i*bw+(bw-barW)/2; const bh=plotH*(v/100); ctx.fillStyle=v>=100?'rgba(22,163,74,.9)':v>=50?'rgba(253,230,138,.95)':'rgba(248,113,113,.85)'; roundRect(ctx,x,top+plotH-bh,barW,Math.max(2,bh),radius,true);});
     ctx.strokeStyle=lineCol;ctx.lineWidth=3;ctx.beginPath(); let started=false; energy.forEach((e,i)=>{if(e==null)return; const x=left+i*bw+bw/2, y=top+plotH-plotH*(e/10); if(!started){ctx.moveTo(x,y);started=true}else ctx.lineTo(x,y)}); if(started) ctx.stroke(); energy.forEach((e,i)=>{if(e==null)return; const x=left+i*bw+bw/2, y=top+plotH-plotH*(e/10); ctx.fillStyle=lineCol; ctx.beginPath(); ctx.arc(x,y,3,0,Math.PI*2); ctx.fill();});
     const labelStep=trendDays<=7?1:trendDays<=14?3:6; ctx.fillStyle=axisCol;ctx.font='10px Inter,Arial'; ctx.textAlign='center'; labels.forEach((l,i)=>{if(i%labelStep!==0&&i!==labels.length-1)return; const x=left+i*bw+bw/2; ctx.fillText(l,x,H-16);}); ctx.textAlign='left';}
   function roundRect(ctx,x,y,w,h,r,fill){ctx.beginPath();ctx.moveTo(x+r,y);ctx.arcTo(x+w,y,x+w,y+h,r);ctx.arcTo(x+w,y+h,x,y+h,r);ctx.arcTo(x,y+h,x,y,r);ctx.arcTo(x,y,x+w,y,r); if(fill)ctx.fill();}
