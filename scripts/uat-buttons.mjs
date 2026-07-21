@@ -647,6 +647,42 @@ await test('Today view resets for a new day', async () => {
   assert(dataDate === today, `records should target today (${today}), got ${dataDate}`);
 });
 
+await test('Daily habit EXP awarded after yesterday completion', async () => {
+  const yesterday = hkYesterdayKey();
+  await page.evaluate((yesterday) => {
+    const uid = () => Date.now().toString(36) + Math.random().toString(36).slice(2, 7);
+    const habitId = uid();
+    localStorage.setItem('habitTrackerProductionV7', JSON.stringify({
+      habits: [{
+        id: habitId, name: 'Daily EXP', emoji: '📖', color: '#4f46e5', target: 1, xpReward: 5,
+        frequency: { mode: 'daily', days: [0, 1, 2, 3, 4, 5, 6], schedule: { type: 'days' } },
+        reminder: { enabled: false, time: '20:30', message: '' },
+        sortOrder: 0, paused: false, archived: false, groupId: null,
+      }],
+      records: [{ id: uid(), habitId, date: yesterday, at: new Date().toISOString(), note: '' }],
+      journals: {}, redemptions: [], groups: [],
+      settings: {
+        startDate: yesterday, onboardingComplete: true, vacations: [],
+        rewards: {
+          creditRules: [{ id: uid(), pct: 50, amount: 2 }, { id: uid(), pct: 100, amount: 10 }],
+          giftRules: [], penaltyCredit: 5, penaltyXp: 20, penaltyZeroDays: 2,
+        },
+      },
+    }));
+    location.reload();
+  }, yesterday);
+  await page.waitForLoadState('networkidle');
+  await page.waitForTimeout(500);
+  await page.locator('#todayHabitGroups .check-btn:not(.done):not(:disabled)').first().click();
+  await page.waitForTimeout(500);
+  const xpPop = await page.evaluate(() => document.querySelector('#expPopLayer .xp-pop')?.textContent || '');
+  assert(xpPop.includes('5'), `today completion should show EXP pop, got ${xpPop}`);
+  await page.click('#profileQuick');
+  await page.waitForTimeout(300);
+  const xpText = await page.locator('#levelPageXp').textContent();
+  assert(xpText?.includes('10 /'), `two daily completions should total 10 EXP, got ${xpText}`);
+});
+
 await test('Reward rule edits show save bar until saved', async () => {
   await page.click('#topSettingsBtn');
   await page.waitForSelector('#creditRulesBox [data-amount]');
