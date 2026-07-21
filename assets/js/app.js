@@ -75,7 +75,7 @@
   const PREVIEW=3;
   const LAZY_CHUNK=10;
   const REMINDER_MSG_LIMIT=80;
-  const APP_VERSION='v49';
+  const APP_VERSION='v50';
   const iconBtn=(cls,svg,title)=>{const b=document.createElement('button'); b.className='act-btn '+cls; b.innerHTML=svg; b.title=title; b.setAttribute('aria-label',title); return b;};
 
   const USER_NAME_MAX=12;
@@ -557,11 +557,24 @@
     updateStatus();
     return true;
   }
-  function habitXpKey(habit,date){return habit.id+'|'+currentPeriodKey(habit,date);}
+  function habitXpKey(habit,date){
+    const f=habit.frequency||{};
+    if(f.mode==='daily') return habit.id+'|'+dateKey(date);
+    return habit.id+'|'+currentPeriodKey(habit,date);
+  }
   function habitXpPerTap(habit){const total=Math.max(1,Math.round(Number(habit.xpReward)||5)); const target=Math.max(1,periodTarget(habit)); return Math.max(1,Math.round(total/target));}
   function habitPeriodXp(habit,date){
-    const pk=currentPeriodKey(habit,date); const k=dateKey(date);
+    const k=dateKey(date);
     if(isVacationDay(k)) return 0;
+    const f=habit.frequency||{};
+    if(f.mode==='daily'){
+      const count=state.records.filter(r=>r.habitId===habit.id&&r.date===k&&afterStart(r.date)).length;
+      if(!count) return 0;
+      const target=Math.max(1,periodTarget(habit));
+      const total=Math.max(1,Math.round(Number(habit.xpReward)||5));
+      return Math.min(total, count*habitXpPerTap(habit));
+    }
+    const pk=currentPeriodKey(habit,date);
     const count=state.records.filter(r=>r.habitId===habit.id&&currentPeriodKey(habit,parseDate(r.date))===pk&&afterStart(r.date)).length;
     if(!count) return 0;
     const target=Math.max(1,periodTarget(habit));
