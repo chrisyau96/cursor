@@ -469,6 +469,30 @@ await test('Report range tabs update compare label', async () => {
   assert(!hasOldFilters, 'per-card report filters should be removed');
 });
 
+await test('Calendar and week views use 0/50/100 completion colors', async () => {
+  const pctClass = (p) => (p >= 100 ? 'perfect' : p >= 50 ? 'partial' : 'zero');
+  assert(pctClass(0) === 'zero', '0% should use zero color');
+  assert(pctClass(49) === 'zero', '49% should use zero color');
+  assert(pctClass(50) === 'partial', '50% should use partial color');
+  assert(pctClass(99) === 'partial', '99% should use partial color');
+  assert(pctClass(100) === 'perfect', '100% should use perfect color');
+
+  await page.click('.nav-item[data-view="homeView"]');
+  await page.waitForTimeout(200);
+  const homeLegend = await page.locator('.week-legend').textContent();
+  assert(!homeLegend?.includes('80%'), 'home legend should not include 80% tier');
+  assert(!homeLegend?.includes('1%+'), 'home legend should not include 1% tier');
+  assert(homeLegend?.includes('50%+'), 'home legend should include 50% tier');
+  assert(homeLegend?.includes('100%+'), 'home legend should include 100% tier');
+
+  await page.click('.nav-item[data-view="reportView"]');
+  await page.waitForTimeout(300);
+  const reportLegend = await page.locator('#monthReport').locator('xpath=..').locator('.legend').textContent();
+  assert(!reportLegend?.includes('80%'), 'report legend should not include 80% tier');
+  assert(!reportLegend?.includes('1%+'), 'report legend should not include 1% tier');
+  assert(reportLegend?.includes('50%+'), 'report legend should include 50% tier');
+});
+
 await test('Credit rule chip matches amount select', async () => {
   await page.evaluate(() => document.querySelector('#modalBackdrop')?.classList.remove('show'));
   await page.click('#topSettingsBtn');

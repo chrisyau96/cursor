@@ -75,7 +75,7 @@
   const PREVIEW=3;
   const LAZY_CHUNK=10;
   const REMINDER_MSG_LIMIT=80;
-  const APP_VERSION='v51';
+  const APP_VERSION='v52';
   const iconBtn=(cls,svg,title)=>{const b=document.createElement('button'); b.className='act-btn '+cls; b.innerHTML=svg; b.title=title; b.setAttribute('aria-label',title); return b;};
 
   const USER_NAME_MAX=12;
@@ -661,7 +661,7 @@
   function longestPerfectStreak(){let max=0,cur=0; const start=parseDate(trackerStart()), end=hkNow(); for(let d=new Date(start); d<=end; d.setDate(d.getDate()+1)){if(isVacationDay(dateKey(d))) continue; const p=dayPct(d); if(p!==null&&p>=100){cur++; max=Math.max(max,cur)}else if(p!==null) cur=0;} return max;}
   function zeroStreakAt(date){let s=0; const d=new Date(date); for(let i=0;i<366;i++){const k=dateKey(d); if(isVacationDay(k)){d.setDate(d.getDate()-1);continue;} const p=dayPct(d); if(p===0){s++; d.setDate(d.getDate()-1)} else break;} return s;}
 
-  function pctClass(p){if(p>=100)return 'perfect'; if(p>=80)return 'good'; if(p>=50)return 'partial'; if(p>0)return 'low'; return 'zero';}
+  function pctClass(p){if(p>=100)return 'perfect'; if(p>=50)return 'partial'; return 'zero';}
   function updateStatus(){const sync=$('#syncStatus'), file=$('#fileStatus'), rem=$('#reminderStatus'); if(!sync)return; const connected=!!fileHandle&&backupSyncState!=='pending'; const backupOn=!!state.settings.autoBackup; const syncActive=backupOn&&connected&&backupSyncState!=='error'; const syncPending=backupOn&&(!connected||backupSyncState==='pending'||backupSyncState==='queued'); let syncLabel='Auto Backup Off'; if(backupOn){ if(backupSyncState==='syncing') syncLabel='Syncing…'; else if(backupSyncState==='queued') syncLabel='Sync queued'; else if(backupSyncState==='error') syncLabel='Sync failed'; else if(syncActive) syncLabel=state.settings.lastBackupAt?'Synced':'Auto Backup On'; else syncLabel='Reconnect backup'; } sync.className='status-pill '+(syncActive?'on':syncPending||backupSyncState==='error'?'warn':''); sync.querySelector('span:last-child').textContent=syncLabel; file.className='status-pill '+(connected?'on':(state.settings.fileConnected?'warn':'')); file.querySelector('span:last-child').textContent=connected?'File Connected':(state.settings.fileConnected?'Reconnect File':'No File'); file.style.cursor=(!connected&&state.settings.fileConnected)?'pointer':''; rem.className='status-pill '+(state.settings.reminders?'on':''); rem.querySelector('span:last-child').textContent=state.settings.reminders?'Reminders On':'Reminders Off'; const wrap=$('#statusRowWrap'); if(wrap) wrap.classList.toggle('open',!!state.settings.statusRowOpen);}
 
   function refreshEconomyDisplays(){
