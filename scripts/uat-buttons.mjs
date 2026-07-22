@@ -841,6 +841,36 @@ await test('Week strip updates instantly after today habit reset', async () => {
   assert(afterResetBand?.includes('band-partial'), `today should return to 50% color after reset, got ${afterResetBand}`);
 });
 
+await test('Not Specific habits carry cumulative progress across days', async () => {
+  const today = hkDateKey();
+  const yesterday = hkYesterdayKey();
+  await page.evaluate(({ today, yesterday }) => {
+    const s = JSON.parse(localStorage.getItem('habitTrackerProductionV7'));
+    s.groups = [];
+    s.habits = [{
+      id: 'flex-habit', name: 'Flex Habit', emoji: '📖', color: '#4f46e5', target: 2, xpReward: 5,
+      frequency: { mode: 'daily', schedule: { type: 'any' }, days: [] },
+      reminder: { enabled: false, time: '20:30', message: '' },
+      sortOrder: 0, paused: false, archived: false, groupId: null,
+    }];
+    s.records = [{ id: 'rec-y', habitId: 'flex-habit', date: yesterday, at: new Date().toISOString(), note: '' }];
+    s.settings.startDate = yesterday;
+    s.settings.vacations = [];
+    s.settings.onboardingComplete = true;
+    localStorage.setItem('habitTrackerProductionV7', JSON.stringify(s));
+  }, { today, yesterday });
+  await page.reload({ waitUntil: 'domcontentloaded' });
+  await page.waitForSelector('#flexHabitGroups .habit-meta');
+  await page.click('.nav-item[data-view="homeView"]');
+  await page.waitForTimeout(300);
+  const metaBefore = await page.locator('#flexHabitGroups .habit-meta span').first().textContent();
+  assert(metaBefore?.includes('1/2'), `should carry yesterday progress, got ${metaBefore}`);
+  await page.locator('#flexHabitGroups .check-btn:not(.done)').first().click();
+  await page.waitForTimeout(400);
+  const metaAfter = await page.locator('#flexHabitGroups .habit-meta span').first().textContent();
+  assert(metaAfter?.includes('2/2'), `completing today should update cumulative progress, got ${metaAfter}`);
+});
+
 await browser.close();
 
 const failed = results.filter(r => !r.ok);

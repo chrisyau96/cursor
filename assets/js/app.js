@@ -75,7 +75,7 @@
   const PREVIEW=3;
   const LAZY_CHUNK=10;
   const REMINDER_MSG_LIMIT=80;
-  const APP_VERSION='v53';
+  const APP_VERSION='v54';
   const iconBtn=(cls,svg,title)=>{const b=document.createElement('button'); b.className='act-btn '+cls; b.innerHTML=svg; b.title=title; b.setAttribute('aria-label',title); return b;};
 
   const USER_NAME_MAX=12;
@@ -540,6 +540,7 @@
   }
   function completionOfHabit(habit,date=hkNow()){const target=periodTarget(habit); const count=periodCount(habit,date); return {count,target,pct:Math.min(100,Math.round(count/target*100)),done:count>=target};}
   function todayViewCompletion(habit,date=hkNow()){
+    if(isNotSpecific(habit)) return completionOfHabit(habit,date);
     const f=habit.frequency||{};
     if(f.mode==='daily'){
       const count=todayHabitCount(habit,date);
@@ -778,18 +779,22 @@
     updateHomeSummary(todayNow, todayHabits);
     refreshEconomyDisplays();
     const habit=state.habits.find(h=>h.id===habitId);
-    const wrap=habitRowWrap(habitId,date);
-    if(habit && wrap){
-      const after=wrap.dataset.afterKey?()=>openDayDetail(wrap.dataset.afterKey):null;
-      const fresh=todayHabitRow(habit, recordDate, after);
-      const groupEl=wrap.closest('.habit-group');
-      wrap.replaceWith(fresh);
-      const gid=habit.groupId||'_ungrouped';
-      refreshGroupProgress(groupEl||fresh.closest('.habit-group'), gid, todayHabits, todayNow);
+    if(habit && !isNotSpecific(habit)){
+      const wrap=habitRowWrap(habitId,date);
+      if(wrap){
+        const after=wrap.dataset.afterKey?()=>openDayDetail(wrap.dataset.afterKey):null;
+        const fresh=todayHabitRow(habit,recordDate,after);
+        const groupEl=wrap.closest('.habit-group');
+        wrap.replaceWith(fresh);
+        const gid=habit.groupId||'_ungrouped';
+        refreshGroupProgress(groupEl||fresh.closest('.habit-group'), gid, todayHabits, todayNow);
+      }else if(date===todayKey()){
+        renderTodayHabitGroups(todayNow, todayHabits);
+      }
     }else if(date===todayKey()){
       renderTodayHabitGroups(todayNow, todayHabits);
     }
-    if(date===todayKey()) renderFlexibleHabits(todayNow);
+    renderFlexibleHabits(todayNow);
     refreshCompletionViews(date);
   }
   function homeTodaySig(now, homeHabits){
@@ -912,7 +917,7 @@
   async function addRecord(habitId,note='',date=todayKey()){
     const habit=state.habits.find(h=>h.id===habitId); if(!habit)return;
     const dt=parseDate(date);
-    const c=(habit.frequency?.mode==='daily')?todayViewCompletion(habit,dt):completionOfHabit(habit,dt);
+    const c=todayViewCompletion(habit,dt);
     if(c.count>=c.target){toast('Target already completed'); return;}
     const beforeCredit=creditTotal();
     const beforeXp=xpTotal();
