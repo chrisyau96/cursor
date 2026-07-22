@@ -1,0 +1,289 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
+  <meta name="theme-color" content="#4f46e5" />
+  <meta name="description" content="Momentum — habit tracker with journal, streaks, rewards, level identities and local file sync." />
+  <title>Momentum · Habit Tracker</title>
+  <link rel="icon" id="appFavicon" href="assets/icon.svg" />
+  <link rel="icon" type="image/png" sizes="192x192" id="appFavicon192" href="assets/icon-192.png" />
+  <link rel="apple-touch-icon" id="appAppleIcon" href="assets/icon-180.png" />
+  <link rel="manifest" href="manifest.webmanifest" />
+  <meta name="mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-title" content="Momentum" />
+  <link rel="stylesheet" href="assets/css/styles.css" />
+</head>
+<body>
+  <div class="app-shell">
+    <header class="topbar" id="topbar">
+      <div class="top-greeting">
+        <h1 id="greeting">Hi</h1>
+        <span class="top-greeting-sub" id="todayEntryStamp"></span>
+      </div>
+      <button class="profile-pill" id="profileQuick" type="button" aria-label="Open level and EXP">
+        <div class="profile-avatar" id="topProfileAvatar">🌱</div>
+        <div class="profile-meta">
+          <div class="profile-title"><span id="topLevel">Lv 1</span></div>
+          <div class="profile-sub"><div class="level-bar-wrap"><div class="level-bar"><div class="level-fill" id="topLevelFill"></div></div><span class="level-pct" id="topLevelPct">0%</span></div></div>
+        </div>
+      </button>
+      <div class="top-actions">
+        <button class="top-icon" id="topSettingsBtn" type="button" aria-label="Settings">
+          <svg class="nav-svg" viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M19.14 12.94c.04-.31.06-.63.06-.94s-.02-.63-.06-.94l2.03-1.58a.49.49 0 0 0 .12-.61l-1.92-3.32a.49.49 0 0 0-.59-.22l-2.39.96a7.04 7.04 0 0 0-1.63-.94l-.36-2.54a.49.49 0 0 0-.48-.42h-3.84a.49.49 0 0 0-.48.42l-.36 2.54a7.04 7.04 0 0 0-1.63.94l-2.39-.96a.49.49 0 0 0-.59.22L2.74 8.87a.49.49 0 0 0 .12.61l2.03 1.58c-.04.31-.06.63-.06.94s.02.63.06.94l-2.03 1.58a.49.49 0 0 0-.12.61l1.92 3.32a.49.49 0 0 0 .59.22l2.39-.96c.5.38 1.05.7 1.63.94l.36 2.54a.49.49 0 0 0 .48.42h3.84a.49.49 0 0 0 .48-.42l.36-2.54c.58-.24 1.13-.56 1.63-.94l2.39.96a.49.49 0 0 0 .59-.22l1.92-3.32a.49.49 0 0 0-.12-.61l-2.03-1.58zM12 15.6A3.6 3.6 0 1 1 12 8.4a3.6 3.6 0 0 1 0 7.2z"/></svg>
+        </button>
+      </div>
+    </header>
+
+    <div class="status-row-wrap hidden" id="statusRowWrap" hidden>
+      <button class="status-toggle" id="statusToggle" type="button" aria-expanded="false" aria-controls="statusRow">
+        <span class="status-toggle-label">Status</span>
+        <span class="status-toggle-caret">⌄</span>
+      </button>
+      <div class="status-row collapsed" id="statusRow">
+        <div class="status-pill" id="syncStatus"><span class="status-dot"></span><span>Sync Off</span></div>
+        <div class="status-pill" id="fileStatus"><span class="status-dot"></span><span>No File</span></div>
+        <div class="status-pill" id="reminderStatus"><span class="status-dot"></span><span>Reminders Off</span></div>
+      </div>
+    </div>
+
+    <main class="view-host">
+      <section class="view active" id="homeView">
+        <div class="card week-card">
+          <div class="week-nav">
+            <button class="round-nav" id="weekPrev" aria-label="Previous week">‹</button>
+            <button class="week-label" id="weekLabel">This week</button>
+            <button class="round-nav" id="weekNext" aria-label="Next week">›</button>
+            <button class="btn-inline pink week-today-btn" id="weekToday" type="button" style="display:none">Today</button>
+          </div>
+          <div class="week-strip" id="weekStrip"></div>
+          <div class="week-legend">
+            <span><i class="band-perfect"></i>100%</span>
+            <span><i class="band-partial"></i>50%</span>
+            <span><i class="band-zero"></i>0%</span>
+            <span><i class="band-vacation"></i>Pause</span>
+          </div>
+        </div>
+
+        <div class="cards home-stats">
+          <div class="stat-card" style="--c:var(--green)"><div class="stat-label">Streak</div><div class="stat-value" id="homeStreakValue">0 / 0</div><div class="stat-sub" id="homeStreakSub">100% days</div></div>
+          <div class="stat-card" style="--c:var(--orange)"><div class="stat-label">Credit</div><div class="stat-value" id="homeCreditValue">HK$0</div><div class="stat-sub" id="homeCreditSub">available</div></div>
+          <div class="stat-card" style="--c:var(--brand)"><div class="stat-label">Next Gift</div><div class="stat-value stat-emoji" id="homeNextGiftIcon">🎁</div><div class="stat-sub" id="homeNextGiftSub">No gift rule yet</div><div class="progress-mini"><span id="homeNextGiftFill"></span></div></div>
+        </div>
+
+        <div class="section-title today-header">
+          <div class="today-header-main">
+            <h2>Today</h2>
+          </div>
+          <div class="today-ring" id="todayRing" aria-label="Today's completion">
+            <svg viewBox="0 0 36 36"><circle class="ring-bg" cx="18" cy="18" r="15.5"/><circle class="ring-fill" id="todayRingFill" cx="18" cy="18" r="15.5"/></svg>
+            <span class="ring-text" id="todayRingText">0%</span>
+          </div>
+        </div>
+
+        <div class="today-pause-banner" id="todayPauseBanner" hidden>
+          <span class="today-pause-icon" aria-hidden="true">⏸</span>
+          <div class="today-pause-copy"><strong>Today is paused</strong><div class="small-note" id="todayPauseSub">Tracking is frozen for today.</div></div>
+        </div>
+
+        <div class="card">
+          <div class="card-head"><h3>Today's Habits</h3></div>
+          <div id="todayHabitGroups"></div>
+        </div>
+
+        <div class="card" id="flexHabitCard" style="display:none">
+          <button class="collapsible-head" id="flexHabitToggle"><div><h3 style="margin:0">Not Specific</h3><div class="small-note" id="flexHabitSummary">0 unfinished targets</div></div><span class="collapse-caret">⌄</span></button>
+          <div class="collapsible-body" style="margin-top:12px"><div id="flexHabitGroups"></div></div>
+        </div>
+
+        <div class="card">
+          <div class="card-head"><h3>Today's Journal</h3><button class="btn-inline pink" id="homeJournalViewAll" type="button">View all</button></div>
+          <div class="form-grid journal-area" id="homeJournalForm"></div>
+        </div>
+
+        <div class="quote-card" id="dailyQuote"></div>
+      </section>
+
+      <section class="view" id="habitsView">
+        <div class="section-title"><h2>Habits</h2></div>
+        <div class="card">
+          <div class="card-head"><h3>Group Setup</h3><button class="btn-inline pink" id="addGroupBtn" type="button">+ Group</button></div>
+          <div id="groupManager"></div>
+        </div>
+        <div class="card"><div class="card-head"><h3>Habit Setup</h3><button class="btn-inline pink" id="addHabitBtn" type="button">+ Habit</button></div><div class="habit-list" id="allHabitList"></div></div>
+        <div class="card"><div class="card-head"><h3>Recent Habit Records</h3></div><div class="activity-log" id="recentActivityLog"></div></div>
+      </section>
+
+      <section class="view" id="reportView">
+        <div class="section-title report-header">
+          <h2>Report</h2>
+          <div class="segmented" id="reportRangeTabs"><button type="button" data-days="7" class="active">7D</button><button type="button" data-days="14">14D</button><button type="button" data-days="30">30D</button></div>
+        </div>
+        <div class="card">
+          <div class="card-head"><h3>Compare Periods</h3><button type="button" class="info-tip card-tip" aria-label="Help" data-tip-title="Compare Periods" data-tip="Compares average daily habit completion % for the selected range vs the previous range of the same length. Pause days are excluded.">ⓘ</button></div>
+          <div id="comparePeriodBox"></div>
+        </div>
+        <div class="card"><div class="card-head"><h3>Insights</h3></div><div id="correlationInsights"></div></div>
+        <div class="card" id="habitCompletionCard">
+          <div class="card-head"><h3>Completion Rate</h3></div>
+          <p class="small-note" id="habitChartRangeNote"></p>
+          <div class="habit-completion-table" id="habitCompletionTable"></div>
+        </div>
+        <div class="card"><div class="card-head"><h3>Performance Trend</h3><button type="button" class="info-tip card-tip" aria-label="Help" data-tip-title="Performance Trend" data-tip="Bars show daily habit completion for the selected range. The line shows your journal energy.">ⓘ</button></div><div class="canvas-wrap"><canvas id="trendCanvas"></canvas></div></div>
+        <div class="card">
+          <div class="card-head"><h3>Calendar Review</h3></div>
+          <div class="report-toolbar"><button class="round-nav" id="reportPrev">‹</button><div class="report-title" id="reportTitle">Month</div><button class="round-nav" id="reportNext">›</button></div>
+          <div id="monthReport"><div class="calendar-weekdays" id="calendarWeekdays"></div><div class="calendar-grid" id="calendarGrid"></div></div>
+          <div class="legend"><span><i class="band-perfect"></i>100%</span><span><i class="band-partial"></i>50%</span><span><i class="band-zero"></i>0%</span><span><i class="band-vacation"></i>Vacation</span><span><i class="band-future"></i>Future</span></div>
+        </div>
+      </section>
+
+      <section class="view" id="rewardsView">
+        <div class="section-title"><h2>Rewards</h2></div>
+        <div class="cards reward-summary">
+          <div class="stat-card reward-credit-card"><div class="stat-label">Credits</div><div class="stat-value" id="creditValue">HK$0</div><div class="stat-sub">Available</div></div>
+          <div class="stat-card reward-gift-card"><div class="stat-label">Gifts</div><div class="stat-value" id="giftUnlockValue">0</div><div class="stat-sub" id="giftUnlockSub">available</div></div>
+        </div>
+        <div class="card"><div class="card-head"><h3>Redeem</h3><button type="button" class="info-tip card-tip" aria-label="Help" data-tip-title="Gift redemption" data-tip="Add or edit gift rules in Settings → Reward rules. Hit the streak target to unlock a gift, then redeem it here.">ⓘ</button></div><div class="reward-grid" id="redeemGrid"></div></div>
+        <div class="card"><div class="card-head"><h3>Reward Ledger</h3></div><div class="ledger-list" id="ledgerList"></div></div>
+      </section>
+
+      <section class="view" id="levelView">
+        <div class="section-title"><h2>Level &amp; EXP</h2><span>Identity ladder and history</span></div>
+        <div class="level-card" id="levelPageCard">
+          <div class="level-avatar" id="levelProfileAvatar">🌱</div>
+          <div style="min-width:0;flex:1">
+            <div class="level-eyebrow">Building identity</div>
+            <div class="level-value" id="levelPageValue">Lv 1</div>
+            <div class="level-identity" id="levelPageIdentity">Seed Planter</div>
+            <div class="lvl-bar"><div class="lvl-fill" id="levelPageFill"></div></div>
+            <div class="level-xp" id="levelPageXp">Building identity</div>
+          </div>
+        </div>
+        <div class="card"><div class="card-head"><h3>Identity Ladder</h3></div><div class="identity-ladder" id="identityPath"></div></div>
+        <div class="card"><div class="card-head"><h3>EXP History</h3></div><div class="xp-history" id="xpHistory"></div></div>
+      </section>
+
+      <section class="view" id="settingsView">
+        <div class="section-title"><h2>Settings</h2></div>
+
+        <p class="settings-section-label">Profile</p>
+        <div class="card settings-card">
+          <div class="field"><label>Display name</label><input id="userNameInput" placeholder="e.g. Chris" maxlength="12"><div class="inline-hint"><span id="userNameCount">0</span>/12</div></div>
+          <div class="upload-profile-box settings-profile-row">
+            <div class="profile-avatar" id="settingsProfileAvatar">🌱</div>
+            <div class="upload-profile-copy"><strong>Profile photo</strong><label class="upload-file-btn">Upload photo<input type="file" id="profileIconInput" accept="image/*" hidden></label></div>
+          </div>
+        </div>
+
+        <p class="settings-section-label">Look &amp; feel</p>
+        <div class="card settings-card">
+          <div class="field"><label>Color mode</label><select id="colorModeSelect"><option value="system">System</option><option value="light">Light</option><option value="dark">Dark</option></select></div>
+        </div>
+
+        <p class="settings-section-label">Reward rules</p>
+        <div class="card settings-card"><div class="form-grid" id="rewardSettings"></div></div>
+
+        <p class="settings-section-label">Tracking <button type="button" class="info-tip" aria-label="Help" data-tip-title="Pause periods" data-tip="Add or update pause periods with + Pause period or View log. While paused, habits stay visible but EXP, credits, gifts and penalties are frozen.">ⓘ</button></p>
+        <div class="card settings-card">
+          <div class="field"><label>Tracker start date</label><input type="date" id="trackerStartDate"><div class="inline-hint">Current: <span id="startDateDisplay">—</span></div></div>
+          <div class="settings-divider"></div>
+          <div id="vacationSummary" class="vacation-summary"></div>
+          <div class="vacation-actions"><button class="btn-secondary" id="addVacationBtn" type="button">+ Pause period</button><button class="btn-secondary" id="viewVacationLogBtn" type="button">View log</button></div>
+        </div>
+
+        <p class="settings-section-label">Backup &amp; sync</p>
+        <div class="card settings-card sync-card">
+          <div class="sync-status-panel" id="backupStatus">No backup file connected.</div>
+          <div class="sync-actions" id="syncActionsGrid"></div>
+          <div class="switch-row sync-auto-row"><div class="switch-label-wrap"><strong>Auto backup</strong><button type="button" class="info-tip" aria-label="Help" data-tip-title="Auto backup" data-tip="Saves to your linked JSON file about 5 seconds after you stop editing, and again when you leave the app. Edits stay instant on this device.">ⓘ</button></div><button type="button" class="switch" id="autoBackupSwitch" aria-label="Auto backup toggle"></button></div>
+        </div>
+
+        <p class="settings-section-label">Notifications</p>
+        <div class="card settings-card">
+          <div class="switch-row"><div class="switch-label-wrap"><strong>Reminders</strong><button type="button" class="info-tip" aria-label="Help" data-tip-title="Reminders" data-tip="Optional per-habit alerts at scheduled times.">ⓘ</button></div><button type="button" class="switch" id="reminderSwitch" aria-label="Reminder toggle"></button></div>
+          <div class="form-grid" id="reminderSettings" style="margin-top:12px"></div>
+        </div>
+
+        <p class="settings-section-label">Debug</p>
+        <div class="card settings-card">
+          <div class="switch-row"><div class="switch-label-wrap"><strong>Demo data</strong><button type="button" class="info-tip" aria-label="Help" data-tip-title="Demo data" data-tip="Loads sample habits and about 40 days of history for testing reports. Turning off switches to real use with a clean slate.">ⓘ</button><div class="small-note">Sample habits and history for testing</div></div><button type="button" class="switch" id="demoModeSwitch" aria-label="Demo data toggle"></button></div>
+        </div>
+
+        <p class="settings-section-label">Help</p>
+        <div class="card settings-card">
+          <button class="btn-secondary settings-action" id="replayOnboardingBtn" type="button">Replay onboarding tour</button>
+        </div>
+
+        <div class="settings-save-bar" id="settingsSaveBar" hidden>
+          <button class="btn-secondary" id="discardSettingsBtn" type="button">Discard</button>
+          <button class="btn-primary" id="saveSettingsBtn" type="button">Save changes</button>
+        </div>
+
+        <p class="settings-section-label danger-label">Danger zone <button type="button" class="info-tip" aria-label="Help" data-tip-title="Danger zone" data-tip="Erases all habits, records, and settings. Type Confirm to proceed.">ⓘ</button></p>
+        <div class="card settings-card settings-danger">
+          <div class="field"><input id="confirmDeleteInput" placeholder="Type Confirm"></div>
+          <button class="btn-danger settings-action" id="resetAllBtn" type="button">Erase all data</button>
+        </div>
+        <p class="settings-version" id="settingsVersion">Momentum v38</p>
+      </section>
+    </main>
+
+    <nav class="tabbar">
+      <button class="nav-item active" data-view="homeView" aria-label="Home">
+        <svg class="nav-svg" viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M10 20v-6h4v6h5v-8h3L12 3 2 12h3v8z"/></svg>
+        <span>Home</span>
+      </button>
+      <button class="nav-item" data-view="habitsView" aria-label="Habits">
+        <svg class="nav-svg" viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M9 16.17 4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41z"/></svg>
+        <span>Habits</span>
+      </button>
+      <button class="fab-add" id="fabAdd" aria-label="Add habit"><span class="fab-plus">+</span></button>
+      <button class="nav-item" data-view="reportView" aria-label="Report">
+        <svg class="nav-svg" viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M3.5 18.5 9 13l3 3 7.5-7.5 1.5 1.5L12 19l-3-3-4.5 4.5z"/></svg>
+        <span>Report</span>
+      </button>
+      <button class="nav-item" data-view="rewardsView" aria-label="Rewards">
+        <svg class="nav-svg" viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M12 2l2.4 7.4h7.6l-6 4.6 2.3 7-6.3-4.6L5.7 21l2.3-7-6-4.6h7.6z"/></svg>
+        <span>Rewards</span>
+      </button>
+    </nav>
+
+    <div class="onboard-backdrop" id="onboardBackdrop" aria-hidden="true">
+      <div class="onboard-spotlight" id="onboardSpotlight" hidden></div>
+      <div class="onboard-card" id="onboardCard">
+        <div class="onboard-head">
+          <div class="onboard-progress"><span id="onboardStepLabel">Step 1 of 8</span><div class="onboard-bar"><span id="onboardBarFill"></span></div></div>
+          <button class="onboard-close" id="onboardClose" type="button" aria-label="Skip tour">×</button>
+        </div>
+        <div class="onboard-body-wrap" id="onboardBody"></div>
+        <div class="onboard-actions">
+          <button class="btn-onboard btn-back" id="onboardBack" type="button">Back</button>
+          <button class="btn-onboard btn-next" id="onboardNext" type="button">Next</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="modal-backdrop" id="modalBackdrop"><div class="modal" id="modalSheet"><div class="sheet-handle" id="sheetHandle"></div><div class="modal-head"><h3 id="modalTitle">Modal</h3><button class="close-x" id="modalClose" aria-label="Close">×</button></div><div id="modalBody"></div></div></div>
+  <div class="help-sheet-backdrop" id="helpSheetBackdrop" aria-hidden="true">
+    <div class="help-sheet" id="helpSheet" role="dialog" aria-modal="true" aria-labelledby="helpSheetTitle">
+      <button type="button" class="close-x help-sheet-close" id="helpSheetClose" aria-label="Close">×</button>
+      <div class="help-sheet-body">
+        <h4 class="help-sheet-title" id="helpSheetTitle"></h4>
+        <div class="help-sheet-text" id="helpSheetBody"></div>
+      </div>
+    </div>
+  </div>
+  <div class="toast" id="toast">Saved</div>
+  <div class="celebrate-layer" id="celebrateLayer" aria-hidden="true"></div>
+
+  <script src="assets/js/app.js"></script>
+  <script>
+    if ("serviceWorker" in navigator) {
+      window.addEventListener("load", () => navigator.serviceWorker.register("sw.js").catch(()=>{}));
+    }
+  </script>
+</body>
+</html>
