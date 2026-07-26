@@ -470,6 +470,38 @@ await test('Redeem credit updates balance and celebrates', async () => {
   assert(celebrated, 'celebration effect should show for credit redemption');
 });
 
+await test('Week strip updates instantly after today habit reset', async () => {
+  const today = hkDateKey();
+  await page.evaluate((today) => {
+    const uid = () => Date.now().toString(36) + Math.random().toString(36).slice(2, 7);
+    const h1 = uid();
+    const h2 = uid();
+    const s = JSON.parse(localStorage.getItem('habitTrackerProductionV7'));
+    s.habits = [
+      { id: h1, name: 'Habit A', emoji: '📖', color: '#4f46e5', target: 1, xpReward: 5, frequency: { mode: 'daily', days: [0, 1, 2, 3, 4, 5, 6], schedule: { type: 'days' } }, reminder: { enabled: false, time: '20:30', message: '' }, sortOrder: 0, paused: false, archived: false, groupId: null },
+      { id: h2, name: 'Habit B', emoji: '🏃', color: '#2563eb', target: 1, xpReward: 5, frequency: { mode: 'daily', days: [0, 1, 2, 3, 4, 5, 6], schedule: { type: 'days' } }, reminder: { enabled: false, time: '20:30', message: '' }, sortOrder: 1, paused: false, archived: false, groupId: null },
+    ];
+    s.records = [{ id: uid(), habitId: h1, date: today, at: new Date().toISOString(), note: '' }];
+    s.settings.startDate = today;
+    s.settings.onboardingComplete = true;
+    s.settings.vacations = [];
+    localStorage.setItem('habitTrackerProductionV7', JSON.stringify(s));
+  }, today);
+  await page.reload({ waitUntil: 'domcontentloaded' });
+  await page.waitForSelector('.nav-item[data-view="homeView"]');
+  await page.waitForTimeout(600);
+  await page.click('.nav-item[data-view="homeView"]');
+  await page.waitForTimeout(300);
+  const beforeBand = await page.locator('#weekStrip .wcell.today .wnum').getAttribute('class');
+  assert(beforeBand?.includes('band-partial'), `today should start at 50% color, got ${beforeBand}`);
+  await page.locator('#todayHabitGroups .check-btn:not(.done):not(:disabled)').first().click();
+  await page.waitForFunction(() => document.querySelector('#weekStrip .wcell.today .wnum')?.className.includes('band-perfect'), null, { timeout: 5000 });
+  await page.locator('#todayHabitGroups .reset-habit-btn').first().click();
+  await page.waitForTimeout(400);
+  const afterResetBand = await page.locator('#weekStrip .wcell.today .wnum').getAttribute('class');
+  assert(afterResetBand?.includes('band-partial'), `today should return to 50% color after reset, got ${afterResetBand}`);
+});
+
 await test('Report range tabs update compare label', async () => {
   await page.click('.nav-item[data-view="reportView"]');
   await page.waitForTimeout(300);
@@ -807,68 +839,77 @@ await test('Today shows paused banner during pause period', async () => {
   assert(ring?.includes('⏸'), 'today ring should show pause icon');
 });
 
-await test('Week strip updates instantly after today habit reset', async () => {
-  const today = hkDateKey();
-  await page.evaluate((today) => {
-    const uid = () => Date.now().toString(36) + Math.random().toString(36).slice(2, 7);
-    const h1 = uid();
-    const h2 = uid();
-    const s = JSON.parse(localStorage.getItem('habitTrackerProductionV7'));
-    s.habits = [
-      { id: h1, name: 'Habit A', emoji: '📖', color: '#4f46e5', target: 1, xpReward: 5, frequency: { mode: 'daily', days: [0, 1, 2, 3, 4, 5, 6], schedule: { type: 'days' } }, reminder: { enabled: false, time: '20:30', message: '' }, sortOrder: 0, paused: false, archived: false, groupId: null },
-      { id: h2, name: 'Habit B', emoji: '🏃', color: '#2563eb', target: 1, xpReward: 5, frequency: { mode: 'daily', days: [0, 1, 2, 3, 4, 5, 6], schedule: { type: 'days' } }, reminder: { enabled: false, time: '20:30', message: '' }, sortOrder: 1, paused: false, archived: false, groupId: null },
-    ];
-    s.records = [{ id: uid(), habitId: h1, date: today, at: new Date().toISOString(), note: '' }];
-    s.settings.startDate = today;
-    s.settings.onboardingComplete = true;
-    s.settings.vacations = [];
-    localStorage.setItem('habitTrackerProductionV7', JSON.stringify(s));
-  }, today);
-  await page.reload({ waitUntil: 'domcontentloaded' });
-  await page.waitForSelector('.nav-item[data-view="homeView"]');
-  await page.waitForTimeout(600);
-  await page.click('.nav-item[data-view="homeView"]');
-  await page.waitForTimeout(300);
-  const beforeBand = await page.locator('#weekStrip .wcell.today .wnum').getAttribute('class');
-  assert(beforeBand?.includes('band-partial'), `today should start at 50% color, got ${beforeBand}`);
-  await page.locator('#todayHabitGroups .check-btn:not(.done)').first().click();
-  await page.waitForTimeout(400);
-  const afterCompleteBand = await page.locator('#weekStrip .wcell.today .wnum').getAttribute('class');
-  assert(afterCompleteBand?.includes('band-perfect'), `today should turn 100% color after completion, got ${afterCompleteBand}`);
-  await page.locator('#todayHabitGroups .reset-habit-btn').first().click();
-  await page.waitForTimeout(400);
-  const afterResetBand = await page.locator('#weekStrip .wcell.today .wnum').getAttribute('class');
-  assert(afterResetBand?.includes('band-partial'), `today should return to 50% color after reset, got ${afterResetBand}`);
-});
-
-await test('Not Specific habits carry cumulative progress across days', async () => {
-  const today = hkDateKey();
-  const yesterday = hkYesterdayKey();
-  await page.evaluate(({ today, yesterday }) => {
+await test('Not Specific habits carry cumulative progress within period', async () => {
+  await page.evaluate(() => {
+    const parts = new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Hong_Kong', year: 'numeric', month: '2-digit', day: '2-digit' }).formatToParts(new Date()).reduce((a, x) => { a[x.type] = x.value; return a; }, {});
+    const todayDt = new Date(Number(parts.year), Number(parts.month) - 1, Number(parts.day));
+    const weekStartToday = new Date(todayDt);
+    weekStartToday.setDate(todayDt.getDate() - todayDt.getDay());
+    const recordDt = new Date(weekStartToday);
+    if (recordDt.getTime() === todayDt.getTime()) recordDt.setDate(recordDt.getDate() + 1);
+    const dateKey = (d) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
     const s = JSON.parse(localStorage.getItem('habitTrackerProductionV7'));
     s.groups = [];
     s.habits = [{
       id: 'flex-habit', name: 'Flex Habit', emoji: '📖', color: '#4f46e5', target: 2, xpReward: 5,
-      frequency: { mode: 'daily', schedule: { type: 'any' }, days: [] },
+      frequency: { mode: 'daily', schedule: { type: 'any', dueWeekday: 6 }, days: [] },
       reminder: { enabled: false, time: '20:30', message: '' },
       sortOrder: 0, paused: false, archived: false, groupId: null,
+      flexPeriodStart: dateKey(weekStartToday),
     }];
-    s.records = [{ id: 'rec-y', habitId: 'flex-habit', date: yesterday, at: new Date().toISOString(), note: '' }];
-    s.settings.startDate = yesterday;
+    s.records = [{ id: 'rec-earlier', habitId: 'flex-habit', date: dateKey(recordDt), at: new Date().toISOString(), note: '' }];
+    s.settings.startDate = dateKey(weekStartToday);
     s.settings.vacations = [];
     s.settings.onboardingComplete = true;
     localStorage.setItem('habitTrackerProductionV7', JSON.stringify(s));
-  }, { today, yesterday });
+  });
   await page.reload({ waitUntil: 'domcontentloaded' });
   await page.waitForSelector('#flexHabitGroups .habit-meta');
   await page.click('.nav-item[data-view="homeView"]');
   await page.waitForTimeout(300);
   const metaBefore = await page.locator('#flexHabitGroups .habit-meta span').first().textContent();
-  assert(metaBefore?.includes('1/2'), `should carry yesterday progress, got ${metaBefore}`);
+  assert(metaBefore?.includes('1/2'), `should carry earlier progress in period, got ${metaBefore}`);
   await page.locator('#flexHabitGroups .check-btn:not(.done)').first().click();
-  await page.waitForTimeout(400);
+  await page.waitForTimeout(800);
   const metaAfter = await page.locator('#flexHabitGroups .habit-meta span').first().textContent();
   assert(metaAfter?.includes('2/2'), `completing today should update cumulative progress, got ${metaAfter}`);
+});
+
+await test('Not Specific habits renew count after period ends', async () => {
+  const today = hkDateKey();
+  await page.evaluate((today) => {
+    const parts = new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Hong_Kong', year: 'numeric', month: '2-digit', day: '2-digit' }).formatToParts(new Date()).reduce((a, x) => { a[x.type] = x.value; return a; }, {});
+    const now = new Date(Number(parts.year), Number(parts.month) - 1, Number(parts.day));
+    const weekStart = new Date(now);
+    weekStart.setDate(now.getDate() - now.getDay());
+    const lastWeekStart = new Date(weekStart);
+    lastWeekStart.setDate(weekStart.getDate() - 7);
+    const lastWeekMid = new Date(lastWeekStart);
+    lastWeekMid.setDate(lastWeekStart.getDate() + 2);
+    const dateKey = (d) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+    const s = JSON.parse(localStorage.getItem('habitTrackerProductionV7'));
+    s.groups = [];
+    s.habits = [{
+      id: 'flex-habit', name: 'Flex Habit', emoji: '📖', color: '#4f46e5', target: 1, xpReward: 5,
+      frequency: { mode: 'daily', schedule: { type: 'any', dueWeekday: 6 }, days: [] },
+      reminder: { enabled: false, time: '20:30', message: '' },
+      sortOrder: 0, paused: false, archived: false, groupId: null,
+      flexPeriodStart: dateKey(lastWeekStart),
+    }];
+    s.records = [{ id: 'rec-last-week', habitId: 'flex-habit', date: dateKey(lastWeekMid), at: new Date().toISOString(), note: '' }];
+    s.settings.startDate = dateKey(lastWeekStart);
+    s.settings.vacations = [];
+    s.settings.onboardingComplete = true;
+    localStorage.setItem('habitTrackerProductionV7', JSON.stringify(s));
+  }, today);
+  await page.reload({ waitUntil: 'domcontentloaded' });
+  await page.waitForSelector('#flexHabitGroups .habit-meta');
+  await page.click('.nav-item[data-view="homeView"]');
+  await page.waitForTimeout(300);
+  const meta = await page.locator('#flexHabitGroups .habit-meta span').first().textContent();
+  const done = await page.locator('#flexHabitGroups .check-btn').first().getAttribute('class');
+  assert(meta?.includes('0/1'), `new period should reset count, got ${meta}`);
+  assert(!done?.includes('done'), 'new period should allow recording again');
 });
 
 await browser.close();

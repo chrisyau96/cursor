@@ -75,7 +75,7 @@
   const PREVIEW=3;
   const LAZY_CHUNK=10;
   const REMINDER_MSG_LIMIT=80;
-  const APP_VERSION='v54';
+  const APP_VERSION='v55';
   const iconBtn=(cls,svg,title)=>{const b=document.createElement('button'); b.className='act-btn '+cls; b.innerHTML=svg; b.title=title; b.setAttribute('aria-label',title); return b;};
 
   const USER_NAME_MAX=12;
@@ -371,19 +371,19 @@
     if(!isNotSpecific(habit)) return false;
     const today=dateKey(date);
     if(!habit.flexPeriodStart) habit.flexPeriodStart=dateKey(weekStart(date));
-    const start=habit.flexPeriodStart;
-    const end=habitDueDate(habit,date);
-    if(today>end){
-      const count=state.records.filter(r=>r.habitId===habit.id&&r.date>=start&&r.date<=end).length;
-      if(count<periodTarget(habit)){
-        const next=new Date(parseDate(end)); next.setDate(next.getDate()+1);
-        habit.flexPeriodStart=dateKey(next);
-        return true;
-      }
+    let changed=false;
+    while(true){
+      const start=habit.flexPeriodStart;
+      const end=habitDueDate(habit,parseDate(start));
+      if(today<=end) break;
+      const next=new Date(parseDate(end));
+      next.setDate(next.getDate()+1);
+      habit.flexPeriodStart=dateKey(next);
+      changed=true;
     }
-    return false;
+    return changed;
   }
-  function flexWindow(habit,date=hkNow()){ensureFlexPeriod(habit,date); return {start:habit.flexPeriodStart||dateKey(weekStart(date)),end:habitDueDate(habit,date)};}
+  function flexWindow(habit,date=hkNow()){ensureFlexPeriod(habit,date); const start=habit.flexPeriodStart||dateKey(weekStart(date)); return {start,end:habitDueDate(habit,parseDate(start))};}
   function reportDayRange(){
     const end=hkNow();
     const start=new Date(end);
@@ -733,8 +733,7 @@
   function isDateInVisibleWeek(k){
     const base=hkNow();
     base.setDate(base.getDate()+weekOffset*7);
-    const start=new Date(base);
-    start.setDate(start.getDate()-start.getDay());
+    const start=weekStart(base);
     const end=new Date(start);
     end.setDate(start.getDate()+6);
     const d=parseDate(k);
