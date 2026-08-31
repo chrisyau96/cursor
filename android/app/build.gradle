@@ -4,7 +4,7 @@ android {
     namespace "app.momentum.habits"
     compileSdk rootProject.ext.compileSdkVersion
     defaultConfig {
-        applicationId "app.momentum.habits"
+        applicationId "com.dincey.habitjournal"
         minSdkVersion rootProject.ext.minSdkVersion
         targetSdkVersion rootProject.ext.targetSdkVersion
         versionCode 1

@@ -43,7 +43,7 @@ Full walkthrough (accounts, Android Studio, signing, closed testing, production)
 ```bash
 npm install @capacitor/core @capacitor/cli @capacitor/android @capacitor/app @capacitor/filesystem @capacitor/local-notifications
 npm run build:www
-npx cap init "Momentum" "app.momentum.habits" --web-dir www
+npx cap init "Momentum" "com.dincey.habitjournal" --web-dir www
 npx cap add android
 npm run native:apply
 npx cap sync android
@@ -94,7 +94,7 @@ Review often takes a few days.
 ## 5. App Store Connect
 
 1. Enroll in the Apple Developer Program.
-2. Create the app record (bundle id `app.momentum.habits`).
+2. Create the app record (bundle id `com.dincey.habitjournal`).
 3. Fill Privacy Nutrition Labels to match `privacy.html`.
 4. Upload the archive via Xcode, submit for review with the TestFlight build.
 

@@ -2,7 +2,7 @@
 
 Play listing name (already created): **2-in-1 Habit & Journal Tracker**
 
-In-app / home-screen name stays **Momentum** (shorter under the icon). Package name stays `app.momentum.habits`.
+In-app / home-screen name stays **Momentum** (shorter under the icon). Package name is `com.dincey.habitjournal`.
 
 Privacy policy (live): https://chrisyau96.github.io/cursor/privacy.html
 
@@ -29,6 +29,7 @@ On the Dashboard, open **Finish setting up your app → View tasks**. Work top t
 
 - Privacy policy URL: `https://chrisyau96.github.io/cursor/privacy.html`
 - Ads: **No, my app does not contain ads**
+- Sign-in details: **All functionality is available without special access** (do not require a reviewer login)
 - Content rating: start questionnaire → **Utility, Productivity, Calendar** / Lifestyle. No violence, no user-generated public sharing, no in-app purchases required
 - Target audience: do **not** select “Designed for children”. 18+ is safest
 - News: No
@@ -50,4 +51,4 @@ Your dashboard locks Closed testing until setup is finished. New personal Play a
 
 ## Package name
 
-Must be `app.momentum.habits`. Set when you first upload an AAB; it cannot change.
+Must be `com.dincey.habitjournal` and match the Android app (`capacitor.config.json` `appId`). Set when you first upload an AAB; it cannot change.

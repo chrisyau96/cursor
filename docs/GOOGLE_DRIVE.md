@@ -24,7 +24,7 @@ This environment cannot open your Google Cloud project.
    - Authorized JavaScript origins: `https://chrisyau96.github.io`, `http://localhost`, `http://127.0.0.1`
    - Copy this ID into Momentum Settings → **Google Web client ID**
 6. Credentials → Create credentials → OAuth client ID → **Android**
-   - Package name: `app.momentum.habits`
+   - Package name: `com.dincey.habitjournal`
    - SHA-1: from your upload keystore (`keytool -list -v -keystore your.jks`) **and** later the Play App Signing SHA-1 from Play Console → Test and release → Setup → App signing
    - Also add the debug keystore SHA-1 if you install via USB / Android Studio
    - **Do not paste the Android client ID into Momentum.** Google matches the signed app automatically. Missing or wrong SHA-1 is why the WebView keeps asking.

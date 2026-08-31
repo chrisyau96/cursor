@@ -13,7 +13,7 @@ The app is free for users. You pay **US$25 once** for a Play developer account (
 - Website: https://chrisyau96.github.io/cursor/ (v56+)
 - Privacy policy (live): https://chrisyau96.github.io/cursor/privacy.html
 - Store listing copy + graphics: `store/play/`
-- Capacitor Android app id: `app.momentum.habits`
+- Capacitor Android app id: `com.dincey.habitjournal`
 - Home-screen widgets (Today complete/reset, 1–6 habits, streak, credits, gift, journal)
 - Local reminders via OS alarms (not web push)
 - Drive backup: Google account picker **once**, then silent — needs an **Android OAuth client + SHA-1** (section 2)
@@ -26,7 +26,7 @@ The app is free for users. You pay **US$25 once** for a Play developer account (
 They fire with the app in the background, swiped away, or after reboot. Force-stop in system Settings cancels alarms until the next open.
 
 **Google Drive = one Google popup, then silent.**  
-Connect once. Daily/weekly first-open backup does not ask again while that Google account stays on the phone. If Google revokes access, Connect once more. This needs a **Web** OAuth client (paste in Settings) **and** an **Android** OAuth client with package `app.momentum.habits` + signing SHA-1 (you do **not** paste the Android client ID in the app).
+Connect once. Daily/weekly first-open backup does not ask again while that Google account stays on the phone. If Google revokes access, Connect once more. This needs a **Web** OAuth client (paste in Settings) **and** an **Android** OAuth client with package `com.dincey.habitjournal` + signing SHA-1 (you do **not** paste the Android client ID in the app).
 
 **Widgets = home-screen app widgets** (Play app only). The website Settings page is a preview. Long-press home screen → Widgets → Momentum.
 
@@ -40,7 +40,7 @@ Follow `docs/GOOGLE_DRIVE.md`. Short version:
 2. Enable **Google Drive API**
 3. OAuth consent screen: External, app name Momentum, privacy `https://chrisyau96.github.io/cursor/privacy.html`, scope `https://www.googleapis.com/auth/drive.appdata`, add yourself as a test user
 4. Credentials → **Web application** client. Authorized JavaScript origins: `https://chrisyau96.github.io` and `http://localhost`. Copy the client ID into Momentum Settings → Google Web client ID
-5. Credentials → **Android** client. Package: `app.momentum.habits`. SHA-1 from your upload keystore (section 5) **and later** Play App Signing SHA-1 (Play Console → Test and release → Setup → App signing). You can also add the debug keystore SHA-1 for USB installs
+5. Credentials → **Android** client. Package: `com.dincey.habitjournal`. SHA-1 from your upload keystore (section 5) **and later** Play App Signing SHA-1 (Play Console → Test and release → Setup → App signing). You can also add the debug keystore SHA-1 for USB installs
 
 ```bash
 keytool -list -v -alias androiddebugkey -keystore ~/.android/debug.keystore -storepass android -keypass android
@@ -107,8 +107,12 @@ First Play upload: `versionCode 1`, `versionName "1.0.0"`.
 
 ## 6. Create the app in Play Console (paste from `store/play/LISTING.md`)
 
+Listing name **2-in-1 Habit & Journal Tracker** is already created. Next: Dashboard → **Finish setting up your app → View tasks**.
+
+If you ever create another app:
+
 1. [Play Console](https://play.google.com/console) → **Create app**
-2. Name: **Momentum**
+2. Name: **2-in-1 Habit & Journal Tracker**
 3. Default language: English (United States)
 4. App or game: **App**
 5. Free or paid: **Free**
@@ -145,7 +149,7 @@ Upload from this repo (already sized):
   - Encrypted in transit: Yes
   - Users can request deletion: Yes (Disconnect Drive + Google Account → Third-party access)
 
-Package name is locked to `app.momentum.habits` on the first AAB upload. It cannot change.
+Package name is locked to `com.dincey.habitjournal` on the first AAB upload. It cannot change.
 
 ---
 
@@ -201,6 +205,6 @@ GitHub Pages updates on every `main` merge. The Play app updates only when you s
 | “Privacy policy is invalid” | Use `https://chrisyau96.github.io/cursor/privacy.html` |
 | Notifications never appear | Android 13+: Allow. Settings → Apps → Momentum → Notifications |
 | Drive popup every time | Android OAuth client with **both** upload-key SHA-1 and Play App Signing SHA-1. Paste the **Web** client ID in Settings |
-| “Package name already used” | `app.momentum.habits` must be unique; change `appId` in `capacitor.config.json` **before** the first upload |
+| “Package name already used” | `com.dincey.habitjournal` must be unique; change `appId` in `capacitor.config.json` **before** the first upload |
 | Closed test not counting | Testers did not click the opt-in link, or you used Internal instead of Closed |
 | AAB rejected for target SDK | `targetSdk` is 35 in `android/variables.gradle` |

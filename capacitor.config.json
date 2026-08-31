@@ -1,5 +1,5 @@
 {
-  "appId": "app.momentum.habits",
+  "appId": "com.dincey.habitjournal",
   "appName": "Momentum",
   "webDir": "www",
   "bundledWebRuntime": false,
