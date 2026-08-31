@@ -101,6 +101,32 @@
     return slots.slice(0, 60);
   };
 
+  Launch.buildRepeatingNative = function (habits, opts) {
+    const bodyFn = typeof opts?.reminderBody === 'function' ? opts.reminderBody : (h) => h.name;
+    const notes = [];
+    (habits || []).forEach((h) => {
+      if (!h || !h.reminder?.enabled || h.paused || h.archived) return;
+      const t = Launch.parseHm(h.reminder.time);
+      const f = h.frequency || {};
+      let days = [0, 1, 2, 3, 4, 5, 6];
+      if (f.mode === 'daily' && Array.isArray(f.days) && f.days.length && f.schedule?.type !== 'any') {
+        days = f.days.map(Number).filter((d) => d >= 0 && d <= 6);
+      }
+      days.forEach((d) => {
+        notes.push({
+          id: Launch.notifId(h.id, 'w' + d),
+          title: 'Momentum',
+          body: bodyFn(h),
+          weekday: d + 1,
+          hour: t.hour,
+          minute: t.minute,
+          extra: { habitId: h.id },
+        });
+      });
+    });
+    return notes;
+  };
+
   Launch.nextWebTimerDelay = function (slots, nowMs) {
     const next = (slots || []).find((s) => s.at > nowMs);
     if (!next) return null;

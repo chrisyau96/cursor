@@ -32,4 +32,6 @@ Settings → Google Drive backup:
 3. Tap **Connect Google Drive** and allow access.
 4. First open of the day/week uploads automatically. **Backup now** / **Restore** are always available.
 
-Tokens stay on the device. Disconnect removes the local token; you can also revoke Momentum in your Google Account → Security → Third-party access.
+Tokens stay on the device. After the first Google account popup, daily/weekly backup is silent while that account remains on the phone. Disconnect removes the local token; you can also revoke Momentum in your Google Account → Security → Third-party access.
+
+On the **Play Store app**, this is local Google Sign-In / token refresh — not a web-push login wall. If Android starts asking every time, add an Android OAuth client with the app’s SHA-1 (`docs/PLAY_STORE.md` §2.2 and §5).

@@ -30,7 +30,9 @@ Authorized JavaScript origins to add:
 - `http://localhost` (Capacitor / local)
 - `https://localhost` (iOS)
 
-## 2. One-time machine setup
+## Google Play first (recommended)
+
+Full walkthrough (accounts, Android Studio, signing, closed testing, production): **[docs/PLAY_STORE.md](./PLAY_STORE.md)**.
 
 ### Android (Windows, macOS, or Linux)
 

@@ -65,4 +65,10 @@ assert(cfg.habitIds.length === 6 && cfg.layout === 6, 'widget config capped at 6
 assert(Launch.parseQueryActions('?widgetAction=complete&habitId=abc').habitId === 'abc', 'query action');
 assert(Launch.parseAppUrl('momentum://widget/reset?habitId=z').type === 'reset', 'app url action');
 
+const repeating = Launch.buildRepeatingNative([
+  { id: 'h1', name: 'Read', reminder: { enabled: true, time: '07:15' }, frequency: { mode: 'daily', days: [1, 3], schedule: { type: 'days' } } },
+], { reminderBody: (h) => h.name });
+assert(repeating.length === 2, 'one native alarm per weekday');
+assert(repeating[0].weekday === 2 && repeating[1].weekday === 4, 'Capacitor weekday is Sunday=1');
+
 console.log('launch-core tests passed');

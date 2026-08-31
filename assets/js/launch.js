@@ -332,13 +332,20 @@
       const pending = await cap().LocalNotifications.getPending();
       const ids = (pending?.notifications || []).map((n) => ({ id: n.id }));
       if (ids.length) await cap().LocalNotifications.cancel({ notifications: ids });
-      if (!slots.length) return;
+      const repeating = Core.buildRepeatingNative(app().activeHabits(), {
+        reminderBody: (h) => app().reminderBody(h),
+      });
+      if (!repeating.length) return;
       await cap().LocalNotifications.schedule({
-        notifications: slots.map((s) => ({
+        notifications: repeating.map((s) => ({
           id: s.id,
           title: s.title,
           body: s.body,
-          schedule: { at: new Date(s.at), allowWhileIdle: true },
+          schedule: {
+            on: { weekday: s.weekday, hour: s.hour, minute: s.minute },
+            allowWhileIdle: true,
+            repeats: true,
+          },
           extra: s.extra,
         })),
       });
@@ -397,7 +404,7 @@
     }
     const n = (slots || currentSlots()).length;
     if (isNative()) {
-      note.textContent = n ? `${n} reminder${n === 1 ? '' : 's'} scheduled on this device, including while the app is closed.` : 'No upcoming habit reminders in the next 21 days.';
+      note.textContent = 'Device reminders are scheduled on this phone. They still fire if Momentum is closed or swiped away (Android OS alarms — not web push). Grant notification permission when asked.';
     } else {
       note.textContent = n
         ? `${n} reminder${n === 1 ? '' : 's'} queued. In the browser they fire only while Momentum is open. The Play / App Store app fires them when closed.`
