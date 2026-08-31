@@ -1,6 +1,8 @@
 # Native widget sources
 
-Copied into Capacitor projects by `npm run native:apply`.
+Copied into Capacitor projects by `npm run native:apply`. The `android/` project in this repo already has widgets applied.
+
+Home-screen widgets (Play app only): Today with complete/reset, 1–6 habits + due, streak, credits, gift, journal. The website Settings page is a preview only.
 
 ## Android
 

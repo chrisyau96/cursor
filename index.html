@@ -197,7 +197,8 @@
         <div class="card settings-card sync-card">
           <div class="sync-status-panel" id="driveStatus">Not connected</div>
           <div class="field" style="margin-top:12px"><label>Backup schedule</label><select id="driveBackupFreq"><option value="daily">Daily — first open of the day</option><option value="weekly">Weekly — first open of the week</option><option value="off">Manual only</option></select></div>
-          <div class="field"><label>Google OAuth client ID <button type="button" class="info-tip" aria-label="Help" data-tip-title="Google client ID" data-tip="Create an OAuth client in Google Cloud (Drive appData scope) and paste the Web client ID here. See docs/GOOGLE_DRIVE.md.">ⓘ</button></label><input id="googleClientIdInput" placeholder="123.apps.googleusercontent.com" autocomplete="off"></div>
+          <div class="field"><label>Google Web client ID <button type="button" class="info-tip" aria-label="Help" data-tip-title="Google client IDs" data-tip="Paste the Web application OAuth client ID from Google Cloud. For the Play app, also create an Android OAuth client with package app.momentum.habits and your signing SHA-1 — you do not paste that Android ID here. After the first Google popup, daily backup stays silent.">ⓘ</button></label><input id="googleClientIdInput" placeholder="….apps.googleusercontent.com" autocomplete="off"></div>
+          <div class="small-note" id="googleAndroidOauthNote" style="margin-top:8px">Play app: create an Android OAuth client in Google Cloud (package <code>app.momentum.habits</code> + SHA-1). Google matches the app automatically so Drive does not keep asking. Steps are in docs/GOOGLE_DRIVE.md.</div>
           <div class="sync-actions" style="margin-top:12px">
             <button type="button" class="btn-primary" id="driveConnectBtn">Connect Google Drive</button>
             <button type="button" class="btn-secondary hidden-action" id="driveBackupNowBtn">Backup now</button>
@@ -223,7 +224,7 @@
 
         <p class="settings-section-label">Home screen widgets</p>
         <div class="card settings-card">
-          <div class="small-note">Pick what a widget shows. On the Play / App Store app, add the Momentum widget from the home screen. Completing or resetting a today-task updates without signing in again.</div>
+          <div class="small-note">This page is a preview. Real home-screen widgets exist only on the Android Play app: Today (complete/reset), 1–6 habits + due, streak, credits, gift, journal. Long-press the home screen → Widgets → Momentum.</div>
           <div class="segmented" id="widgetModeTabs" style="margin-top:12px;flex-wrap:wrap">
             <button type="button" data-widget-mode="today" class="active">Today</button>
             <button type="button" data-widget-mode="habits">Habits</button>

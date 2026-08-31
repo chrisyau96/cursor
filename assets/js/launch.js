@@ -75,8 +75,68 @@
     }));
   }
 
+  let socialReadyFor = '';
+  async function socialLogin() {
+    return cap().SocialLogin || null;
+  }
+
+  async function ensureSocialGoogle() {
+    const social = await socialLogin();
+    if (!social) return null;
+    const cid = clientId();
+    if (!cid) throw new Error('Add a Google OAuth Web client ID in Settings first.');
+    if (socialReadyFor !== cid) {
+      await social.initialize({ google: { webClientId: cid, mode: 'online' } });
+      socialReadyFor = cid;
+    }
+    return social;
+  }
+
+  function saveNativeToken(tok, email, expiresAt) {
+    if (!tok || String(tok).length < 20) return null;
+    writeToken({ accessToken: tok, expiresAt: expiresAt || Date.now() + 50 * 60 * 1000, email: email || '' });
+    if (email && state()?.settings) state().settings.driveEmail = email;
+    return tok;
+  }
+
+  async function nativeGoogleToken(interactive) {
+    const social = await ensureSocialGoogle();
+    if (!social) return null;
+    const scopes = ['email', 'profile', 'openid', Core.DRIVE_SCOPE];
+    if (!interactive) {
+      try {
+        const logged = await social.isLoggedIn({ provider: 'google' });
+        if (logged?.isLoggedIn) {
+          const code = await social.getAuthorizationCode({ provider: 'google' });
+          const tok = saveNativeToken(code?.accessToken, '', Date.now() + 50 * 60 * 1000);
+          if (tok) return tok;
+        }
+      } catch (e) { /* fall through to silent Credential Manager */ }
+    }
+    const res = await social.login({
+      provider: 'google',
+      options: {
+        scopes,
+        forceRefreshToken: false,
+        filterByAuthorizedAccounts: !interactive,
+        autoSelectEnabled: true,
+        style: interactive ? 'standard' : 'bottom',
+      },
+    });
+    const result = res?.result || {};
+    const tok = result.accessToken?.token || result.accessToken;
+    const email = result.profile?.email || '';
+    const expires = result.accessToken?.expires ? Date.parse(result.accessToken.expires) : 0;
+    return saveNativeToken(tok, email, expires > Date.now() ? expires : Date.now() + 50 * 60 * 1000);
+  }
+
   async function accessToken(interactive) {
     if (tokenValid()) return readToken().accessToken;
+    if (isNative() && cap().SocialLogin) {
+      const tok = await nativeGoogleToken(!!interactive);
+      if (tok) return tok;
+      if (!interactive) throw new Error('Google Drive needs Connect once');
+    }
     return requestToken(interactive ? 'consent' : '');
   }
 
@@ -164,6 +224,7 @@
       driveBackupFreq: settings().driveBackupFreq || 'daily',
       driveFileId: fileId,
       googleClientId: settings().googleClientId,
+      googleAndroidClientId: settings().googleAndroidClientId,
       lastDriveBackupAt: new Date().toISOString(),
     };
     app().setState(data);
@@ -196,7 +257,11 @@
     if (t?.accessToken && window.google?.accounts?.oauth2) {
       try { window.google.accounts.oauth2.revoke(t.accessToken); } catch (e) { /* ignore */ }
     }
+    if (isNative() && cap().SocialLogin) {
+      try { await cap().SocialLogin.logout({ provider: 'google' }); } catch (e) { /* ignore */ }
+    }
     writeToken(null);
+    socialReadyFor = '';
     const st = state();
     st.settings.driveConnected = false;
     st.settings.driveEmail = '';
@@ -613,6 +678,7 @@
     });
     document.getElementById('googleClientIdInput')?.addEventListener('change', async (e) => {
       state().settings.googleClientId = e.target.value.trim();
+      socialReadyFor = '';
       await app().save(true, { render: 'none' });
     });
     document.getElementById('testReminderBtn')?.addEventListener('click', async () => {

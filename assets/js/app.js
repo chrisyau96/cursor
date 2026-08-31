@@ -80,7 +80,7 @@
 
   const USER_NAME_MAX=12;
   function rewardDefaults(includeGifts=false){return{creditRules:[{id:uid(),pct:50,amount:2},{id:uid(),pct:100,amount:10}],giftRules:includeGifts?[{id:uid(),gift:'Buffet',icon:'🍽️',pct:80,days:30}]:[],penaltyCredit:5,penaltyXp:20,penaltyZeroDays:2};}
-  function pickSettings(overrides={}){const gifts=overrides.includeGifts===true; const {includeGifts,...rest}=overrides; return{autoSync:false,autoBackup:true,dailyBackup:true,fileConnected:false,backupFileName:'',reminders:false,colorMode:'system',styleTheme:'vivid',globalReminderTime:'20:30',profileIcon:'',userName:'',onboardingComplete:false,statusRowOpen:false,lastExportAt:'',lastBackupAt:'',lastScheduledBackupAt:'',vacations:[],dataMode:'real',defaultReminderMessage:'Time for {habit}!',driveConnected:false,driveEmail:'',driveBackupFreq:'daily',lastDriveBackupAt:'',driveFileId:'',googleClientId:'',widget:{mode:'today',habitIds:[],layout:3},rewards:rewardDefaults(gifts),...rest};}
+  function pickSettings(overrides={}){const gifts=overrides.includeGifts===true; const {includeGifts,...rest}=overrides; return{autoSync:false,autoBackup:true,dailyBackup:true,fileConnected:false,backupFileName:'',reminders:false,colorMode:'system',styleTheme:'vivid',globalReminderTime:'20:30',profileIcon:'',userName:'',onboardingComplete:false,statusRowOpen:false,lastExportAt:'',lastBackupAt:'',lastScheduledBackupAt:'',vacations:[],dataMode:'real',defaultReminderMessage:'Time for {habit}!',driveConnected:false,driveEmail:'',driveBackupFreq:'daily',lastDriveBackupAt:'',driveFileId:'',googleClientId:'',googleAndroidClientId:'',widget:{mode:'today',habitIds:[],layout:3},rewards:rewardDefaults(gifts),...rest};}
   function defaultGroups(){return[{id:uid(),name:'Morning',emoji:'🌅',color:'#ea580c',sortOrder:0},{id:uid(),name:'Afternoon',emoji:'☀️',color:'#ca8a04',sortOrder:1},{id:uid(),name:'Evening',emoji:'🌙',color:'#4f46e5',sortOrder:2}];}
   function freshState(opts={}){const keep=opts.keep||{}; return{habits:[],records:[],journals:{},redemptions:[],groups:defaultGroups(),settings:pickSettings({dataMode:'real',includeGifts:false,startDate:todayKey(),onboardingComplete:opts.onboardingComplete??true,colorMode:keep.colorMode||'system',styleTheme:keep.styleTheme||'vivid',userName:keep.userName||'',profileIcon:keep.profileIcon||''})};}
   function demoState(opts={}){const keep=opts.keep||{};
@@ -140,6 +140,7 @@
     if(state.settings.lastDriveBackupAt===undefined) state.settings.lastDriveBackupAt='';
     if(state.settings.driveFileId===undefined) state.settings.driveFileId='';
     if(state.settings.googleClientId===undefined) state.settings.googleClientId='';
+    if(state.settings.googleAndroidClientId===undefined) state.settings.googleAndroidClientId='';
     if(!state.settings.widget) state.settings.widget={mode:'today',habitIds:[],layout:3};
     state.settings.widget=window.MomentumLaunchCore?window.MomentumLaunchCore.normalizeWidgetConfig(state.settings.widget):state.settings.widget;
     delete state.settings.appIcon;

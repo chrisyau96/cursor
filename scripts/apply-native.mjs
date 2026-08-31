@@ -18,13 +18,22 @@ if (existsSync('android/app/src/main')) {
   copyDir('native-src/android/java', 'android/app/src/main/java/app/momentum/habits');
   copyDir('native-src/android/res', 'android/app/src/main/res');
   const manifestPath = 'android/app/src/main/AndroidManifest.xml';
+  const activityFilter = `            <intent-filter>
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
+                <data android:scheme="momentum" android:host="widget" />
+            </intent-filter>`;
   if (existsSync(manifestPath)) {
     let xml = readFileSync(manifestPath, 'utf8');
     const snippet = readFileSync('native-src/android/AndroidManifest.snippet.xml', 'utf8');
     if (!xml.includes('MomentumWidgetProvider')) {
       xml = xml.replace('</application>', `${snippet}\n    </application>`);
-      writeFileSync(manifestPath, xml);
     }
+    if (!xml.includes('android:host="widget"')) {
+      xml = xml.replace('</activity>', `${activityFilter}\n        </activity>`);
+    }
+    writeFileSync(manifestPath, xml);
   }
   copied++;
   console.log('Applied Android widget sources');
