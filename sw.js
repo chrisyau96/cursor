@@ -1,6 +1,6 @@
 // Offline-first service worker for the Momentum habit-tracker PWA.
 // Cross-origin requests always go to the network.
-const CACHE = "momentum-v55";
+const CACHE = "momentum-v56";
 
 const ASSETS = [
   ".",
@@ -8,6 +8,8 @@ const ASSETS = [
   "manifest.webmanifest",
   "assets/css/styles.css",
   "assets/js/app.js",
+  "assets/js/launch-core.js",
+  "assets/js/launch.js",
   "assets/icon.svg",
   "assets/icon-192.png",
   "assets/icon-512.png",
@@ -43,6 +45,19 @@ self.addEventListener("fetch", (event) => {
         })
         .catch(() => cached);
       return cached || network;
+    }),
+  );
+});
+
+self.addEventListener("notificationclick", (event) => {
+  event.notification.close();
+  const url = event.notification.data?.url || "./";
+  event.waitUntil(
+    self.clients.matchAll({ type: "window", includeUncontrolled: true }).then((clients) => {
+      for (const client of clients) {
+        if ("focus" in client) return client.focus();
+      }
+      if (self.clients.openWindow) return self.clients.openWindow(url);
     }),
   );
 });

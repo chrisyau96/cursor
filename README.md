@@ -4,10 +4,13 @@ A sophisticated, mobile-first **habit tracking web app**. Track habits with flex
 schedules, journal your mood and energy, review trends across a canvas chart and a
 month/quarter calendar, and stay motivated with an XP **level/identity** ladder plus a
 **credit / gift / penalty** reward system. It runs fully in the browser (no account, no
-server) and installs as a PWA. Backup/sync uses a **local JSON file** (File System Access
-API) that you can keep in a Google Drive / OneDrive / iCloud synced folder — no OAuth.
+server) and installs as a PWA. Optional **Google Drive** backup uploads on the first open
+of the day or week. Desktop can still link a local JSON file.
 
 Live: https://chrisyau96.github.io/cursor/
+
+To publish on Google Play and the App Store (free app, paid developer accounts), see
+[`docs/PUBLISH.md`](docs/PUBLISH.md).
 
 ## Features
 
@@ -30,9 +33,8 @@ Live: https://chrisyau96.github.io/cursor/
 - **Gift** — credit balance, 80%+ streak, gift balance; **redeem** credits for anything you
   like (free-text spend) and redeem streak-based **gift rules** (e.g. Buffet after 30 days
   at 80%+); a live reward ledger.
-- **Settings** — profile icon, tracker start date, **reward rules** (credit tiers + gift
-  rules), **penalty rules** (credit/XP loss for consecutive 0% days), **Backup & Sync**
-  (connect/create a JSON file + auto-sync, or export/import), reminders, and a danger zone.
+- **Settings** — profile, reward rules, **Google Drive backup** (daily/weekly), local file
+  backup, reminders, home-screen widget layout, and a danger zone.
 
 ## Rewards engine (all derived from your records)
 
@@ -48,19 +50,23 @@ Live: https://chrisyau96.github.io/cursor/
 Everything except redemptions is recomputed from `records`, so editing history stays
 consistent. All times use the Asia/Hong_Kong day boundary.
 
-## Backup & sync (no account)
+## Backup
 
-Settings → **Backup & Sync**. On desktop Chrome/Edge, **Create New File** or **Connect
-File** to a `.json` placed inside a cloud-synced folder, then turn on **Auto Sync** — every
-edit writes to that file and your cloud app syncs it across devices. On phones (where the
-File System Access API is limited), use **Export / Import JSON**. Data is always saved in
-`localStorage` first.
+Settings → **Google Drive backup**: connect once, then Momentum uploads on the first launch
+of the day or week (see `docs/GOOGLE_DRIVE.md`). Desktop Chrome/Edge can still **Create /
+Connect** a JSON file for local auto-sync. Phones should use Drive.
+
+## Home screen widgets (store app)
+
+Settings → **Home screen widgets** chooses the mode (today tasks, 1–6 habits with due dates,
+streak, credits, gift, journal). The Play / App Store build can complete or reset today’s
+tasks from the widget. The website shows a preview only.
 
 ## Use it on your phone
 
 1. Open the live URL in Chrome/Safari → browser menu → **Add to Home Screen / Install app**
    (installable PWA, works offline).
-2. For sync, keep the backup JSON in your Drive/OneDrive/iCloud folder as above.
+2. For backup on a phone, connect Google Drive in Settings (daily or weekly).
 
 ## Run locally
 
@@ -68,17 +74,19 @@ Static site — serve over HTTP:
 
 ```bash
 python3 -m http.server 8000   # then open http://localhost:8000
+node scripts/test-launch.mjs  # Drive / reminder / widget unit tests
 ```
 
 ## Project structure
 
 ```
-index.html                 # app shell (top bar, views, bottom nav + FAB, modal)
-assets/css/styles.css       # design system + all component styles
-assets/js/app.js            # full engine: state, scheduling, records, journal,
-                            #   trend/calendar, XP/level, reward ledger, file sync
-manifest.webmanifest, sw.js # PWA (installable + offline)
-assets/icon*.{svg,png}      # app icons
+index.html                 # app shell
+assets/js/app.js           # habit engine
+assets/js/launch-core.js   # Drive / reminder / widget helpers
+assets/js/launch.js        # Google Drive, notifications, widget snapshot
+native-src/                # Android + iOS widget sources for Capacitor
+docs/PUBLISH.md            # Play Store + App Store steps
+privacy.html               # store / OAuth privacy policy
 ```
 
-No build step, no external dependencies.
+The GitHub Pages site has no build step. Store binaries use Capacitor (`docs/PUBLISH.md`).

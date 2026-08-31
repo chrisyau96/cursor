@@ -193,17 +193,48 @@
           <div class="vacation-actions"><button class="btn-secondary" id="addVacationBtn" type="button">+ Pause period</button><button class="btn-secondary" id="viewVacationLogBtn" type="button">View log</button></div>
         </div>
 
-        <p class="settings-section-label">Backup &amp; sync</p>
+        <p class="settings-section-label">Google Drive backup</p>
+        <div class="card settings-card sync-card">
+          <div class="sync-status-panel" id="driveStatus">Not connected</div>
+          <div class="field" style="margin-top:12px"><label>Backup schedule</label><select id="driveBackupFreq"><option value="daily">Daily — first open of the day</option><option value="weekly">Weekly — first open of the week</option><option value="off">Manual only</option></select></div>
+          <div class="field"><label>Google OAuth client ID <button type="button" class="info-tip" aria-label="Help" data-tip-title="Google client ID" data-tip="Create an OAuth client in Google Cloud (Drive appData scope) and paste the Web client ID here. See docs/GOOGLE_DRIVE.md.">ⓘ</button></label><input id="googleClientIdInput" placeholder="123.apps.googleusercontent.com" autocomplete="off"></div>
+          <div class="sync-actions" style="margin-top:12px">
+            <button type="button" class="btn-primary" id="driveConnectBtn">Connect Google Drive</button>
+            <button type="button" class="btn-secondary hidden-action" id="driveBackupNowBtn">Backup now</button>
+            <button type="button" class="btn-secondary hidden-action" id="driveRestoreBtn">Restore</button>
+            <button type="button" class="btn-inline gray hidden-action" id="driveDisconnectBtn">Disconnect</button>
+          </div>
+        </div>
+
+        <p class="settings-section-label">Local file backup</p>
         <div class="card settings-card sync-card">
           <div class="sync-status-panel" id="backupStatus">No backup file connected.</div>
           <div class="sync-actions" id="syncActionsGrid"></div>
-          <div class="switch-row sync-auto-row"><div class="switch-label-wrap"><strong>Auto backup</strong><button type="button" class="info-tip" aria-label="Help" data-tip-title="Auto backup" data-tip="Saves to your linked JSON file about 5 seconds after you stop editing, and again when you leave the app. Edits stay instant on this device.">ⓘ</button></div><button type="button" class="switch" id="autoBackupSwitch" aria-label="Auto backup toggle"></button></div>
+          <div class="switch-row sync-auto-row"><div class="switch-label-wrap"><strong>Auto backup</strong><button type="button" class="info-tip" aria-label="Help" data-tip-title="Auto backup" data-tip="Desktop Chrome/Edge: link a JSON file (including one inside Google Drive on this computer). On phones, use Google Drive backup above.">ⓘ</button></div><button type="button" class="switch" id="autoBackupSwitch" aria-label="Auto backup toggle"></button></div>
         </div>
 
         <p class="settings-section-label">Notifications</p>
         <div class="card settings-card">
-          <div class="switch-row"><div class="switch-label-wrap"><strong>Reminders</strong><button type="button" class="info-tip" aria-label="Help" data-tip-title="Reminders" data-tip="Optional per-habit alerts at scheduled times.">ⓘ</button></div><button type="button" class="switch" id="reminderSwitch" aria-label="Reminder toggle"></button></div>
+          <div class="switch-row"><div class="switch-label-wrap"><strong>Reminders</strong><button type="button" class="info-tip" aria-label="Help" data-tip-title="Reminders" data-tip="Schedules each enabled habit reminder for the next 21 days. The store app can alert you while closed. In a browser, keep Momentum open or install the app.">ⓘ</button></div><button type="button" class="switch" id="reminderSwitch" aria-label="Reminder toggle"></button></div>
           <div class="form-grid" id="reminderSettings" style="margin-top:12px"></div>
+          <p class="small-note" id="reminderRuntimeNote">Reminders are off.</p>
+          <button type="button" class="btn-secondary settings-action" id="testReminderBtn" style="margin-top:10px">Send test notification</button>
+        </div>
+
+        <p class="settings-section-label">Home screen widgets</p>
+        <div class="card settings-card">
+          <div class="small-note">Pick what a widget shows. On the Play / App Store app, add the Momentum widget from the home screen. Completing or resetting a today-task updates without signing in again.</div>
+          <div class="segmented" id="widgetModeTabs" style="margin-top:12px;flex-wrap:wrap">
+            <button type="button" data-widget-mode="today" class="active">Today</button>
+            <button type="button" data-widget-mode="habits">Habits</button>
+            <button type="button" data-widget-mode="streak">Streak</button>
+            <button type="button" data-widget-mode="credits">Credits</button>
+            <button type="button" data-widget-mode="gift">Gift</button>
+            <button type="button" data-widget-mode="journal">Journal</button>
+          </div>
+          <div class="field" id="widgetLayoutWrap" style="margin-top:12px;display:none"><label>Habits on widget (1–6)</label><select id="widgetLayout"><option value="1">1</option><option value="2">2</option><option value="3">3</option><option value="4">4</option><option value="5">5</option><option value="6">6</option></select></div>
+          <div id="widgetHabitPicker" class="widget-habit-picker" style="display:none"></div>
+          <div id="widgetPreview" class="widget-preview" style="margin-top:12px"></div>
         </div>
 
         <p class="settings-section-label">Debug</p>
@@ -214,6 +245,7 @@
         <p class="settings-section-label">Help</p>
         <div class="card settings-card">
           <button class="btn-secondary settings-action" id="replayOnboardingBtn" type="button">Replay onboarding tour</button>
+          <a class="btn-secondary settings-action" href="privacy.html" style="margin-top:8px;display:block;text-align:center">Privacy policy</a>
         </div>
 
         <div class="settings-save-bar" id="settingsSaveBar" hidden>
@@ -226,7 +258,7 @@
           <div class="field"><input id="confirmDeleteInput" placeholder="Type Confirm"></div>
           <button class="btn-danger settings-action" id="resetAllBtn" type="button">Erase all data</button>
         </div>
-        <p class="settings-version" id="settingsVersion">Momentum v38</p>
+        <p class="settings-version" id="settingsVersion">Momentum v56</p>
       </section>
     </main>
 
@@ -279,7 +311,9 @@
   <div class="toast" id="toast">Saved</div>
   <div class="celebrate-layer" id="celebrateLayer" aria-hidden="true"></div>
 
+  <script src="assets/js/launch-core.js"></script>
   <script src="assets/js/app.js"></script>
+  <script src="assets/js/launch.js"></script>
   <script>
     if ("serviceWorker" in navigator) {
       window.addEventListener("load", () => navigator.serviceWorker.register("sw.js").catch(()=>{}));

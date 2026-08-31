@@ -75,12 +75,12 @@
   const PREVIEW=3;
   const LAZY_CHUNK=10;
   const REMINDER_MSG_LIMIT=80;
-  const APP_VERSION='v55';
+  const APP_VERSION='v56';
   const iconBtn=(cls,svg,title)=>{const b=document.createElement('button'); b.className='act-btn '+cls; b.innerHTML=svg; b.title=title; b.setAttribute('aria-label',title); return b;};
 
   const USER_NAME_MAX=12;
   function rewardDefaults(includeGifts=false){return{creditRules:[{id:uid(),pct:50,amount:2},{id:uid(),pct:100,amount:10}],giftRules:includeGifts?[{id:uid(),gift:'Buffet',icon:'🍽️',pct:80,days:30}]:[],penaltyCredit:5,penaltyXp:20,penaltyZeroDays:2};}
-  function pickSettings(overrides={}){const gifts=overrides.includeGifts===true; const {includeGifts,...rest}=overrides; return{autoSync:false,autoBackup:true,dailyBackup:true,fileConnected:false,backupFileName:'',reminders:false,colorMode:'system',styleTheme:'vivid',globalReminderTime:'20:30',profileIcon:'',userName:'',onboardingComplete:false,statusRowOpen:false,lastExportAt:'',lastBackupAt:'',lastScheduledBackupAt:'',vacations:[],dataMode:'real',defaultReminderMessage:'Time for {habit}!',rewards:rewardDefaults(gifts),...rest};}
+  function pickSettings(overrides={}){const gifts=overrides.includeGifts===true; const {includeGifts,...rest}=overrides; return{autoSync:false,autoBackup:true,dailyBackup:true,fileConnected:false,backupFileName:'',reminders:false,colorMode:'system',styleTheme:'vivid',globalReminderTime:'20:30',profileIcon:'',userName:'',onboardingComplete:false,statusRowOpen:false,lastExportAt:'',lastBackupAt:'',lastScheduledBackupAt:'',vacations:[],dataMode:'real',defaultReminderMessage:'Time for {habit}!',driveConnected:false,driveEmail:'',driveBackupFreq:'daily',lastDriveBackupAt:'',driveFileId:'',googleClientId:'',widget:{mode:'today',habitIds:[],layout:3},rewards:rewardDefaults(gifts),...rest};}
   function defaultGroups(){return[{id:uid(),name:'Morning',emoji:'🌅',color:'#ea580c',sortOrder:0},{id:uid(),name:'Afternoon',emoji:'☀️',color:'#ca8a04',sortOrder:1},{id:uid(),name:'Evening',emoji:'🌙',color:'#4f46e5',sortOrder:2}];}
   function freshState(opts={}){const keep=opts.keep||{}; return{habits:[],records:[],journals:{},redemptions:[],groups:defaultGroups(),settings:pickSettings({dataMode:'real',includeGifts:false,startDate:todayKey(),onboardingComplete:opts.onboardingComplete??true,colorMode:keep.colorMode||'system',styleTheme:keep.styleTheme||'vivid',userName:keep.userName||'',profileIcon:keep.profileIcon||''})};}
   function demoState(opts={}){const keep=opts.keep||{};
@@ -132,8 +132,16 @@
     if(!Array.isArray(state.settings.vacations)) state.settings.vacations=[];
     state.groups=state.groups||[];
     state.habits=state.habits||[]; state.records=state.records||[]; state.journals=state.journals||{}; state.redemptions=state.redemptions||[];
-    state.habits.forEach((h,i)=>{h.target=Number(h.target||1); h.xpReward=Math.max(1,Math.round(Number(h.xpReward)||5)); h.frequency=h.frequency||{mode:'daily',days:[0,1,2,3,4,5,6]}; if(!h.frequency.schedule&&h.frequency.mode!=='daily') h.frequency.schedule={type:'any'}; if(h.frequency.mode==='daily'&&!h.frequency.schedule) h.frequency.schedule={type:'days'}; if(h.sortOrder===undefined) h.sortOrder=i; if(h.paused===undefined) h.paused=false; if(h.archived===undefined) h.archived=false; if(h.groupId===undefined) h.groupId=null; h.reminder=h.reminder||{enabled:false,time:state.settings.globalReminderTime||'20:30',message:'',daysBeforeDue:1}; if(h.reminder.message===undefined) h.reminder.message=''; if(h.reminder.daysBeforeDue===undefined) h.reminder.daysBeforeDue=1;});
+    state.habits.forEach((h,i)=>{h.target=Number(h.target||1); h.xpReward=Math.max(1,Math.round(Number(h.xpReward)||5)); h.frequency=h.frequency||{mode:'daily',days:[0,1,2,3,4,5,6]}; if(!h.frequency.schedule&&h.frequency.mode!=='daily') h.frequency.schedule={type:'any'}; if(h.frequency.mode==='daily'&&!h.frequency.schedule) h.frequency.schedule={type:'days'}; if(h.sortOrder===undefined) h.sortOrder=i; if(h.paused===undefined) h.paused=false; if(h.archived===undefined) h.archived=false; if(h.groupId===undefined) h.groupId=null; h.reminder=h.reminder||{enabled:false,time:state.settings.globalReminderTime||'20:30',message:'',daysBeforeDue:1}; if(h.reminder.message===undefined) h.reminder.message='';     if(h.reminder.daysBeforeDue===undefined) h.reminder.daysBeforeDue=1;});
     if(!state.settings.defaultReminderMessage) state.settings.defaultReminderMessage='Time for {habit}!';
+    if(state.settings.driveConnected===undefined) state.settings.driveConnected=false;
+    if(state.settings.driveEmail===undefined) state.settings.driveEmail='';
+    if(!state.settings.driveBackupFreq) state.settings.driveBackupFreq='daily';
+    if(state.settings.lastDriveBackupAt===undefined) state.settings.lastDriveBackupAt='';
+    if(state.settings.driveFileId===undefined) state.settings.driveFileId='';
+    if(state.settings.googleClientId===undefined) state.settings.googleClientId='';
+    if(!state.settings.widget) state.settings.widget={mode:'today',habitIds:[],layout:3};
+    state.settings.widget=window.MomentumLaunchCore?window.MomentumLaunchCore.normalizeWidgetConfig(state.settings.widget):state.settings.widget;
     delete state.settings.appIcon;
     delete state.settings.appIconCustom;
     state.groups.forEach((g,i)=>{if(!g.id)g.id=uid(); if(g.sortOrder===undefined) g.sortOrder=i; if(!g.emoji)g.emoji='📋'; if(!g.color)g.color='#4f46e5';});
@@ -169,6 +177,7 @@
     else if(mode!=='none') renderAfterSave(mode);
     else { updateStatus(); renderTopProfile(); refreshEconomyDisplays(); }
     if(!skipSync) queueBackupSync();
+    if(window.MomentumLaunch?.onStateSaved) void window.MomentumLaunch.onStateSaved();
   }
   function toast(msg,duration=1600){const t=$('#toast'); if(!t)return; t.textContent=msg; t.classList.add('show'); clearTimeout(toast._timer); toast._timer=setTimeout(()=>t.classList.remove('show'),duration);}
   function showHelpSheet(title,text){
@@ -1667,6 +1676,8 @@
       if(autoLocked) autoSw.setAttribute('data-locked','true');
       else autoSw.removeAttribute('data-locked');
     }
+    window.MomentumLaunch?.renderDriveUi?.();
+    window.MomentumLaunch?.renderWidgetUi?.();
   }
   function refreshBackupChrome(){ updateStatus(); refreshSettingsChrome(); }
   function drawRewardPanel(tab=rewardActiveTab){
@@ -1759,9 +1770,12 @@
   }
   async function saveSettingsForm(){
     const form=readSettingsForm();
-    if(form.reminders && !state.settings.reminders && 'Notification' in window && Notification.permission==='default'){
-      const perm=await Notification.requestPermission();
-      if(perm==='denied') toast('Browser notifications blocked — reminders will use in-app alerts');
+    if(form.reminders && !state.settings.reminders){
+      if(window.MomentumLaunch?.requestNotifPermission) await window.MomentumLaunch.requestNotifPermission();
+      else if('Notification' in window && Notification.permission==='default'){
+        const perm=await Notification.requestPermission();
+        if(perm==='denied') toast('Browser notifications blocked — reminders will use in-app alerts');
+      }
     }
     state.settings.userName=form.userName;
     state.settings.colorMode=form.colorMode;
@@ -1778,6 +1792,7 @@
     $('#greeting').textContent=timeGreeting()+greetName();
     renderTopProfile();
     setupReminderLoop();
+    if(window.MomentumLaunch?.scheduleReminders) void window.MomentumLaunch.scheduleReminders();
     updateSettingsSaveBar();
     refreshSettingsChrome();
     refreshEconomyDisplays();
@@ -1901,6 +1916,8 @@
       if(autoLocked) autoSw.setAttribute('data-locked','true');
       else autoSw.removeAttribute('data-locked');
     }
+    window.MomentumLaunch?.renderDriveUi?.();
+    window.MomentumLaunch?.renderWidgetUi?.();
   }
   function renderSettingsVersion(){
     const el=$('#settingsVersion');
@@ -2095,7 +2112,29 @@
     }
     return isScheduledToday(h,now)||isFlexibleHabit(h,now);
   }
-  function setupReminderLoop(){if(reminderTimer)clearInterval(reminderTimer); if(!state.settings.reminders)return; reminderTimer=setInterval(()=>{const now=hkNow(); state.habits.forEach(h=>{if(!shouldRemindHabit(h,now))return; const last=`${h.id}-${todayKey()}-${h.reminder.time}`; if(sessionStorage.getItem(last))return; sessionStorage.setItem(last,'1'); const body=reminderBody(h); if('Notification' in window && Notification.permission==='granted') new Notification('Momentum',{body}); else toast(body);});},30000)}
+  function setupReminderLoop(){
+    if(reminderTimer)clearInterval(reminderTimer);
+    if(window.MomentumLaunch?.scheduleReminders) return;
+    if(!state.settings.reminders)return;
+    reminderTimer=setInterval(()=>{
+      const now=hkNow();
+      let fired={};
+      try{fired=JSON.parse(localStorage.getItem('momentumReminderFired')||'{}');}catch(e){fired={};}
+      state.habits.forEach(h=>{
+        if(!shouldRemindHabit(h,now))return;
+        const last=`${h.id}|${todayKey()}|${h.reminder.time}`;
+        if(fired[last])return;
+        Object.keys(fired).forEach(k=>{if(!k.includes(todayKey())) delete fired[k];});
+        fired[last]=1;
+        localStorage.setItem('momentumReminderFired',JSON.stringify(fired));
+        const body=reminderBody(h);
+        if(navigator.serviceWorker){
+          navigator.serviceWorker.ready.then(reg=>reg.showNotification?.('Momentum',{body,icon:'assets/icon-192.png'})).catch(()=>{});
+        }else if('Notification' in window && Notification.permission==='granted') new Notification('Momentum',{body});
+        else toast(body);
+      });
+    },30000);
+  }
 
   async function eraseAllData(){
     if($('#confirmDeleteInput')?.value!=='Confirm'){toast('Type Confirm first');return;}
@@ -2306,6 +2345,8 @@
     }else if(document.visibilityState==='visible'){
       refreshForDayChange();
       void tryReconnectOnReturn();
+      if(window.MomentumLaunch?.maybeAutoDriveBackup) void window.MomentumLaunch.maybeAutoDriveBackup();
+      if(window.MomentumLaunch?.scheduleReminders) void window.MomentumLaunch.scheduleReminders();
     }
   });
   window.addEventListener('pageshow',()=>{ refreshForDayChange(); });
@@ -2341,5 +2382,18 @@
     refreshBackupChrome();
     renderSettingsVersion();
     if(state.settings.autoBackup && await ensureBackupConnection()) void flushBackupSync();
+    window.Momentum={
+      version:APP_VERSION,
+      getState:()=>state,
+      setState:(s)=>{state=s;},
+      save,toast,addRecord,resetHabitForDate,openJournalEditor,showView,
+      creditTotal,streakAt,giftProgress,activeGiftRule,longestPerfectStreak,
+      completionOfHabit,todayViewCompletion,habitDueDate,fmtDueRelative,periodCount,periodTarget,
+      isNotSpecific,showsOnHomeToday,isScheduledToday,isFlexibleHabit,activeHabits,
+      hkNow,todayKey,dateKey,parseDate,reminderBody,shouldRemindHabit,uid,
+      refreshHomeAfterRecord,renderAll,openModal,closeModal,escapeHtml,escapeAttr,
+      normalizeState,setupReminderLoop,haptic
+    };
+    document.dispatchEvent(new Event('momentum-ready'));
   })();
 })();
