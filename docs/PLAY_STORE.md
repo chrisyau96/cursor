@@ -126,7 +126,7 @@ Upload from this repo (already sized):
 | Feature graphic | `store/play/feature-graphic.png` | 1024×500 |
 | Phone screenshots (need ≥2) | `store/play/screenshots/01-home.png` … `05-settings.png` | 1170×2080 |
 
-- App name: Momentum
+- App name: **2-in-1 Habit & Journal Tracker** (in-app name stays Momentum)
 - Short / full description: `docs/STORE_LISTING.md`
 - Category: **Productivity**
 - Privacy: `https://chrisyau96.github.io/cursor/privacy.html`

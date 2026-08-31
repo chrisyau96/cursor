@@ -1,14 +1,13 @@
 # Store listing copy
 
-**Name:** Momentum
-
-**Subtitle:** Habits, journal, rewards
+**Play listing name:** 2-in-1 Habit & Journal Tracker  
+**In-app name:** Momentum
 
 **Short description (Play, 80 chars):**
 Track habits, journal daily, and back up to Google Drive — free.
 
 **Full description:**
-Momentum is a private habit tracker. Log today’s habits, keep a mood and energy journal, and watch streaks, credits, and gift goals grow from your real completions.
+2-in-1 Habit & Journal Tracker (Momentum) is a private habit tracker and daily journal. Log today’s habits, keep a mood and energy journal, and watch streaks, credits, and gift goals grow from your real completions.
 
 • Flexible schedules (daily, weekly, monthly, not-specific)
 • Today view with one-tap complete and reset
@@ -19,4 +18,4 @@ Momentum is a private habit tracker. Log today’s habits, keep a mood and energ
 
 No account required. Data stays on your device unless you connect Drive.
 
-**Keywords:** habit tracker, streaks, journal, routine, productivity
+**Keywords:** habit tracker, journal, streaks, routine, productivity
