@@ -912,6 +912,43 @@ await test('Not Specific habits renew count after period ends', async () => {
   assert(!done?.includes('done'), 'new period should allow recording again');
 });
 
+await test('Settings expose Google Drive backup, reminders, and widgets', async () => {
+  await page.click('#topSettingsBtn');
+  await page.waitForTimeout(400);
+  assert(await page.locator('#driveConnectBtn').count() === 1, 'Drive connect button missing');
+  const freq = await page.locator('#driveBackupFreq option').count();
+  assert(freq >= 3, 'daily/weekly/off schedules missing');
+  assert(await page.locator('#widgetModeTabs button').count() === 6, 'six widget modes expected');
+  assert(await page.locator('#testReminderBtn').count() === 1, 'test reminder button missing');
+  const note = await page.locator('#reminderRuntimeNote').textContent();
+  assert(!!note, 'reminder runtime note should render');
+});
+
+await test('Widget complete query records a habit without opening a habit row', async () => {
+  const today = hkDateKey();
+  await page.evaluate((today) => {
+    const s = JSON.parse(localStorage.getItem('habitTrackerProductionV7'));
+    s.habits = [{
+      id: 'widget-habit', name: 'Widget Habit', emoji: '📖', color: '#4f46e5', target: 1, xpReward: 5,
+      frequency: { mode: 'daily', days: [0, 1, 2, 3, 4, 5, 6], schedule: { type: 'days' } },
+      reminder: { enabled: false, time: '20:30', message: '' },
+      sortOrder: 0, paused: false, archived: false, groupId: null,
+    }];
+    s.records = [];
+    s.settings.startDate = today;
+    s.settings.onboardingComplete = true;
+    s.settings.vacations = [];
+    localStorage.setItem('habitTrackerProductionV7', JSON.stringify(s));
+  }, today);
+  await page.goto(`${BASE.split('?')[0]}?widgetAction=complete&habitId=widget-habit&date=${today}`, { waitUntil: 'domcontentloaded' });
+  await page.waitForTimeout(1800);
+  const n = await page.evaluate((today) => {
+    const s = JSON.parse(localStorage.getItem('habitTrackerProductionV7'));
+    return (s.records || []).filter(r => r.habitId === 'widget-habit' && r.date === today).length;
+  }, today);
+  assert(n >= 1, `widget action should add a record, got ${n}`);
+});
+
 await browser.close();
 
 const failed = results.filter(r => !r.ok);

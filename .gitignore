@@ -3,3 +3,15 @@ __pycache__/
 .pytest_cache/
 *.pyc
 .DS_Store
+node_modules/
+/www/
+/android/
+/ios/
+.idea/
+.vscode/
+*.jks
+*.keystore
+*.mobileprovision
+local.properties
+assets/js/config.local.js
+package-lock.json

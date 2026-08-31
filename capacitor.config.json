@@ -1,0 +1,20 @@
+{
+  "appId": "app.momentum.habits",
+  "appName": "Momentum",
+  "webDir": "www",
+  "bundledWebRuntime": false,
+  "plugins": {
+    "LocalNotifications": {
+      "smallIcon": "ic_stat_momentum",
+      "iconColor": "#4f46e5",
+      "sound": "beep.wav"
+    }
+  },
+  "android": {
+    "allowMixedContent": false
+  },
+  "ios": {
+    "contentInset": "automatic",
+    "limitsNavigationsToAppBoundDomains": true
+  }
+}
