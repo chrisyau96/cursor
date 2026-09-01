@@ -9,6 +9,11 @@
   Launch.PENDING_KEY = 'momentumWidgetPending';
   Launch.SNAPSHOT_KEY = 'momentumWidgetSnapshot';
   Launch.REMINDER_FIRED_KEY = 'momentumReminderFired';
+  Launch.ADS_PRODUCT_ID = 'remove_ads_lifetime';
+  Launch.ADS_PRICE_LABEL = 'HK$38';
+  Launch.ADMOB_TEST_APP_ID = 'ca-app-pub-3940256099942544~3347511713';
+  Launch.ADMOB_TEST_BANNER = 'ca-app-pub-3940256099942544/6300978111';
+  Launch.NATIVE_SLOT_LIMIT = 200;
   Launch.WIDGET_MODES = [
     { id: 'today', label: 'Today tasks', hint: 'Outstanding habits with complete / reset' },
     { id: 'habits', label: 'Selected habits', hint: 'Due in X days for 1–6 habits' },
@@ -71,7 +76,7 @@
   Launch.buildReminderSlots = function (habits, opts) {
     const todayKey = opts.todayKey;
     const days = Math.max(1, Number(opts.days || 21));
-    const now = opts.now instanceof Date ? opts.now : new Date();
+    const now = opts.now && typeof opts.now.getTime === 'function' ? opts.now : new Date();
     const needs = typeof opts.habitNeedsReminderOn === 'function' ? opts.habitNeedsReminderOn : () => false;
     const bodyFn = typeof opts.reminderBody === 'function' ? opts.reminderBody : (h) => h.name;
     const slots = [];
@@ -98,7 +103,7 @@
       }
     });
     slots.sort((a, b) => a.at - b.at);
-    return slots.slice(0, 60);
+    return slots.slice(0, Launch.NATIVE_SLOT_LIMIT);
   };
 
   Launch.buildRepeatingNative = function (habits, opts) {
@@ -106,10 +111,11 @@
     const notes = [];
     (habits || []).forEach((h) => {
       if (!h || !h.reminder?.enabled || h.paused || h.archived) return;
-      const t = Launch.parseHm(h.reminder.time);
       const f = h.frequency || {};
+      if (f.mode !== 'daily') return;
+      const t = Launch.parseHm(h.reminder.time);
       let days = [0, 1, 2, 3, 4, 5, 6];
-      if (f.mode === 'daily' && Array.isArray(f.days) && f.days.length && f.schedule?.type !== 'any') {
+      if (Array.isArray(f.days) && f.days.length && f.schedule?.type !== 'any') {
         days = f.days.map(Number).filter((d) => d >= 0 && d <= 6);
       }
       days.forEach((d) => {
@@ -127,6 +133,42 @@
     return notes;
   };
 
+  Launch.adsRemoved = function (settings) {
+    return !!(settings && settings.adsRemoved);
+  };
+
+  Launch.shouldShowAds = function (settings) {
+    return !Launch.adsRemoved(settings);
+  };
+
+  Launch.markAdsRemoved = function (settings, at) {
+    const next = Object.assign({}, settings || {});
+    next.adsRemoved = true;
+    next.adsRemovedAt = at || new Date().toISOString();
+    return next;
+  };
+
+  Launch.purchaseOwnsRemoveAds = function (purchases) {
+    return (purchases || []).some((p) => {
+      if (!p) return false;
+      const id = p.productIdentifier || p.productId || p.sku || p.product || '';
+      if (id !== Launch.ADS_PRODUCT_ID) return false;
+      const state = String(p.purchaseState || p.state || '').toLowerCase();
+      if (state && state !== 'purchased' && state !== '1' && state !== 'owned') return false;
+      return true;
+    });
+  };
+
+  Launch.toNativeNotifications = function (slots) {
+    return (slots || []).map((s) => ({
+      id: s.id,
+      title: s.title || 'Momentum',
+      body: s.body || '',
+      schedule: { at: new Date(s.at), allowWhileIdle: true },
+      extra: s.extra || { habitId: s.habitId, date: s.dateKey },
+    }));
+  };
+
   Launch.nextWebTimerDelay = function (slots, nowMs) {
     const next = (slots || []).find((s) => s.at > nowMs);
     if (!next) return null;
@@ -142,11 +184,8 @@
       if (!action || !action.type) return;
       if (action.type === 'complete' && action.habitId) {
         const date = action.date || todayKey;
-        const exists = (state.records || []).some((r) => r.habitId === action.habitId && r.date === date && r.note === 'widget');
-        if (!exists) {
-          state.records = state.records || [];
-          state.records.push({ id: uid(), habitId: action.habitId, date, at: action.at || nowIso, note: 'widget' });
-        }
+        state.records = state.records || [];
+        state.records.push({ id: uid(), habitId: action.habitId, date, at: action.at || nowIso, note: 'widget' });
         applied.push(action);
       } else if (action.type === 'reset' && action.habitId) {
         const date = action.date || todayKey;

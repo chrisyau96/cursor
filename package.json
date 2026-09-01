@@ -1,7 +1,7 @@
 {
   "name": "momentum",
   "private": true,
-  "version": "56.0.0",
+  "version": "57.0.0",
   "description": "Momentum habit tracker — PWA and Capacitor store shell",
   "scripts": {
     "test:launch": "node scripts/test-launch.mjs",
@@ -12,12 +12,14 @@
     "screenshots": "node scripts/play-screenshots.mjs"
   },
   "dependencies": {
+    "@capacitor-community/admob": "^7.2.0",
     "@capacitor/android": "^7.4.3",
     "@capacitor/app": "^7.0.2",
     "@capacitor/core": "^7.4.3",
     "@capacitor/filesystem": "^7.1.4",
     "@capacitor/local-notifications": "^7.0.2",
-    "@capgo/capacitor-social-login": "^7.20.0"
+    "@capgo/capacitor-social-login": "^7.20.0",
+    "@capgo/native-purchases": "^7.19.3"
   },
   "devDependencies": {
     "@capacitor/cli": "^7.4.3"

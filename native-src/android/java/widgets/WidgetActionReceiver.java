@@ -21,10 +21,9 @@ public class WidgetActionReceiver extends BroadcastReceiver {
     }
     WidgetStore.refreshAll(context);
     try {
-      Intent open = new Intent(Intent.ACTION_VIEW, android.net.Uri.parse(
-        "momentum://widget/" + type + (habitId != null ? ("?habitId=" + habitId) : "")
-      ));
-      open.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
+      String path = "journal".equals(type) ? "momentum://widget/journal" : "momentum://widget/open";
+      Intent open = new Intent(Intent.ACTION_VIEW, android.net.Uri.parse(path));
+      open.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_SINGLE_TOP);
       context.startActivity(open);
     } catch (Exception ignored) {}
   }

@@ -137,19 +137,32 @@ Upload from this repo (already sized):
 
 ### App content
 
-- **Ads** — No
-- **Content rating** — Utility / Productivity / Lifestyle; no violence; no public user chat
+- **Ads** — **Yes**, my app contains ads
+- **Content rating** — Utility / Productivity / Lifestyle; no violence; no public user chat; **in-app purchases: Yes** (HK$38 lifetime remove-ads)
 - **Target audience** — do **not** tick “designed for children”. 18+ is safest
 - **News / COVID** — No
 - **Data safety**
-  - Collected? **Yes, optional**, only if the user taps Connect Google Drive
-  - Types: Files and docs (backup JSON); App activity (habit completions inside that file)
-  - Shared with other companies? **No** (Drive is the user’s own Google account)
+  - Collected? **Yes**
+  - Types: Files and docs (optional Drive backup); App activity (habit completions inside that file); Advertising ID (AdMob); Purchases (Play Billing)
+  - Shared with other companies? AdMob/Google for ads. Drive stays in the user’s Google account
   - Sold? **No**
   - Encrypted in transit: Yes
-  - Users can request deletion: Yes (Disconnect Drive + Google Account → Third-party access)
+  - Users can request deletion: Yes (Disconnect Drive + Google Account → Third-party access; reset advertising ID in Android settings)
 
 Package name is locked to `com.dincey.habitjournal` on the first AAB upload. It cannot change.
+
+### In-app product (required before testers can buy)
+
+Monetize → In-app products → Create product:
+
+- Product ID: `remove_ads_lifetime`
+- Type: one-time (managed product)
+- Price: **HK$38**
+- Activate it before Internal testing if you want to buy/restore on a real device
+
+The website cannot charge Play Billing. It shows the house ad and tells the user to buy in the Play app.
+
+AdMob uses Google’s **test** app id in `android/app/src/main/res/values/strings.xml` (`admob_app_id`) until you paste your own AdMob app id. The house banner still appears so the free app is clearly ad-supported.
 
 ---
 
@@ -166,7 +179,7 @@ Public Play users **never** see this. Same package as Production.
 3. Create release → upload `.aab` → Start rollout
 4. Open the opt-in link on the phone (signed into that Gmail) → Install
 
-Confirm: reminders with the app killed; Drive popup once then silent; Widgets → Momentum.
+Confirm: reminders with the app killed; Drive popup once then silent; Widgets → Momentum; ads banner; HK$38 remove-ads + Restore.
 
 ### Closed testing (only if Google blocks Production)
 

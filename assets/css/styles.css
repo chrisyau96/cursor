@@ -8,7 +8,7 @@
   --soft-pink:#eef2ff; --soft-purple:#f3efff; --soft-blue:#eff6ff; --soft-green:#e9fbf1; --soft-orange:#fff4e8;
   --b-perfect:#16a34a; --b-good:#86efac; --b-partial:#fde68a; --b-low:#fecaca; --b-zero:#f87171;
   --shadow-sm:0 6px 16px rgba(15,23,42,.06); --shadow:0 14px 34px rgba(15,23,42,.10); --shadow-lg:0 24px 60px rgba(15,23,42,.18);
-  --radius:20px; --radius-sm:14px; --tabbar-h:62px;
+  --radius:20px; --radius-sm:14px; --tabbar-h:62px; --ad-banner-h:0px;
   --safe-top:env(safe-area-inset-top,0px); --safe-bottom:env(safe-area-inset-bottom,0px);
   --font:"Inter",-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
 }
@@ -379,10 +379,10 @@ input[type=range]::-moz-range-track{height:6px;border-radius:999px;background:va
 body.help-sheet-open{overflow:hidden}
 #settingsView{padding-bottom:8px}
 .settings-version{text-align:center;font-size:11px;color:var(--muted);margin:20px 2px 16px;padding-bottom:2px}
-.settings-save-bar{position:fixed;left:50%;transform:translateX(-50%);bottom:calc(var(--tabbar-h) + var(--safe-bottom));width:min(480px,100%);display:flex;gap:10px;padding:12px 14px;background:color-mix(in srgb,var(--card) 94%,transparent);backdrop-filter:blur(10px);border-top:1px solid var(--line);box-shadow:0 -10px 30px rgba(15,23,42,.1);z-index:90}
+.settings-save-bar{position:fixed;left:50%;transform:translateX(-50%);bottom:calc(var(--tabbar-h) + var(--safe-bottom) + var(--ad-banner-h));width:min(480px,100%);display:flex;gap:10px;padding:12px 14px;background:color-mix(in srgb,var(--card) 94%,transparent);backdrop-filter:blur(10px);border-top:1px solid var(--line);box-shadow:0 -10px 30px rgba(15,23,42,.1);z-index:90}
 .settings-save-bar[hidden]{display:none!important}
 .settings-save-bar .btn-primary,.settings-save-bar .btn-secondary{flex:1;margin:0}
-#settingsView.view.active{padding-bottom:calc(80px + var(--tabbar-h) + var(--safe-bottom))}
+#settingsView.view.active{padding-bottom:calc(80px + var(--tabbar-h) + var(--safe-bottom) + var(--ad-banner-h))}
 .rule-card.rule-flash{animation:rule-flash .9s ease}
 @keyframes rule-flash{0%,100%{box-shadow:0 0 0 0 transparent}35%{box-shadow:0 0 0 3px var(--brand-soft)}}
 button,.nav-item,.switch,.wcell,.check-btn,.icon-btn,.act-btn,.btn-primary,.btn-secondary,.info-tip{touch-action:manipulation}
@@ -403,6 +403,12 @@ button,.nav-item,.switch,.wcell,.check-btn,.icon-btn,.act-btn,.btn-primary,.btn-
 .log-filter-grid{display:grid;grid-template-columns:1fr 1fr auto;gap:8px;align-items:end}
 
 /* Bottom nav + FAB — iOS-style */
+.ad-slot{flex:0 0 auto;display:flex;align-items:center;gap:10px;padding:8px 12px;background:color-mix(in srgb,var(--brand-soft) 70%,var(--card));border-top:.5px solid var(--line);min-height:52px}
+.ad-slot[hidden]{display:none!important}
+.ad-slot-kicker{flex:0 0 auto;font-size:9px;font-weight:800;letter-spacing:.08em;text-transform:uppercase;color:var(--muted);border:1px solid var(--line);border-radius:4px;padding:2px 5px}
+.ad-slot-copy{flex:1;min-width:0;display:flex;flex-direction:column;gap:1px;font-size:12px;line-height:1.25}
+.ad-slot-copy span{color:var(--muted);font-size:11px}
+body.has-ads{--ad-banner-h:56px}
 .tabbar{position:relative;flex-shrink:0;z-index:40;display:grid;grid-template-columns:repeat(5,1fr);align-items:center;height:calc(var(--tabbar-h) + var(--safe-bottom));padding:0 4px var(--safe-bottom);background:var(--card);border-top:.5px solid color-mix(in srgb,var(--line) 80%,transparent)}
 .nav-item{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:3px;color:var(--muted);font-size:10px;font-weight:600;letter-spacing:-.01em;padding:8px 0;min-height:48px;transition:color .2s ease}
 .nav-svg{width:24px;height:24px;flex:0 0 auto;display:block;opacity:.72;transition:opacity .2s ease,transform .2s ease}
@@ -511,7 +517,7 @@ button,.nav-item,.switch,.wcell,.check-btn,.icon-btn,.act-btn,.btn-primary,.btn-
 
 /* Empty / toast / xp pop */
 .empty{padding:16px;text-align:center;color:var(--muted);font-size:13px;background:#fbfbff;border:1px dashed var(--line);border-radius:16px}
-.toast{position:fixed;left:50%;bottom:calc(var(--tabbar-h) + 16px + var(--safe-bottom));transform:translateX(-50%);background:rgba(21,32,51,.94);color:#fff;padding:10px 16px;border-radius:999px;font-size:12.5px;font-weight:700;z-index:200;opacity:0;pointer-events:none;transition:.25s;box-shadow:var(--shadow-lg);max-width:min(92vw,340px);text-align:center;line-height:1.35}
+.toast{position:fixed;left:50%;bottom:calc(var(--tabbar-h) + 16px + var(--safe-bottom) + var(--ad-banner-h));transform:translateX(-50%);background:rgba(21,32,51,.94);color:#fff;padding:10px 16px;border-radius:999px;font-size:12.5px;font-weight:700;z-index:200;opacity:0;pointer-events:none;transition:.25s;box-shadow:var(--shadow-lg);max-width:min(92vw,340px);text-align:center;line-height:1.35}
 .toast.show{opacity:1}
 :root[data-theme="dark"] .toast{background:rgba(241,245,249,.96);color:#0f172a;border:1px solid var(--line-strong)}
 .xp-pop{background:linear-gradient(135deg,#f59e0b,#ea580c);color:#fff;padding:5px 11px;border-radius:999px;font-weight:900;box-shadow:0 6px 16px rgba(234,88,12,.28);animation:xp-pop .9s ease both;pointer-events:none;font-size:12px;line-height:1.2;white-space:nowrap}

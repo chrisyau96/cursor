@@ -79,15 +79,15 @@ Prepare:
 - Privacy policy URL: `https://chrisyau96.github.io/cursor/privacy.html` (after this ships to GitHub Pages)
 - Icon: 512×512 (`assets/icon-512.png`) plus a 1024×1024 App Store icon
 - Screenshots: phone, 6.7" and 5.5" (iOS) / phone + 7" tablet (Play)
-- Content rating questionnaire (no user-generated public content; no ads)
+- Content rating questionnaire (no user-generated public content; **ads yes**; **IAP yes** — HK$38 lifetime remove-ads)
 - Support URL / email
 
 ## 4. Google Play Console
 
 1. Pay the developer fee and create the app (Free, Productivity).
-2. Complete Data safety: data is stored on device; Drive backup is optional user-initiated cloud backup; no selling of data.
+2. Complete Data safety: on-device data; optional Drive backup; Advertising ID for AdMob; Play Billing for remove-ads; no selling of data.
 3. Upload the `.aab` to Internal testing, then Production.
-4. Countries, ads declaration (no ads).
+4. Countries, ads declaration (**Yes, contains ads**), and one managed product `remove_ads_lifetime` priced **HK$38**.
 
 Review often takes a few days.
 

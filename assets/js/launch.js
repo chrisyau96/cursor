@@ -397,23 +397,9 @@
       const pending = await cap().LocalNotifications.getPending();
       const ids = (pending?.notifications || []).map((n) => ({ id: n.id }));
       if (ids.length) await cap().LocalNotifications.cancel({ notifications: ids });
-      const repeating = Core.buildRepeatingNative(app().activeHabits(), {
-        reminderBody: (h) => app().reminderBody(h),
-      });
-      if (!repeating.length) return;
-      await cap().LocalNotifications.schedule({
-        notifications: repeating.map((s) => ({
-          id: s.id,
-          title: s.title,
-          body: s.body,
-          schedule: {
-            on: { weekday: s.weekday, hour: s.hour, minute: s.minute },
-            allowWhileIdle: true,
-            repeats: true,
-          },
-          extra: s.extra,
-        })),
-      });
+      const notifications = Core.toNativeNotifications(slots || []);
+      if (!notifications.length) return;
+      await cap().LocalNotifications.schedule({ notifications });
     } catch (e) { /* keep web fallback */ }
   }
 
@@ -587,6 +573,16 @@
     await writeWidgetSnapshot();
   }
 
+  async function ingestNativeWidgetPending(action) {
+    await applyPendingFromNative();
+    if (!action) return;
+    if (action.type === 'complete' || action.type === 'reset') {
+      await writeWidgetSnapshot();
+      return;
+    }
+    await handleWidgetAction(action);
+  }
+
   function consumeLaunchQuery() {
     const action = Core.parseQueryActions(location.search);
     if (!action) return;
@@ -646,6 +642,126 @@
     renderWidgetPreview();
   }
 
+  function renderAdsUi() {
+    const show = Core.shouldShowAds(settings());
+    const banner = document.getElementById('adBanner');
+    if (banner) banner.hidden = !show;
+    document.body.classList.toggle('has-ads', show);
+    const status = document.getElementById('adsStatus');
+    if (status) {
+      status.className = 'sync-status-panel' + (show ? '' : ' connected');
+      status.innerHTML = show
+        ? '<strong>Ads are on</strong><div class="small-note" style="margin-top:6px">Free version. One-time HK$38 removes every ad for life.</div>'
+        : '<strong>Ads removed</strong><div class="small-note" style="margin-top:6px">Lifetime purchase is on this device.</div>';
+    }
+    const buy = document.getElementById('removeAdsBtn');
+    if (buy) buy.classList.toggle('hidden-action', !show);
+  }
+
+  async function grantAdsRemoved() {
+    const st = state();
+    Object.assign(st.settings, Core.markAdsRemoved(st.settings));
+    await app().save(true, { render: 'none' });
+    renderAdsUi();
+    try { await cap().AdMob?.hideBanner?.(); } catch (e) { /* ignore */ }
+  }
+
+  async function listStorePurchases() {
+    const plugin = cap().NativePurchases;
+    if (!plugin) return [];
+    const query = { productType: 'inapp' };
+    try {
+      if (typeof plugin.restorePurchases === 'function') {
+        try { await plugin.restorePurchases(); } catch (e) { /* continue to list */ }
+      }
+      if (typeof plugin.getPurchases === 'function') {
+        const res = await plugin.getPurchases(query);
+        return res?.purchases || res || [];
+      }
+    } catch (e) { return []; }
+    return [];
+  }
+
+  async function restoreAdsPurchase(silent) {
+    const owned = Core.purchaseOwnsRemoveAds(await listStorePurchases());
+    if (owned && !Core.adsRemoved(settings())) {
+      await grantAdsRemoved();
+      if (!silent) app().toast('Purchase restored. Ads removed.');
+      return true;
+    }
+    if (owned) {
+      renderAdsUi();
+      if (!silent) app().toast('Ads already removed.');
+      return true;
+    }
+    if (!silent) {
+      if (!isNative() || !cap().NativePurchases) {
+        app().toast('Restore works in the Play Store app after you buy HK$38 remove-ads.');
+      } else {
+        app().toast('No remove-ads purchase found for this Google account.');
+      }
+    }
+    renderAdsUi();
+    return false;
+  }
+
+  async function purchaseRemoveAds() {
+    if (Core.adsRemoved(settings())) {
+      app().toast('Ads are already removed.');
+      return;
+    }
+    const plugin = cap().NativePurchases;
+    if (!isNative() || !plugin) {
+      app().toast('HK$38 lifetime remove-ads is a Play Store purchase. Install the Android app to buy.');
+      return;
+    }
+    try {
+      if (typeof plugin.isBillingSupported === 'function') {
+        const billing = await plugin.isBillingSupported();
+        if (billing && billing.isBillingSupported === false) {
+          app().toast('Google Play Billing is not available on this device.');
+          return;
+        }
+      }
+      await plugin.purchaseProduct({
+        productIdentifier: Core.ADS_PRODUCT_ID,
+        productType: 'inapp',
+        quantity: 1,
+      });
+      await grantAdsRemoved();
+      app().toast('Ads removed for life. Thank you!');
+    } catch (e) {
+      const msg = String(e?.message || e || '');
+      if (/cancel/i.test(msg)) app().toast('Purchase cancelled');
+      else app().toast(msg || 'Purchase failed');
+    }
+  }
+
+  async function showAdsIfNeeded() {
+    renderAdsUi();
+    if (!Core.shouldShowAds(settings())) {
+      try { await cap().AdMob?.hideBanner?.(); } catch (e) { /* ignore */ }
+      return;
+    }
+    const admob = cap().AdMob;
+    if (!isNative() || !admob) return;
+    try {
+      const appId = (settings().admobAppId || Core.ADMOB_TEST_APP_ID).trim();
+      const bannerId = (settings().admobBannerId || Core.ADMOB_TEST_BANNER).trim();
+      if (typeof admob.initialize === 'function') {
+        await admob.initialize({ initializeForTesting: /3940256099942544/.test(appId), appIdAndroid: appId });
+      }
+      await admob.showBanner({
+        adId: bannerId,
+        adSize: 'ADAPTIVE_BANNER',
+        position: 'BOTTOM_CENTER',
+        margin: 64,
+      });
+      const banner = document.getElementById('adBanner');
+      if (banner) banner.hidden = true;
+    } catch (e) { /* house banner stays visible */ }
+  }
+
   async function saveWidgetConfig(patch) {
     const st = state();
     st.settings.widget = Core.normalizeWidgetConfig(Object.assign({}, st.settings.widget, patch));
@@ -657,6 +773,7 @@
   async function onStateSaved() {
     await writeWidgetSnapshot();
     await scheduleReminders();
+    renderAdsUi();
   }
 
   function bindUi() {
@@ -705,6 +822,9 @@
       } else ids = ids.filter((x) => x !== id);
       void saveWidgetConfig({ habitIds: ids, layout: Math.max(ids.length, 1) });
     });
+    document.getElementById('removeAdsBtn')?.addEventListener('click', () => { void purchaseRemoveAds(); });
+    document.getElementById('restoreAdsPurchaseBtn')?.addEventListener('click', () => { void restoreAdsPurchase(); });
+    document.getElementById('adBannerCta')?.addEventListener('click', () => { void purchaseRemoveAds(); });
   }
 
   let booted = false;
@@ -714,17 +834,20 @@
     bindUi();
     renderDriveUi();
     renderWidgetUi();
+    renderAdsUi();
     await applyPendingFromNative();
     consumeLaunchQuery();
     await writeWidgetSnapshot();
     if (settings().reminders) await requestNotifPermission();
     await scheduleReminders();
+    await restoreAdsPurchase(true);
+    await showAdsIfNeeded();
     await maybeAutoDriveBackup();
     try {
       cap().App?.addListener?.('appUrlOpen', (event) => {
-        const action = Core.parseAppUrl(event.url);
-        if (action) void handleWidgetAction(action);
+        void ingestNativeWidgetPending(Core.parseAppUrl(event.url));
       });
+      cap().App?.addListener?.('resume', () => { void applyPendingFromNative(); });
       cap().LocalNotifications?.addListener?.('localNotificationActionPerformed', (event) => {
         const extra = event?.notification?.extra || {};
         if (extra.habitId) void handleWidgetAction({ type: 'open', view: 'homeView' });
@@ -738,6 +861,7 @@
     maybeAutoDriveBackup,
     renderDriveUi,
     renderWidgetUi,
+    renderAdsUi,
     handleWidgetAction,
     requestNotifPermission,
     isNative,

@@ -24,9 +24,25 @@ This is not locked. Edit it:
 
 The green check stays. You do not start the whole 11-task setup over.
 
-## Ads — **No**
+## Monetize — one lifetime product
 
-**No, my app does not contain ads.**
+Play Console → Monetize → In-app products → Create product.
+
+| Field | Value |
+|---|---|
+| Product ID | `remove_ads_lifetime` (cannot change later) |
+| Name | Remove ads |
+| Description | Remove all ads forever |
+| Status | Active |
+| Price | **HK$38** (one-time managed product, not a subscription) |
+
+The Play app buys this SKU and hides every banner. Restore purchase uses the same Google account.
+
+## Ads — **Yes**
+
+**Yes, my app contains ads.**
+
+Free users see a banner (house ad, plus AdMob in the Play app). A one-time **HK$38** Play purchase (`remove_ads_lifetime`) removes every ad for life. Restore works on a new phone with the same Google account.
 
 ## Content rating
 
@@ -40,9 +56,9 @@ Start questionnaire → IARC.
 | Language | None / mild if asked |
 | Controlled substances | None |
 | User interaction / UGC | No public sharing, no user-to-user chat |
-| In-app purchases | No (credits are on-device play money, not Play Billing) |
+| In-app purchases | **Yes** — one lifetime product: remove ads, HK$38. On-device “credits” are play money, not Play Billing |
 | Location sharing | No |
-| Digital purchases | No |
+| Digital purchases | Yes (the remove-ads IAP only) |
 
 Submit and apply the rating it gives (usually Everyone / PEGI 3).
 
@@ -56,19 +72,19 @@ Submit and apply the rating it gives (usually Everyone / PEGI 3).
 
 ## Data safety
 
-Collected? **Yes** — only if the user taps Connect Google Drive.
+Collected? **Yes**.
 
 | Prompt | Answer |
 |---|---|
-| Data collected | Yes (optional) |
-| Data types | **Files and docs** (backup JSON). **App activity** only as habit completions inside that file |
+| Data collected | Yes |
+| Data types | **Files and docs** (optional Drive backup JSON). **App activity** only as habit completions inside that file. **Device or other IDs → Advertising ID** (Google AdMob, ads only). **Purchases** (Play Billing, restore remove-ads) |
 | Collected | Yes |
-| Shared with other companies | **No** |
+| Shared with other companies | Advertising ID is processed by Google AdMob for serving ads. Drive stays in the user’s Google account. **Not sold** |
 | Sold | **No** |
 | Encrypted in transit | Yes |
 | Users can request deletion | Yes |
-| Purpose | App functionality (backup) |
-| Optional vs required | Optional — app works without Drive |
+| Purpose | App functionality (backup, IAP restore). Advertising (banner ads until remove-ads is bought) |
+| Optional vs required | Drive and ads-ID for ads are optional. The app works after remove-ads with no ads SDK calls |
 
 Deletion: Disconnect Drive in Settings, and Google Account → Security → Third-party access.
 

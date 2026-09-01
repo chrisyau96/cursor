@@ -28,18 +28,18 @@ On the Dashboard, open **Finish setting up your app → View tasks**. Work top t
 ### 2. App content (same View tasks list)
 
 - Privacy policy URL: `https://chrisyau96.github.io/cursor/privacy.html`
-- Ads: **No, my app does not contain ads**
+- Ads: **Yes, my app contains ads** (banner; hide forever with HK$38 lifetime IAP `remove_ads_lifetime`)
 - Sign-in details: **All functionality is available without special access** (do not require a reviewer login)
-- Content rating: start questionnaire → **Utility, Productivity, Calendar** / Lifestyle. No violence, no user-generated public sharing, no in-app purchases required
+- Content rating: start questionnaire → **Utility, Productivity, Calendar** / Lifestyle. No violence, no user-generated public sharing. **In-app purchases: Yes** (HK$38 lifetime remove-ads). On-device credits are not Play Billing.
 - Target audience: do **not** select “Designed for children”. 18+ is safest
 - News: No
 - Data safety:
-  - Data collected: **Yes**, only if the user taps Connect Google Drive
-  - Data types: Files and docs (backup JSON); App activity (habit completions inside that file)
-  - Shared with other companies: **No**. Sold: **No**
+  - Data collected: **Yes**
+  - Data types: Files and docs (optional Drive backup); App activity (habit completions inside that file); Advertising ID (AdMob); Purchases (Play Billing restore)
+  - Shared with other companies: AdMob/Google for ads only. Sold: **No**
   - Encrypted in transit: Yes
-  - Users can request deletion: Yes (Disconnect Drive + Google Account → Third-party access)
-  - Purpose: App functionality (backup)
+  - Users can request deletion: Yes (Disconnect Drive + Google Account → Third-party access; reset advertising ID in Android settings)
+  - Purpose: App functionality (backup, IAP) and advertising (until remove-ads)
 
 ### 3. Then Internal testing (you, same day)
 

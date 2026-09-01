@@ -33,6 +33,16 @@ if (existsSync('android/app/src/main')) {
     if (!xml.includes('android:host="widget"')) {
       xml = xml.replace('</activity>', `${activityFilter}\n        </activity>`);
     }
+    if (!xml.includes('com.google.android.gms.ads.APPLICATION_ID')) {
+      xml = xml.replace('</application>', `        <meta-data
+            android:name="com.google.android.gms.ads.APPLICATION_ID"
+            android:value="@string/admob_app_id" />
+    </application>`);
+    }
+    if (!xml.includes('com.android.vending.BILLING')) {
+      xml = xml.replace('</manifest>', `    <uses-permission android:name="com.android.vending.BILLING" />
+</manifest>`);
+    }
     writeFileSync(manifestPath, xml);
   }
   copied++;

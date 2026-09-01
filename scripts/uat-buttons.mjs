@@ -50,6 +50,7 @@ function demoState() {
       reminders: true, globalReminderTime: '20:30', defaultReminderMessage: 'Hi {habit}!',
       dataMode: 'real', autoBackup: false, dailyBackup: false, fileConnected: false, backupFileName: '',
       onboardingComplete: true, vacations: [],
+      adsRemoved: false, adsRemovedAt: '',
       rewards: {
         creditRules: [{ id: uid(), pct: 50, amount: 2 }, { id: uid(), pct: 100, amount: 10 }],
         giftRules: [{ id: giftRuleId, gift: 'Buffet', icon: '🍽️', pct: 80, days: 30 }],
@@ -922,6 +923,68 @@ await test('Settings expose Google Drive backup, reminders, and widgets', async 
   assert(await page.locator('#testReminderBtn').count() === 1, 'test reminder button missing');
   const note = await page.locator('#reminderRuntimeNote').textContent();
   assert(!!note, 'reminder runtime note should render');
+  assert(await page.locator('#removeAdsBtn').count() === 1, 'remove-ads button missing');
+  assert(await page.locator('#restoreAdsPurchaseBtn').count() === 1, 'restore purchase button missing');
+  const adsCopy = await page.locator('#adsStatus').textContent();
+  assert(/Ads are on|Free version/i.test(adsCopy || ''), 'ads status should say ads are on');
+});
+
+await test('House ad banner shows until lifetime purchase is on device', async () => {
+  await page.evaluate(() => {
+    const s = JSON.parse(localStorage.getItem('habitTrackerProductionV7'));
+    s.settings.adsRemoved = false;
+    s.settings.adsRemovedAt = '';
+    localStorage.setItem('habitTrackerProductionV7', JSON.stringify(s));
+  });
+  await page.reload({ waitUntil: 'domcontentloaded' });
+  await page.waitForTimeout(800);
+  const shown = await page.evaluate(() => {
+    const el = document.getElementById('adBanner');
+    return !!(el && !el.hidden && document.body.classList.contains('has-ads'));
+  });
+  assert(shown, 'free users should see the house ad banner');
+  await page.click('#adBannerCta');
+  await page.waitForTimeout(400);
+  const toast = await page.locator('#toast').textContent().catch(() => '');
+  assert(/Play|HK\$38|purchase/i.test(toast || ''), 'web buy should point to Play HK$38 purchase, got ' + toast);
+});
+
+await test('adsRemoved hides banner and buy button', async () => {
+  await page.evaluate(() => {
+    const s = JSON.parse(localStorage.getItem('habitTrackerProductionV7'));
+    s.settings.adsRemoved = true;
+    s.settings.adsRemovedAt = '2026-09-01T00:00:00.000Z';
+    localStorage.setItem('habitTrackerProductionV7', JSON.stringify(s));
+  });
+  await page.reload({ waitUntil: 'domcontentloaded' });
+  await page.waitForTimeout(800);
+  const hidden = await page.evaluate(() => {
+    const el = document.getElementById('adBanner');
+    return !!(el && el.hidden && !document.body.classList.contains('has-ads'));
+  });
+  assert(hidden, 'purchased users should not see ads');
+  await page.click('#topSettingsBtn');
+  await page.waitForTimeout(400);
+  const status = await page.locator('#adsStatus').textContent();
+  assert(/removed/i.test(status || ''), 'settings should say ads removed');
+  const buyHidden = await page.locator('#removeAdsBtn').evaluate((el) => el.classList.contains('hidden-action'));
+  assert(buyHidden, 'remove-ads button hides after purchase');
+});
+
+await test('Widget preview switches through all six modes', async () => {
+  await page.click('#topSettingsBtn');
+  await page.waitForTimeout(300);
+  const modes = ['today', 'habits', 'streak', 'credits', 'gift', 'journal'];
+  for (const mode of modes) {
+    await page.locator(`#widgetModeTabs button[data-widget-mode="${mode}"]`).click();
+    await page.waitForTimeout(250);
+    const on = await page.locator(`#widgetModeTabs button[data-widget-mode="${mode}"]`).evaluate((el) => el.classList.contains('active'));
+    assert(on, mode + ' tab should be active');
+    const preview = await page.locator('#widgetPreview').innerHTML();
+    assert(preview.length > 10, mode + ' preview should render');
+  }
+  const stored = await page.evaluate(() => JSON.parse(localStorage.getItem('habitTrackerProductionV7')).settings.widget.mode);
+  assert(stored === 'journal', 'last widget mode should persist, got ' + stored);
 });
 
 await test('Widget complete query records a habit without opening a habit row', async () => {
