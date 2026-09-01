@@ -43,6 +43,10 @@ if (existsSync('android/app/src/main')) {
       xml = xml.replace('</manifest>', `    <uses-permission android:name="com.android.vending.BILLING" />
 </manifest>`);
     }
+    if (!xml.includes('SCHEDULE_EXACT_ALARM')) {
+      xml = xml.replace('</manifest>', `    <uses-permission android:name="android.permission.SCHEDULE_EXACT_ALARM" />
+</manifest>`);
+    }
     writeFileSync(manifestPath, xml);
   }
   copied++;

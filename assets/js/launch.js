@@ -368,7 +368,14 @@
   async function requestNotifPermission() {
     if (isNative() && cap().LocalNotifications) {
       const perm = await cap().LocalNotifications.requestPermissions();
-      return perm?.display === 'granted' || perm?.granted === true;
+      const granted = perm?.display === 'granted' || perm?.granted === true;
+      try {
+        const exact = await cap().LocalNotifications.checkExactNotificationSetting?.();
+        if (granted && exact && exact.exact_alarm !== 'granted') {
+          await cap().LocalNotifications.changeExactNotificationSetting?.();
+        }
+      } catch (e) { /* inexact alarms still fire */ }
+      return granted;
     }
     if (!('Notification' in window)) return false;
     if (Notification.permission === 'granted') return true;
