@@ -220,4 +220,4 @@ GitHub Pages updates on every `main` merge. The Play app updates only when you s
 | Drive popup every time | Android OAuth client with **both** upload-key SHA-1 and Play App Signing SHA-1. Paste the **Web** client ID in Settings |
 | “Package name already used” | `com.dincey.habitjournal` must be unique; change `appId` in `capacitor.config.json` **before** the first upload |
 | Closed test not counting | Testers did not click the opt-in link, or you used Internal instead of Closed |
-| AAB rejected for target SDK | `targetSdk` is 35 in `android/variables.gradle` |
+| AAB rejected for target SDK | `targetSdk` is 36 in `android/variables.gradle` |
