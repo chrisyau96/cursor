@@ -1,7 +1,7 @@
 apply plugin: 'com.android.application'
 
 android {
-    namespace "app.momentum.habits"
+    namespace "com.dincey.habitjournal"
     compileSdk rootProject.ext.compileSdkVersion
     defaultConfig {
         applicationId "com.dincey.habitjournal"

@@ -1,4 +1,4 @@
-package app.momentum.habits.widgets;
+package com.dincey.habitjournal.widgets;
 
 import android.appwidget.AppWidgetManager;
 import android.content.ComponentName;

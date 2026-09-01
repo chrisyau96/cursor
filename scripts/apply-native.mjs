@@ -15,7 +15,7 @@ function copyDir(src, dest) {
 
 let copied = 0;
 if (existsSync('android/app/src/main')) {
-  copyDir('native-src/android/java', 'android/app/src/main/java/app/momentum/habits');
+  copyDir('native-src/android/java', 'android/app/src/main/java/com/dincey/habitjournal');
   copyDir('native-src/android/res', 'android/app/src/main/res');
   const manifestPath = 'android/app/src/main/AndroidManifest.xml';
   const activityFilter = `            <intent-filter>
@@ -45,7 +45,7 @@ if (existsSync('ios/App/App')) {
   copyDir('native-src/ios', 'ios/App/MomentumWidgets');
   copied++;
   console.log('Copied iOS widget sources to ios/App/MomentumWidgets');
-  console.log('Still required in Xcode: File → New → Target → Widget Extension, then add these Swift files and App Group group.app.momentum.habits');
+  console.log('Still required in Xcode: File → New → Target → Widget Extension, then add these Swift files and App Group group.com.dincey.habitjournal');
 } else {
   console.log('Skip iOS (run npx cap add ios on a Mac)');
 }

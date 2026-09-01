@@ -66,7 +66,7 @@ npx cap sync ios
 npx cap open ios
 ```
 
-3. In Xcode: add a **Widget Extension** target, replace it with files from `ios/App/MomentumWidgets`, enable App Group `group.app.momentum.habits` on the app **and** the widget, set the URL scheme `momentum`.
+3. In Xcode: add a **Widget Extension** target, replace it with files from `ios/App/MomentumWidgets`, enable App Group `group.com.dincey.habitjournal` on the app **and** the widget, set the URL scheme `momentum`.
 4. Archive → Distribute to App Store Connect.
 
 ## 3. Store listings (both stores)

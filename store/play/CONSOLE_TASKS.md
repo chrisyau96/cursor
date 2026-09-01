@@ -12,6 +12,18 @@ Choose **All functionality is available without special access**.
 
 Do **not** select the restricted / “yes, reviewers need a login” option. There is no required account. Google reviewers can use every screen. Google Drive backup is optional and they can skip Connect.
 
+### If you already submitted Yes
+
+This is not locked. Edit it:
+
+1. Play Console → your app → left menu **Policy and programs → App content** (or Dashboard → Finish setting up → **Sign-in details**)
+2. Sign-in details → **Manage** (or **Edit**)
+3. Switch to **All functionality is available without special access**
+4. Delete any username / password / notes you typed
+5. **Save**
+
+The green check stays. You do not start the whole 11-task setup over.
+
 ## Ads — **No**
 
 **No, my app does not contain ads.**

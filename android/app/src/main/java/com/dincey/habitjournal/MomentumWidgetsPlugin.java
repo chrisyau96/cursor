@@ -1,11 +1,11 @@
-package app.momentum.habits;
+package com.dincey.habitjournal;
 
 import com.getcapacitor.Plugin;
 import com.getcapacitor.PluginCall;
 import com.getcapacitor.PluginMethod;
 import com.getcapacitor.annotation.CapacitorPlugin;
 import org.json.JSONObject;
-import app.momentum.habits.widgets.WidgetStore;
+import com.dincey.habitjournal.widgets.WidgetStore;
 
 @CapacitorPlugin(name = "MomentumWidgets")
 public class MomentumWidgetsPlugin extends Plugin {

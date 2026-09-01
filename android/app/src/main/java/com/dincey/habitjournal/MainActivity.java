@@ -1,4 +1,4 @@
-package app.momentum.habits;
+package com.dincey.habitjournal;
 
 import android.os.Bundle;
 import com.getcapacitor.BridgeActivity;

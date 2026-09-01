@@ -1,4 +1,4 @@
-package app.momentum.habits.widgets;
+package com.dincey.habitjournal.widgets;
 
 import android.app.PendingIntent;
 import android.appwidget.AppWidgetManager;
@@ -10,7 +10,7 @@ import android.view.View;
 import android.widget.RemoteViews;
 import org.json.JSONArray;
 import org.json.JSONObject;
-import app.momentum.habits.R;
+import com.dincey.habitjournal.R;
 
 public class MomentumWidgetProvider extends AppWidgetProvider {
   @Override
@@ -108,7 +108,7 @@ public class MomentumWidgetProvider extends AppWidgetProvider {
 
   private PendingIntent action(Context ctx, String type, String habitId, String date, int req) {
     Intent intent = new Intent(ctx, WidgetActionReceiver.class);
-    intent.setAction("app.momentum.habits.WIDGET_" + type.toUpperCase());
+    intent.setAction("com.dincey.habitjournal.WIDGET_" + type.toUpperCase());
     intent.putExtra("type", type);
     intent.putExtra("habitId", habitId);
     intent.putExtra("date", date);

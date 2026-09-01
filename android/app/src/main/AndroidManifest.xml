@@ -54,8 +54,8 @@
             android:name=".widgets.WidgetActionReceiver"
             android:exported="false">
             <intent-filter>
-                <action android:name="app.momentum.habits.WIDGET_COMPLETE" />
-                <action android:name="app.momentum.habits.WIDGET_RESET" />
+                <action android:name="com.dincey.habitjournal.WIDGET_COMPLETE" />
+                <action android:name="com.dincey.habitjournal.WIDGET_RESET" />
             </intent-filter>
         </receiver>
 
