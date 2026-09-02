@@ -120,6 +120,33 @@ const marked = Launch.markAdsRemoved({ adsRemoved: false }, '2026-09-01T00:00:00
 assert(marked.adsRemoved === true && marked.adsRemovedAt === '2026-09-01T00:00:00.000Z', 'mark lifetime purchase');
 assert(Launch.ADS_PRODUCT_ID === 'remove_ads_lifetime', 'Play product id');
 assert(Launch.ADS_PRICE_LABEL === 'HK$38', 'Hong Kong lifetime price');
+assert(Launch.ADS_LIST_PRICE_LABEL === 'HK$158', 'intro list price');
+assert(Launch.ADS_OFFER_DAYS === 7, 'seven-day intro window');
+
+const memStore = (() => {
+  const m = {};
+  return {
+    getItem: (k) => (Object.prototype.hasOwnProperty.call(m, k) ? m[k] : null),
+    setItem: (k, v) => { m[k] = String(v); },
+  };
+})();
+const firstInstall = Date.parse('2026-09-01T00:00:00.000Z');
+assert(Launch.readInstalledAt(memStore, firstInstall) === firstInstall, 'records first install');
+assert(Launch.readInstalledAt(memStore, firstInstall + 1000) === firstInstall, 'keeps first install');
+const midOffer = Launch.adsIntroOffer(firstInstall + 2 * 86400000, firstInstall);
+assert(midOffer.active === true && midOffer.remainingMs === 5 * 86400000, 'offer active for 7 days');
+const afterOffer = Launch.adsIntroOffer(firstInstall + 8 * 86400000, firstInstall);
+assert(afterOffer.active === false && afterOffer.remainingMs === 0, 'offer ends after 7 days');
+assert(Launch.formatCountdown(2 * 86400000 + 3 * 3600000) === '2d 3h left', 'countdown days');
+assert(Launch.formatCountdown(90 * 60 * 1000) === '1h 30m left', 'countdown hours');
+assert(Launch.formatCountdown(45 * 1000) === '0m 45s left', 'countdown seconds');
+const liveCopy = Launch.adsOfferCopy(firstInstall + 1000, firstInstall);
+assert(liveCopy.limited === true && liveCopy.kicker === 'One-off purchase limited time offer!', 'limited-time kicker');
+assert(liveCopy.listPrice === 'HK$158' && liveCopy.offerPrice === 'HK$38', 'shows 158 then 38');
+assert(liveCopy.cta === 'Remove ads · HK$38', 'cta stays 38');
+const expiredCopy = Launch.adsOfferCopy(firstInstall + 8 * 86400000, firstInstall);
+assert(expiredCopy.limited === false && expiredCopy.kicker === 'One-off purchase', 'regular copy after window');
+assert(expiredCopy.countdown === '' && expiredCopy.offerPrice === 'HK$38', 'still HK$38 after window');
 assert(Launch.purchaseOwnsRemoveAds([{ productIdentifier: 'remove_ads_lifetime', purchaseState: 'PURCHASED' }]) === true, 'owns purchased sku');
 assert(Launch.purchaseOwnsRemoveAds([{ productId: 'remove_ads_lifetime', state: 'owned' }]) === true, 'owns alt field names');
 assert(Launch.purchaseOwnsRemoveAds([{ sku: 'remove_ads_lifetime' }]) === true, 'owns sku without state');

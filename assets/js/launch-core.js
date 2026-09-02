@@ -11,6 +11,9 @@
   Launch.REMINDER_FIRED_KEY = 'momentumReminderFired';
   Launch.ADS_PRODUCT_ID = 'remove_ads_lifetime';
   Launch.ADS_PRICE_LABEL = 'HK$38';
+  Launch.ADS_LIST_PRICE_LABEL = 'HK$158';
+  Launch.ADS_OFFER_DAYS = 7;
+  Launch.INSTALLED_AT_KEY = 'momentumInstalledAt';
   Launch.ADMOB_TEST_APP_ID = 'ca-app-pub-3940256099942544~3347511713';
   Launch.ADMOB_TEST_BANNER = 'ca-app-pub-3940256099942544/6300978111';
   Launch.NATIVE_SLOT_LIMIT = 200;
@@ -146,6 +149,64 @@
     next.adsRemoved = true;
     next.adsRemovedAt = at || new Date().toISOString();
     return next;
+  };
+
+  Launch.readInstalledAt = function (storage, nowMs) {
+    const store = storage && typeof storage.getItem === 'function' ? storage : null;
+    let raw = '';
+    try { raw = store ? String(store.getItem(Launch.INSTALLED_AT_KEY) || '') : ''; } catch (e) { raw = ''; }
+    const parsed = Date.parse(raw);
+    if (Number.isFinite(parsed) && parsed > 0) return parsed;
+    const at = Number(nowMs) || Date.now();
+    try { if (store && typeof store.setItem === 'function') store.setItem(Launch.INSTALLED_AT_KEY, new Date(at).toISOString()); } catch (e) { /* ignore */ }
+    return at;
+  };
+
+  Launch.adsIntroOffer = function (nowMs, installedAt) {
+    const start = Number(installedAt) || 0;
+    const now = Number(nowMs) || Date.now();
+    const windowMs = Launch.ADS_OFFER_DAYS * 86400000;
+    const remainingMs = start > 0 ? Math.max(0, start + windowMs - now) : 0;
+    return {
+      active: start > 0 && remainingMs > 0,
+      remainingMs,
+      endsAt: start > 0 ? start + windowMs : 0,
+      listPrice: Launch.ADS_LIST_PRICE_LABEL,
+      offerPrice: Launch.ADS_PRICE_LABEL,
+    };
+  };
+
+  Launch.formatCountdown = function (ms) {
+    const total = Math.max(0, Math.floor(Number(ms) || 0));
+    const d = Math.floor(total / 86400000);
+    const h = Math.floor((total % 86400000) / 3600000);
+    const m = Math.floor((total % 3600000) / 60000);
+    const s = Math.floor((total % 60000) / 1000);
+    if (d > 0) return d + 'd ' + h + 'h left';
+    if (h > 0) return h + 'h ' + m + 'm left';
+    return m + 'm ' + s + 's left';
+  };
+
+  Launch.adsOfferCopy = function (nowMs, installedAt) {
+    const offer = Launch.adsIntroOffer(nowMs, installedAt);
+    if (offer.active) {
+      return {
+        kicker: 'One-off purchase limited time offer!',
+        listPrice: offer.listPrice,
+        offerPrice: offer.offerPrice,
+        countdown: Launch.formatCountdown(offer.remainingMs),
+        cta: 'Remove ads · ' + offer.offerPrice,
+        limited: true,
+      };
+    }
+    return {
+      kicker: 'One-off purchase',
+      listPrice: '',
+      offerPrice: Launch.ADS_PRICE_LABEL,
+      countdown: '',
+      cta: 'Remove ads · ' + Launch.ADS_PRICE_LABEL,
+      limited: false,
+    };
   };
 
   Launch.purchaseOwnsRemoveAds = function (purchases) {

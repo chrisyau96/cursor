@@ -196,9 +196,7 @@
         <p class="settings-section-label">Google Drive backup</p>
         <div class="card settings-card sync-card">
           <div class="sync-status-panel" id="driveStatus">Not connected</div>
-          <div class="field" style="margin-top:12px"><label>Backup schedule</label><select id="driveBackupFreq"><option value="daily">Daily — first open of the day</option><option value="weekly">Weekly — first open of the week</option><option value="off">Manual only</option></select></div>
-          <div class="field"><label>Google Web client ID <button type="button" class="info-tip" aria-label="Help" data-tip-title="Google client IDs" data-tip="Paste the Web application OAuth client ID from Google Cloud. For the Play app, also create an Android OAuth client with package com.dincey.habitjournal and your signing SHA-1 — you do not paste that Android ID here. After the first Google popup, daily backup stays silent.">ⓘ</button></label><input id="googleClientIdInput" placeholder="….apps.googleusercontent.com" autocomplete="off"></div>
-          <div class="small-note" id="googleAndroidOauthNote" style="margin-top:8px">Play app: create an Android OAuth client in Google Cloud (package <code>com.dincey.habitjournal</code> + SHA-1). Google matches the app automatically so Drive does not keep asking. Steps are in docs/GOOGLE_DRIVE.md.</div>
+          <div class="field" style="margin-top:12px"><label>Backup schedule</label><select id="driveBackupFreq"><option value="daily">Daily</option><option value="weekly">Weekly</option><option value="off">Off</option></select></div>
           <div class="sync-actions" style="margin-top:12px">
             <button type="button" class="btn-primary" id="driveConnectBtn">Connect Google Drive</button>
             <button type="button" class="btn-secondary hidden-action" id="driveBackupNowBtn">Backup now</button>
@@ -217,7 +215,7 @@
         <p class="settings-section-label">Ads</p>
         <div class="card settings-card" id="adsSettingsCard">
           <div class="sync-status-panel" id="adsStatus">Free version includes ads.</div>
-          <div class="small-note" style="margin-top:8px">Remove all ads forever for <strong>HK$38</strong> (one-time Play purchase). Restore on a new phone with the same Google account.</div>
+          <div class="small-note" id="adsOfferNote" style="margin-top:8px">One-off purchase limited time offer! <s>HK$158</s> <strong>HK$38</strong>.</div>
           <div class="sync-actions" style="margin-top:12px">
             <button type="button" class="btn-primary" id="removeAdsBtn">Remove ads · HK$38</button>
             <button type="button" class="btn-secondary" id="restoreAdsPurchaseBtn">Restore purchase</button>
@@ -269,17 +267,17 @@
           <div class="field"><input id="confirmDeleteInput" placeholder="Type Confirm"></div>
           <button class="btn-danger settings-action" id="resetAllBtn" type="button">Erase all data</button>
         </div>
-        <p class="settings-version" id="settingsVersion">Momentum v57</p>
+        <p class="settings-version" id="settingsVersion">Momentum v58</p>
       </section>
     </main>
 
     <div class="ad-slot" id="adBanner" hidden>
-      <div class="ad-slot-kicker">Ad</div>
       <div class="ad-slot-copy">
-        <strong>Free version</strong>
-        <span>Remove all ads forever for HK$38.</span>
+        <strong id="adOfferKicker">One-off purchase limited time offer!</strong>
+        <span class="ad-slot-price" id="adOfferPrice"><s>HK$158</s> HK$38</span>
+        <span class="ad-slot-countdown" id="adOfferCountdown"></span>
       </div>
-      <button type="button" class="btn-inline pink" id="adBannerCta">Remove ads</button>
+      <button type="button" class="btn-inline pink" id="adBannerCta">Remove ads · HK$38</button>
     </div>
 
     <nav class="tabbar">
@@ -331,6 +329,12 @@
   <div class="toast" id="toast">Saved</div>
   <div class="celebrate-layer" id="celebrateLayer" aria-hidden="true"></div>
 
+  <script>
+    window.MOMENTUM_CONFIG = window.MOMENTUM_CONFIG || {
+      // Bake the Google Cloud *Web* OAuth client ID here. Testers never type it.
+      // googleClientId: 'xxxxx.apps.googleusercontent.com'
+    };
+  </script>
   <script src="assets/js/launch-core.js"></script>
   <script src="assets/js/app.js"></script>
   <script src="assets/js/launch.js"></script>

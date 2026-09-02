@@ -26,7 +26,7 @@ The app is free for users. You pay **US$25 once** for a Play developer account (
 They fire with the app in the background, swiped away, or after reboot. Force-stop in system Settings cancels alarms until the next open.
 
 **Google Drive = one Google popup, then silent.**  
-Connect once. Daily/weekly first-open backup does not ask again while that Google account stays on the phone. If Google revokes access, Connect once more. This needs a **Web** OAuth client (paste in Settings) **and** an **Android** OAuth client with package `com.dincey.habitjournal` + signing SHA-1 (you do **not** paste the Android client ID in the app).
+Connect once. Daily/weekly first-open backup does not ask again while that Google account stays on the phone. If Google revokes access, Connect once more. Bake the **Web** OAuth client ID in `window.MOMENTUM_CONFIG.googleClientId` (testers never type it). Also create an **Android** OAuth client with package `com.dincey.habitjournal` + signing SHA-1 (you do **not** paste the Android client ID in the app).
 
 **Widgets = home-screen app widgets** (Play app only). The website Settings page is a preview. Long-press home screen → Widgets → Momentum.
 
@@ -39,7 +39,7 @@ Follow `docs/GOOGLE_DRIVE.md`. Short version:
 1. [Google Cloud Console](https://console.cloud.google.com/) → new project `momentum-habits`
 2. Enable **Google Drive API**
 3. OAuth consent screen: External, app name Momentum, privacy `https://chrisyau96.github.io/cursor/privacy.html`, scope `https://www.googleapis.com/auth/drive.appdata`, add yourself as a test user
-4. Credentials → **Web application** client. Authorized JavaScript origins: `https://chrisyau96.github.io` and `http://localhost`. Copy the client ID into Momentum Settings → Google Web client ID
+4. Credentials → **Web application** client. Authorized JavaScript origins: `https://chrisyau96.github.io` and `http://localhost`. Bake that ID into `index.html` as `window.MOMENTUM_CONFIG.googleClientId` (not a Settings field)
 5. Credentials → **Android** client. Package: `com.dincey.habitjournal`. SHA-1 from your upload keystore (section 5) **and later** Play App Signing SHA-1 (Play Console → Test and release → Setup → App signing). You can also add the debug keystore SHA-1 for USB installs
 
 ```bash
@@ -177,7 +177,9 @@ Public Play users **never** see this. Same package as Production.
 1. Play Console → Test and release → Testing → **Internal testing**
 2. Testers list (your Gmail)
 3. Create release → upload `.aab` → Start rollout
-4. Open the opt-in link on the phone (signed into that Gmail) → Install
+4. Open the **opt-in URL** on the phone (signed into that same Gmail) → Become a tester → Install
+
+Play does **not** reliably email Internal testers. Adding Gmails to the list only allows those accounts to open the opt-in link. There is no guaranteed “your app is ready” mail. Testers must use the opt-in URL while signed into the listed Gmail. Internal testing is not searchable on the public Play Store.
 
 Confirm: reminders with the app killed; Drive popup once then silent; Widgets → Momentum; ads banner; HK$38 remove-ads + Restore.
 

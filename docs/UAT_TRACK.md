@@ -7,7 +7,7 @@ You can keep shipping new features without touching people who already installed
 | Track | Who | Package | When to use |
 |---|---|---|---|
 | **GitHub Pages** | You, in a browser | n/a | Fast UI checks. Updates on every `main` merge |
-| **Play Internal testing** | You + a few Gmails | `com.dincey.habitjournal` | **Default UAT.** Real Android (notifications, Drive, widgets, ads, HK$38 remove-ads). Testers opt in. **Public Play users never see this** |
+| **Play Internal testing** | You + a few Gmails | `com.dincey.habitjournal` | **Default UAT.** Real Android (notifications, Drive, widgets, ads, HK$38 remove-ads). Testers use the **opt-in URL** (Play does not reliably email them). **Public Play users never see this** |
 | **Play Closed testing** | 12+ friends for 14 days | same package | Required for many **personal** developer accounts created after 13 Nov 2023 before Production |
 | **Play Production** | Everyone | `com.dincey.habitjournal` | Stable releases only |
 | **Second package (optional)** | You, two icons on one phone | `com.dincey.habitjournal.uat` | Only if you need Production **and** UAT installed at once. Not needed to start |

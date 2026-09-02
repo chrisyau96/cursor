@@ -19,9 +19,13 @@
   function cap() { return window.Capacitor?.Plugins || {}; }
 
   function clientId() {
-    const fromSettings = (settings().googleClientId || '').trim();
     const fromConfig = (window.MOMENTUM_CONFIG?.googleClientId || '').trim();
-    return fromSettings || fromConfig;
+    const fromSettings = (settings().googleClientId || '').trim();
+    return fromConfig || fromSettings;
+  }
+
+  function installedAt() {
+    return Core.readInstalledAt(localStorage);
   }
 
   function readToken() {
@@ -56,7 +60,7 @@
 
   function requestToken(prompt) {
     const cid = clientId();
-    if (!cid) return Promise.reject(new Error('Add a Google OAuth client ID in Settings first.'));
+    if (!cid) return Promise.reject(new Error('Google Drive on the website needs the Play app.'));
     return ensureGis().then(() => new Promise((resolve, reject) => {
       tokenClient = window.google.accounts.oauth2.initTokenClient({
         client_id: cid,
@@ -84,10 +88,12 @@
     const social = await socialLogin();
     if (!social) return null;
     const cid = clientId();
-    if (!cid) throw new Error('Add a Google OAuth Web client ID in Settings first.');
-    if (socialReadyFor !== cid) {
-      await social.initialize({ google: { webClientId: cid, mode: 'online' } });
-      socialReadyFor = cid;
+    const key = cid || 'native';
+    if (socialReadyFor !== key) {
+      const google = { mode: 'online' };
+      if (cid) google.webClientId = cid;
+      await social.initialize({ google });
+      socialReadyFor = key;
     }
     return social;
   }
@@ -133,10 +139,21 @@
   async function accessToken(interactive) {
     if (tokenValid()) return readToken().accessToken;
     if (isNative() && cap().SocialLogin) {
-      const tok = await nativeGoogleToken(!!interactive);
-      if (tok) return tok;
+      try {
+        const tok = await nativeGoogleToken(!!interactive);
+        if (tok) return tok;
+      } catch (e) {
+        if (interactive) {
+          const msg = String(e?.message || e || '');
+          if (/clientId is null or empty|webClientId/i.test(msg)) {
+            throw new Error('Google sign-in is not configured for this build.');
+          }
+          throw (e instanceof Error ? e : new Error(msg));
+        }
+      }
       if (!interactive) throw new Error('Google Drive needs Connect once');
     }
+    if (!clientId()) throw new Error('Google Drive on the website needs the Play app.');
     return requestToken(interactive ? 'consent' : '');
   }
 
@@ -293,15 +310,13 @@
     const s = settings();
     const status = document.getElementById('driveStatus');
     const freq = document.getElementById('driveBackupFreq');
-    const cid = document.getElementById('googleClientIdInput');
-    if (cid && document.activeElement !== cid) cid.value = s.googleClientId || '';
     if (freq && document.activeElement !== freq) freq.value = s.driveBackupFreq || 'daily';
     if (status) {
       status.className = 'sync-status-panel' + (s.driveConnected ? ' connected' : '');
       if (s.driveConnected) {
         status.innerHTML = `<strong>Google Drive connected</strong>${s.driveEmail ? ' · ' + escape(s.driveEmail) : ''}<div class="small-note" style="margin-top:6px">Last auto backup: <strong>${formatStamp(s.lastDriveBackupAt)}</strong></div>`;
       } else {
-        status.innerHTML = `<strong>Not connected</strong><div class="small-note" style="margin-top:6px">Sign in once. Momentum then backs up on the first open of the day or week — like Money Manager.</div>`;
+        status.innerHTML = `<strong>Not connected</strong><div class="small-note" style="margin-top:6px">Tap Connect to sign in with Google.</div>`;
       }
     }
     document.getElementById('driveConnectBtn')?.classList.toggle('hidden-action', !!s.driveConnected);
@@ -649,16 +664,66 @@
     renderWidgetPreview();
   }
 
+  let offerTimer = null;
+
+  function fillAdsOffer() {
+    const copy = Core.adsOfferCopy(Date.now(), installedAt());
+    const kicker = document.getElementById('adOfferKicker');
+    const price = document.getElementById('adOfferPrice');
+    const count = document.getElementById('adOfferCountdown');
+    const cta = document.getElementById('adBannerCta');
+    const buy = document.getElementById('removeAdsBtn');
+    const note = document.getElementById('adsOfferNote');
+    if (kicker) kicker.textContent = copy.kicker;
+    if (price) {
+      price.innerHTML = copy.limited
+        ? '<s>' + copy.listPrice + '</s> ' + copy.offerPrice
+        : copy.offerPrice;
+    }
+    if (count) {
+      count.hidden = !copy.limited;
+      count.textContent = copy.countdown;
+    }
+    if (cta) cta.textContent = copy.cta;
+    if (buy) buy.textContent = copy.cta;
+    if (note) {
+      note.innerHTML = copy.limited
+        ? 'One-off purchase limited time offer! <s>' + copy.listPrice + '</s> <strong>' + copy.offerPrice + '</strong> · ' + copy.countdown + '. Same Google account can Restore later.'
+        : 'Remove all ads forever for <strong>' + copy.offerPrice + '</strong> (one-time Play purchase). Restore on a new phone with the same Google account.';
+    }
+  }
+
+  function startOfferTick() {
+    if (offerTimer) return;
+    offerTimer = setInterval(() => {
+      if (!Core.shouldShowAds(settings())) {
+        stopOfferTick();
+        return;
+      }
+      fillAdsOffer();
+    }, 1000);
+  }
+
+  function stopOfferTick() {
+    if (offerTimer) {
+      clearInterval(offerTimer);
+      offerTimer = null;
+    }
+  }
+
   function renderAdsUi() {
     const show = Core.shouldShowAds(settings());
     const banner = document.getElementById('adBanner');
     if (banner) banner.hidden = !show;
     document.body.classList.toggle('has-ads', show);
+    fillAdsOffer();
+    if (show) startOfferTick();
+    else stopOfferTick();
     const status = document.getElementById('adsStatus');
     if (status) {
       status.className = 'sync-status-panel' + (show ? '' : ' connected');
       status.innerHTML = show
-        ? '<strong>Ads are on</strong><div class="small-note" style="margin-top:6px">Free version. One-time HK$38 removes every ad for life.</div>'
+        ? '<strong>Ads are on</strong><div class="small-note" style="margin-top:6px">House banner above the tab bar. Buy once to remove ads for life.</div>'
         : '<strong>Ads removed</strong><div class="small-note" style="margin-top:6px">Lifetime purchase is on this device.</div>';
     }
     const buy = document.getElementById('removeAdsBtn');
@@ -746,27 +811,7 @@
 
   async function showAdsIfNeeded() {
     renderAdsUi();
-    if (!Core.shouldShowAds(settings())) {
-      try { await cap().AdMob?.hideBanner?.(); } catch (e) { /* ignore */ }
-      return;
-    }
-    const admob = cap().AdMob;
-    if (!isNative() || !admob) return;
-    try {
-      const appId = (settings().admobAppId || Core.ADMOB_TEST_APP_ID).trim();
-      const bannerId = (settings().admobBannerId || Core.ADMOB_TEST_BANNER).trim();
-      if (typeof admob.initialize === 'function') {
-        await admob.initialize({ initializeForTesting: /3940256099942544/.test(appId), appIdAndroid: appId });
-      }
-      await admob.showBanner({
-        adId: bannerId,
-        adSize: 'ADAPTIVE_BANNER',
-        position: 'BOTTOM_CENTER',
-        margin: 64,
-      });
-      const banner = document.getElementById('adBanner');
-      if (banner) banner.hidden = true;
-    } catch (e) { /* house banner stays visible */ }
+    try { await cap().AdMob?.hideBanner?.(); } catch (e) { /* ignore */ }
   }
 
   async function saveWidgetConfig(patch) {
@@ -799,11 +844,6 @@
       state().settings.driveBackupFreq = e.target.value;
       await app().save(true, { render: 'none' });
       if (Core.shouldDriveBackup(settings(), app().todayKey())) void maybeAutoDriveBackup();
-    });
-    document.getElementById('googleClientIdInput')?.addEventListener('change', async (e) => {
-      state().settings.googleClientId = e.target.value.trim();
-      socialReadyFor = '';
-      await app().save(true, { render: 'none' });
     });
     document.getElementById('testReminderBtn')?.addEventListener('click', async () => {
       const ok = await requestNotifPermission();

@@ -75,7 +75,7 @@
   const PREVIEW=3;
   const LAZY_CHUNK=10;
   const REMINDER_MSG_LIMIT=80;
-  const APP_VERSION='v57';
+  const APP_VERSION='v58';
   const iconBtn=(cls,svg,title)=>{const b=document.createElement('button'); b.className='act-btn '+cls; b.innerHTML=svg; b.title=title; b.setAttribute('aria-label',title); return b;};
 
   const USER_NAME_MAX=12;
@@ -1385,6 +1385,8 @@
     const shellRect=shell.getBoundingClientRect();
     const cardW=Math.min(300,shellRect.width-28);
     const tabbarH=parseInt(getComputedStyle(document.documentElement).getPropertyValue('--tabbar-h'))||62;
+    const adH=parseInt(getComputedStyle(document.documentElement).getPropertyValue('--ad-banner-h'))||0;
+    const bottomReserve=tabbarH+adH;
     const bottomGap=14;
     bd?.classList.toggle('onboard-fullscreen',step.layout==='fullscreen');
     card.classList.toggle('onboard-center',step.layout==='fullscreen');
@@ -1424,21 +1426,21 @@
     let cardTop,cardLeft;
     const cardH=card.offsetHeight||170;
     if(anchor==='near-bottom'||anchor==='above-tabbar'){
-      cardTop=shellRect.height-tabbarH-cardH-bottomGap;
+      cardTop=shellRect.height-bottomReserve-cardH-bottomGap;
       cardLeft=(shellRect.width-cardW)/2;
     }else if(anchor==='top'){
       cardTop=68; cardLeft=(shellRect.width-cardW)/2;
     }else if(anchor==='below-header'){
-      cardTop=Math.min(shellRect.height-tabbarH-cardH-bottomGap, top+height+14);
+      cardTop=Math.min(shellRect.height-bottomReserve-cardH-bottomGap, top+height+14);
       cardLeft=14;
     }else if(anchor==='below'){
-      cardTop=Math.min(shellRect.height-tabbarH-cardH-bottomGap, top+height+12);
+      cardTop=Math.min(shellRect.height-bottomReserve-cardH-bottomGap, top+height+12);
       cardLeft=Math.max(14, Math.min(left, shellRect.width-cardW-14));
     }else{
       cardTop=Math.max(68, top-150);
       cardLeft=Math.max(14, Math.min(left, shellRect.width-cardW-14));
     }
-    const maxTop=shellRect.height-tabbarH-cardH-bottomGap;
+    const maxTop=shellRect.height-bottomReserve-cardH-bottomGap;
     cardTop=Math.min(cardTop, maxTop);
     card.style.top=Math.max(12,cardTop)+'px';
     card.style.left=Math.max(14,cardLeft)+'px';
