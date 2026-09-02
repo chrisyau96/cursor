@@ -3,7 +3,7 @@ import SwiftUI
 import AppIntents
 
 enum WidgetStore {
-  static let suite = "group.app.momentum.habits"
+  static let suite = "group.com.dincey.habitjournal"
 
   static func snapshot() -> [String: Any] {
     let defaults = UserDefaults(suiteName: suite)

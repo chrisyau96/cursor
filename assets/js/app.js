@@ -75,14 +75,14 @@
   const PREVIEW=3;
   const LAZY_CHUNK=10;
   const REMINDER_MSG_LIMIT=80;
-  const APP_VERSION='v56';
+  const APP_VERSION='v58';
   const iconBtn=(cls,svg,title)=>{const b=document.createElement('button'); b.className='act-btn '+cls; b.innerHTML=svg; b.title=title; b.setAttribute('aria-label',title); return b;};
 
   const USER_NAME_MAX=12;
   function rewardDefaults(includeGifts=false){return{creditRules:[{id:uid(),pct:50,amount:2},{id:uid(),pct:100,amount:10}],giftRules:includeGifts?[{id:uid(),gift:'Buffet',icon:'🍽️',pct:80,days:30}]:[],penaltyCredit:5,penaltyXp:20,penaltyZeroDays:2};}
-  function pickSettings(overrides={}){const gifts=overrides.includeGifts===true; const {includeGifts,...rest}=overrides; return{autoSync:false,autoBackup:true,dailyBackup:true,fileConnected:false,backupFileName:'',reminders:false,colorMode:'system',styleTheme:'vivid',globalReminderTime:'20:30',profileIcon:'',userName:'',onboardingComplete:false,statusRowOpen:false,lastExportAt:'',lastBackupAt:'',lastScheduledBackupAt:'',vacations:[],dataMode:'real',defaultReminderMessage:'Time for {habit}!',driveConnected:false,driveEmail:'',driveBackupFreq:'daily',lastDriveBackupAt:'',driveFileId:'',googleClientId:'',widget:{mode:'today',habitIds:[],layout:3},rewards:rewardDefaults(gifts),...rest};}
+  function pickSettings(overrides={}){const gifts=overrides.includeGifts===true; const {includeGifts,...rest}=overrides; return{autoSync:false,autoBackup:true,dailyBackup:true,fileConnected:false,backupFileName:'',reminders:false,colorMode:'system',styleTheme:'vivid',globalReminderTime:'20:30',profileIcon:'',userName:'',onboardingComplete:false,statusRowOpen:false,lastExportAt:'',lastBackupAt:'',lastScheduledBackupAt:'',vacations:[],dataMode:'real',defaultReminderMessage:'Time for {habit}!',driveConnected:false,driveEmail:'',driveBackupFreq:'daily',lastDriveBackupAt:'',driveFileId:'',googleClientId:'',googleAndroidClientId:'',adsRemoved:false,adsRemovedAt:'',admobAppId:'',admobBannerId:'',widget:{mode:'today',habitIds:[],layout:3},rewards:rewardDefaults(gifts),...rest};}
   function defaultGroups(){return[{id:uid(),name:'Morning',emoji:'🌅',color:'#ea580c',sortOrder:0},{id:uid(),name:'Afternoon',emoji:'☀️',color:'#ca8a04',sortOrder:1},{id:uid(),name:'Evening',emoji:'🌙',color:'#4f46e5',sortOrder:2}];}
-  function freshState(opts={}){const keep=opts.keep||{}; return{habits:[],records:[],journals:{},redemptions:[],groups:defaultGroups(),settings:pickSettings({dataMode:'real',includeGifts:false,startDate:todayKey(),onboardingComplete:opts.onboardingComplete??true,colorMode:keep.colorMode||'system',styleTheme:keep.styleTheme||'vivid',userName:keep.userName||'',profileIcon:keep.profileIcon||''})};}
+  function freshState(opts={}){const keep=opts.keep||{}; return{habits:[],records:[],journals:{},redemptions:[],groups:defaultGroups(),settings:pickSettings({dataMode:'real',includeGifts:false,startDate:todayKey(),onboardingComplete:opts.onboardingComplete??true,colorMode:keep.colorMode||'system',styleTheme:keep.styleTheme||'vivid',userName:keep.userName||'',profileIcon:keep.profileIcon||'',adsRemoved:!!keep.adsRemoved,adsRemovedAt:keep.adsRemovedAt||'',googleClientId:keep.googleClientId||''})};}
   function demoState(opts={}){const keep=opts.keep||{};
     const habits=[
       {id:uid(),name:'Bible Time & Prayer',emoji:'📖',color:'#7c3aed',target:1,xpReward:5,frequency:{mode:'daily',days:[0,1,2,3,4,5,6]},reminder:{enabled:false,time:'07:15',message:''}},
@@ -105,7 +105,7 @@
       });
       if(k!==todayKey() && Math.random()<0.6){ journals[k]={mood:MOODS[Math.floor(Math.random()*MOODS.length)],energy:4+Math.floor(Math.random()*7),text:'',updatedAt:new Date().toISOString()}; }
     }
-    return{habits,records,journals,redemptions:[],groups,settings:pickSettings({dataMode:'demo',includeGifts:true,startDate:dateKey(startD),onboardingComplete:opts.onboardingComplete??false,colorMode:keep.colorMode||'system',styleTheme:keep.styleTheme||'vivid',userName:keep.userName||'',profileIcon:keep.profileIcon||''})};
+    return{habits,records,journals,redemptions:[],groups,settings:pickSettings({dataMode:'demo',includeGifts:true,startDate:dateKey(startD),onboardingComplete:opts.onboardingComplete??false,colorMode:keep.colorMode||'system',styleTheme:keep.styleTheme||'vivid',userName:keep.userName||'',profileIcon:keep.profileIcon||'',adsRemoved:!!keep.adsRemoved,adsRemovedAt:keep.adsRemovedAt||'',googleClientId:keep.googleClientId||''})};
   }
   function defaults(){return freshState({onboardingComplete:false});}
   function stateForMode(mode,opts={}){return mode==='real'?freshState(opts):demoState(opts);}
@@ -140,8 +140,13 @@
     if(state.settings.lastDriveBackupAt===undefined) state.settings.lastDriveBackupAt='';
     if(state.settings.driveFileId===undefined) state.settings.driveFileId='';
     if(state.settings.googleClientId===undefined) state.settings.googleClientId='';
+    if(state.settings.googleAndroidClientId===undefined) state.settings.googleAndroidClientId='';
     if(!state.settings.widget) state.settings.widget={mode:'today',habitIds:[],layout:3};
     state.settings.widget=window.MomentumLaunchCore?window.MomentumLaunchCore.normalizeWidgetConfig(state.settings.widget):state.settings.widget;
+    if(state.settings.adsRemoved===undefined) state.settings.adsRemoved=false;
+    if(state.settings.adsRemovedAt===undefined) state.settings.adsRemovedAt='';
+    if(state.settings.admobAppId===undefined) state.settings.admobAppId='';
+    if(state.settings.admobBannerId===undefined) state.settings.admobBannerId='';
     delete state.settings.appIcon;
     delete state.settings.appIconCustom;
     state.groups.forEach((g,i)=>{if(!g.id)g.id=uid(); if(g.sortOrder===undefined) g.sortOrder=i; if(!g.emoji)g.emoji='📋'; if(!g.color)g.color='#4f46e5';});
@@ -1380,6 +1385,8 @@
     const shellRect=shell.getBoundingClientRect();
     const cardW=Math.min(300,shellRect.width-28);
     const tabbarH=parseInt(getComputedStyle(document.documentElement).getPropertyValue('--tabbar-h'))||62;
+    const adH=parseInt(getComputedStyle(document.documentElement).getPropertyValue('--ad-banner-h'))||0;
+    const bottomReserve=tabbarH+adH;
     const bottomGap=14;
     bd?.classList.toggle('onboard-fullscreen',step.layout==='fullscreen');
     card.classList.toggle('onboard-center',step.layout==='fullscreen');
@@ -1419,21 +1426,21 @@
     let cardTop,cardLeft;
     const cardH=card.offsetHeight||170;
     if(anchor==='near-bottom'||anchor==='above-tabbar'){
-      cardTop=shellRect.height-tabbarH-cardH-bottomGap;
+      cardTop=shellRect.height-bottomReserve-cardH-bottomGap;
       cardLeft=(shellRect.width-cardW)/2;
     }else if(anchor==='top'){
       cardTop=68; cardLeft=(shellRect.width-cardW)/2;
     }else if(anchor==='below-header'){
-      cardTop=Math.min(shellRect.height-tabbarH-cardH-bottomGap, top+height+14);
+      cardTop=Math.min(shellRect.height-bottomReserve-cardH-bottomGap, top+height+14);
       cardLeft=14;
     }else if(anchor==='below'){
-      cardTop=Math.min(shellRect.height-tabbarH-cardH-bottomGap, top+height+12);
+      cardTop=Math.min(shellRect.height-bottomReserve-cardH-bottomGap, top+height+12);
       cardLeft=Math.max(14, Math.min(left, shellRect.width-cardW-14));
     }else{
       cardTop=Math.max(68, top-150);
       cardLeft=Math.max(14, Math.min(left, shellRect.width-cardW-14));
     }
-    const maxTop=shellRect.height-tabbarH-cardH-bottomGap;
+    const maxTop=shellRect.height-bottomReserve-cardH-bottomGap;
     cardTop=Math.min(cardTop, maxTop);
     card.style.top=Math.max(12,cardTop)+'px';
     card.style.left=Math.max(14,cardLeft)+'px';
@@ -1649,7 +1656,7 @@
     await applyDataMode(mode);
   }
   async function applyDataMode(mode){
-    const keep={colorMode:state.settings.colorMode,styleTheme:state.settings.styleTheme,userName:state.settings.userName,profileIcon:state.settings.profileIcon};
+    const keep={colorMode:state.settings.colorMode,styleTheme:state.settings.styleTheme,userName:state.settings.userName,profileIcon:state.settings.profileIcon,adsRemoved:!!state.settings.adsRemoved,adsRemovedAt:state.settings.adsRemovedAt||'',googleClientId:state.settings.googleClientId||''};
     localStorage.setItem('momentumDataMode',mode);
     state=stateForMode(mode,{onboardingComplete:true,keep});
     normalizeState();
@@ -1678,6 +1685,7 @@
     }
     window.MomentumLaunch?.renderDriveUi?.();
     window.MomentumLaunch?.renderWidgetUi?.();
+    window.MomentumLaunch?.renderAdsUi?.();
   }
   function refreshBackupChrome(){ updateStatus(); refreshSettingsChrome(); }
   function drawRewardPanel(tab=rewardActiveTab){
@@ -1918,6 +1926,7 @@
     }
     window.MomentumLaunch?.renderDriveUi?.();
     window.MomentumLaunch?.renderWidgetUi?.();
+    window.MomentumLaunch?.renderAdsUi?.();
   }
   function renderSettingsVersion(){
     const el=$('#settingsVersion');
@@ -2139,7 +2148,7 @@
   async function eraseAllData(){
     if($('#confirmDeleteInput')?.value!=='Confirm'){toast('Type Confirm first');return;}
     if(!confirm('Erase all data and start fresh?'))return;
-    const keep={colorMode:state.settings.colorMode,styleTheme:state.settings.styleTheme,userName:state.settings.userName,profileIcon:state.settings.profileIcon};
+    const keep={colorMode:state.settings.colorMode,styleTheme:state.settings.styleTheme,userName:state.settings.userName,profileIcon:state.settings.profileIcon,adsRemoved:!!state.settings.adsRemoved,adsRemovedAt:state.settings.adsRemovedAt||'',googleClientId:state.settings.googleClientId||''};
     const linkedBackup=!!state.settings.fileConnected;
     const backupName=state.settings.backupFileName||'';
     clearTimeout(backupDebounceTimer);

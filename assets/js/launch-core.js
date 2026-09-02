@@ -9,6 +9,14 @@
   Launch.PENDING_KEY = 'momentumWidgetPending';
   Launch.SNAPSHOT_KEY = 'momentumWidgetSnapshot';
   Launch.REMINDER_FIRED_KEY = 'momentumReminderFired';
+  Launch.ADS_PRODUCT_ID = 'remove_ads_lifetime';
+  Launch.ADS_PRICE_LABEL = 'HK$38';
+  Launch.ADS_LIST_PRICE_LABEL = 'HK$158';
+  Launch.ADS_OFFER_DAYS = 7;
+  Launch.INSTALLED_AT_KEY = 'momentumInstalledAt';
+  Launch.ADMOB_TEST_APP_ID = 'ca-app-pub-3940256099942544~3347511713';
+  Launch.ADMOB_TEST_BANNER = 'ca-app-pub-3940256099942544/6300978111';
+  Launch.NATIVE_SLOT_LIMIT = 200;
   Launch.WIDGET_MODES = [
     { id: 'today', label: 'Today tasks', hint: 'Outstanding habits with complete / reset' },
     { id: 'habits', label: 'Selected habits', hint: 'Due in X days for 1–6 habits' },
@@ -71,7 +79,7 @@
   Launch.buildReminderSlots = function (habits, opts) {
     const todayKey = opts.todayKey;
     const days = Math.max(1, Number(opts.days || 21));
-    const now = opts.now instanceof Date ? opts.now : new Date();
+    const now = opts.now && typeof opts.now.getTime === 'function' ? opts.now : new Date();
     const needs = typeof opts.habitNeedsReminderOn === 'function' ? opts.habitNeedsReminderOn : () => false;
     const bodyFn = typeof opts.reminderBody === 'function' ? opts.reminderBody : (h) => h.name;
     const slots = [];
@@ -98,7 +106,7 @@
       }
     });
     slots.sort((a, b) => a.at - b.at);
-    return slots.slice(0, 60);
+    return slots.slice(0, Launch.NATIVE_SLOT_LIMIT);
   };
 
   Launch.buildRepeatingNative = function (habits, opts) {
@@ -106,10 +114,11 @@
     const notes = [];
     (habits || []).forEach((h) => {
       if (!h || !h.reminder?.enabled || h.paused || h.archived) return;
-      const t = Launch.parseHm(h.reminder.time);
       const f = h.frequency || {};
+      if (f.mode !== 'daily') return;
+      const t = Launch.parseHm(h.reminder.time);
       let days = [0, 1, 2, 3, 4, 5, 6];
-      if (f.mode === 'daily' && Array.isArray(f.days) && f.days.length && f.schedule?.type !== 'any') {
+      if (Array.isArray(f.days) && f.days.length && f.schedule?.type !== 'any') {
         days = f.days.map(Number).filter((d) => d >= 0 && d <= 6);
       }
       days.forEach((d) => {
@@ -127,6 +136,100 @@
     return notes;
   };
 
+  Launch.adsRemoved = function (settings) {
+    return !!(settings && settings.adsRemoved);
+  };
+
+  Launch.shouldShowAds = function (settings) {
+    return !Launch.adsRemoved(settings);
+  };
+
+  Launch.markAdsRemoved = function (settings, at) {
+    const next = Object.assign({}, settings || {});
+    next.adsRemoved = true;
+    next.adsRemovedAt = at || new Date().toISOString();
+    return next;
+  };
+
+  Launch.readInstalledAt = function (storage, nowMs) {
+    const store = storage && typeof storage.getItem === 'function' ? storage : null;
+    let raw = '';
+    try { raw = store ? String(store.getItem(Launch.INSTALLED_AT_KEY) || '') : ''; } catch (e) { raw = ''; }
+    const parsed = Date.parse(raw);
+    if (Number.isFinite(parsed) && parsed > 0) return parsed;
+    const at = Number(nowMs) || Date.now();
+    try { if (store && typeof store.setItem === 'function') store.setItem(Launch.INSTALLED_AT_KEY, new Date(at).toISOString()); } catch (e) { /* ignore */ }
+    return at;
+  };
+
+  Launch.adsIntroOffer = function (nowMs, installedAt) {
+    const start = Number(installedAt) || 0;
+    const now = Number(nowMs) || Date.now();
+    const windowMs = Launch.ADS_OFFER_DAYS * 86400000;
+    const remainingMs = start > 0 ? Math.max(0, start + windowMs - now) : 0;
+    return {
+      active: start > 0 && remainingMs > 0,
+      remainingMs,
+      endsAt: start > 0 ? start + windowMs : 0,
+      listPrice: Launch.ADS_LIST_PRICE_LABEL,
+      offerPrice: Launch.ADS_PRICE_LABEL,
+    };
+  };
+
+  Launch.formatCountdown = function (ms) {
+    const total = Math.max(0, Math.floor(Number(ms) || 0));
+    const d = Math.floor(total / 86400000);
+    const h = Math.floor((total % 86400000) / 3600000);
+    const m = Math.floor((total % 3600000) / 60000);
+    const s = Math.floor((total % 60000) / 1000);
+    if (d > 0) return d + 'd ' + h + 'h left';
+    if (h > 0) return h + 'h ' + m + 'm left';
+    return m + 'm ' + s + 's left';
+  };
+
+  Launch.adsOfferCopy = function (nowMs, installedAt) {
+    const offer = Launch.adsIntroOffer(nowMs, installedAt);
+    if (offer.active) {
+      return {
+        kicker: 'One-off purchase limited time offer!',
+        listPrice: offer.listPrice,
+        offerPrice: offer.offerPrice,
+        countdown: Launch.formatCountdown(offer.remainingMs),
+        cta: 'Remove ads · ' + offer.offerPrice,
+        limited: true,
+      };
+    }
+    return {
+      kicker: 'One-off purchase',
+      listPrice: '',
+      offerPrice: Launch.ADS_PRICE_LABEL,
+      countdown: '',
+      cta: 'Remove ads · ' + Launch.ADS_PRICE_LABEL,
+      limited: false,
+    };
+  };
+
+  Launch.purchaseOwnsRemoveAds = function (purchases) {
+    return (purchases || []).some((p) => {
+      if (!p) return false;
+      const id = p.productIdentifier || p.productId || p.sku || p.product || '';
+      if (id !== Launch.ADS_PRODUCT_ID) return false;
+      const state = String(p.purchaseState || p.state || '').toLowerCase();
+      if (state && state !== 'purchased' && state !== '1' && state !== 'owned') return false;
+      return true;
+    });
+  };
+
+  Launch.toNativeNotifications = function (slots) {
+    return (slots || []).map((s) => ({
+      id: s.id,
+      title: s.title || 'Momentum',
+      body: s.body || '',
+      schedule: { at: new Date(s.at), allowWhileIdle: true },
+      extra: s.extra || { habitId: s.habitId, date: s.dateKey },
+    }));
+  };
+
   Launch.nextWebTimerDelay = function (slots, nowMs) {
     const next = (slots || []).find((s) => s.at > nowMs);
     if (!next) return null;
@@ -142,11 +245,8 @@
       if (!action || !action.type) return;
       if (action.type === 'complete' && action.habitId) {
         const date = action.date || todayKey;
-        const exists = (state.records || []).some((r) => r.habitId === action.habitId && r.date === date && r.note === 'widget');
-        if (!exists) {
-          state.records = state.records || [];
-          state.records.push({ id: uid(), habitId: action.habitId, date, at: action.at || nowIso, note: 'widget' });
-        }
+        state.records = state.records || [];
+        state.records.push({ id: uid(), habitId: action.habitId, date, at: action.at || nowIso, note: 'widget' });
         applied.push(action);
       } else if (action.type === 'reset' && action.habitId) {
         const date = action.date || todayKey;

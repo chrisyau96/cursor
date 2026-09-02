@@ -19,9 +19,13 @@
   function cap() { return window.Capacitor?.Plugins || {}; }
 
   function clientId() {
-    const fromSettings = (settings().googleClientId || '').trim();
     const fromConfig = (window.MOMENTUM_CONFIG?.googleClientId || '').trim();
-    return fromSettings || fromConfig;
+    const fromSettings = (settings().googleClientId || '').trim();
+    return fromConfig || fromSettings;
+  }
+
+  function installedAt() {
+    return Core.readInstalledAt(localStorage);
   }
 
   function readToken() {
@@ -56,7 +60,7 @@
 
   function requestToken(prompt) {
     const cid = clientId();
-    if (!cid) return Promise.reject(new Error('Add a Google OAuth client ID in Settings first.'));
+    if (!cid) return Promise.reject(new Error('Google Drive on the website needs the Play app.'));
     return ensureGis().then(() => new Promise((resolve, reject) => {
       tokenClient = window.google.accounts.oauth2.initTokenClient({
         client_id: cid,
@@ -75,8 +79,81 @@
     }));
   }
 
+  let socialReadyFor = '';
+  async function socialLogin() {
+    return cap().SocialLogin || null;
+  }
+
+  async function ensureSocialGoogle() {
+    const social = await socialLogin();
+    if (!social) return null;
+    const cid = clientId();
+    const key = cid || 'native';
+    if (socialReadyFor !== key) {
+      const google = { mode: 'online' };
+      if (cid) google.webClientId = cid;
+      await social.initialize({ google });
+      socialReadyFor = key;
+    }
+    return social;
+  }
+
+  function saveNativeToken(tok, email, expiresAt) {
+    if (!tok || String(tok).length < 20) return null;
+    writeToken({ accessToken: tok, expiresAt: expiresAt || Date.now() + 50 * 60 * 1000, email: email || '' });
+    if (email && state()?.settings) state().settings.driveEmail = email;
+    return tok;
+  }
+
+  async function nativeGoogleToken(interactive) {
+    const social = await ensureSocialGoogle();
+    if (!social) return null;
+    const scopes = ['email', 'profile', 'openid', Core.DRIVE_SCOPE];
+    if (!interactive) {
+      try {
+        const logged = await social.isLoggedIn({ provider: 'google' });
+        if (logged?.isLoggedIn) {
+          const code = await social.getAuthorizationCode({ provider: 'google' });
+          const tok = saveNativeToken(code?.accessToken, '', Date.now() + 50 * 60 * 1000);
+          if (tok) return tok;
+        }
+      } catch (e) { /* fall through to silent Credential Manager */ }
+    }
+    const res = await social.login({
+      provider: 'google',
+      options: {
+        scopes,
+        forceRefreshToken: false,
+        filterByAuthorizedAccounts: !interactive,
+        autoSelectEnabled: true,
+        style: interactive ? 'standard' : 'bottom',
+      },
+    });
+    const result = res?.result || {};
+    const tok = result.accessToken?.token || result.accessToken;
+    const email = result.profile?.email || '';
+    const expires = result.accessToken?.expires ? Date.parse(result.accessToken.expires) : 0;
+    return saveNativeToken(tok, email, expires > Date.now() ? expires : Date.now() + 50 * 60 * 1000);
+  }
+
   async function accessToken(interactive) {
     if (tokenValid()) return readToken().accessToken;
+    if (isNative() && cap().SocialLogin) {
+      try {
+        const tok = await nativeGoogleToken(!!interactive);
+        if (tok) return tok;
+      } catch (e) {
+        if (interactive) {
+          const msg = String(e?.message || e || '');
+          if (/clientId is null or empty|webClientId/i.test(msg)) {
+            throw new Error('Google sign-in is not configured for this build.');
+          }
+          throw (e instanceof Error ? e : new Error(msg));
+        }
+      }
+      if (!interactive) throw new Error('Google Drive needs Connect once');
+    }
+    if (!clientId()) throw new Error('Google Drive on the website needs the Play app.');
     return requestToken(interactive ? 'consent' : '');
   }
 
@@ -164,6 +241,7 @@
       driveBackupFreq: settings().driveBackupFreq || 'daily',
       driveFileId: fileId,
       googleClientId: settings().googleClientId,
+      googleAndroidClientId: settings().googleAndroidClientId,
       lastDriveBackupAt: new Date().toISOString(),
     };
     app().setState(data);
@@ -196,7 +274,11 @@
     if (t?.accessToken && window.google?.accounts?.oauth2) {
       try { window.google.accounts.oauth2.revoke(t.accessToken); } catch (e) { /* ignore */ }
     }
+    if (isNative() && cap().SocialLogin) {
+      try { await cap().SocialLogin.logout({ provider: 'google' }); } catch (e) { /* ignore */ }
+    }
     writeToken(null);
+    socialReadyFor = '';
     const st = state();
     st.settings.driveConnected = false;
     st.settings.driveEmail = '';
@@ -228,15 +310,13 @@
     const s = settings();
     const status = document.getElementById('driveStatus');
     const freq = document.getElementById('driveBackupFreq');
-    const cid = document.getElementById('googleClientIdInput');
-    if (cid && document.activeElement !== cid) cid.value = s.googleClientId || '';
     if (freq && document.activeElement !== freq) freq.value = s.driveBackupFreq || 'daily';
     if (status) {
       status.className = 'sync-status-panel' + (s.driveConnected ? ' connected' : '');
       if (s.driveConnected) {
         status.innerHTML = `<strong>Google Drive connected</strong>${s.driveEmail ? ' · ' + escape(s.driveEmail) : ''}<div class="small-note" style="margin-top:6px">Last auto backup: <strong>${formatStamp(s.lastDriveBackupAt)}</strong></div>`;
       } else {
-        status.innerHTML = `<strong>Not connected</strong><div class="small-note" style="margin-top:6px">Sign in once. Momentum then backs up on the first open of the day or week — like Money Manager.</div>`;
+        status.innerHTML = `<strong>Not connected</strong><div class="small-note" style="margin-top:6px">Tap Connect to sign in with Google.</div>`;
       }
     }
     document.getElementById('driveConnectBtn')?.classList.toggle('hidden-action', !!s.driveConnected);
@@ -303,7 +383,14 @@
   async function requestNotifPermission() {
     if (isNative() && cap().LocalNotifications) {
       const perm = await cap().LocalNotifications.requestPermissions();
-      return perm?.display === 'granted' || perm?.granted === true;
+      const granted = perm?.display === 'granted' || perm?.granted === true;
+      try {
+        const exact = await cap().LocalNotifications.checkExactNotificationSetting?.();
+        if (granted && exact && exact.exact_alarm !== 'granted') {
+          await cap().LocalNotifications.changeExactNotificationSetting?.();
+        }
+      } catch (e) { /* inexact alarms still fire */ }
+      return granted;
     }
     if (!('Notification' in window)) return false;
     if (Notification.permission === 'granted') return true;
@@ -332,23 +419,9 @@
       const pending = await cap().LocalNotifications.getPending();
       const ids = (pending?.notifications || []).map((n) => ({ id: n.id }));
       if (ids.length) await cap().LocalNotifications.cancel({ notifications: ids });
-      const repeating = Core.buildRepeatingNative(app().activeHabits(), {
-        reminderBody: (h) => app().reminderBody(h),
-      });
-      if (!repeating.length) return;
-      await cap().LocalNotifications.schedule({
-        notifications: repeating.map((s) => ({
-          id: s.id,
-          title: s.title,
-          body: s.body,
-          schedule: {
-            on: { weekday: s.weekday, hour: s.hour, minute: s.minute },
-            allowWhileIdle: true,
-            repeats: true,
-          },
-          extra: s.extra,
-        })),
-      });
+      const notifications = Core.toNativeNotifications(slots || []);
+      if (!notifications.length) return;
+      await cap().LocalNotifications.schedule({ notifications });
     } catch (e) { /* keep web fallback */ }
   }
 
@@ -522,6 +595,16 @@
     await writeWidgetSnapshot();
   }
 
+  async function ingestNativeWidgetPending(action) {
+    await applyPendingFromNative();
+    if (!action) return;
+    if (action.type === 'complete' || action.type === 'reset') {
+      await writeWidgetSnapshot();
+      return;
+    }
+    await handleWidgetAction(action);
+  }
+
   function consumeLaunchQuery() {
     const action = Core.parseQueryActions(location.search);
     if (!action) return;
@@ -581,6 +664,156 @@
     renderWidgetPreview();
   }
 
+  let offerTimer = null;
+
+  function fillAdsOffer() {
+    const copy = Core.adsOfferCopy(Date.now(), installedAt());
+    const kicker = document.getElementById('adOfferKicker');
+    const price = document.getElementById('adOfferPrice');
+    const count = document.getElementById('adOfferCountdown');
+    const cta = document.getElementById('adBannerCta');
+    const buy = document.getElementById('removeAdsBtn');
+    const note = document.getElementById('adsOfferNote');
+    if (kicker) kicker.textContent = copy.kicker;
+    if (price) {
+      price.innerHTML = copy.limited
+        ? '<s>' + copy.listPrice + '</s> ' + copy.offerPrice
+        : copy.offerPrice;
+    }
+    if (count) {
+      count.hidden = !copy.limited;
+      count.textContent = copy.countdown;
+    }
+    if (cta) cta.textContent = copy.cta;
+    if (buy) buy.textContent = copy.cta;
+    if (note) {
+      note.innerHTML = copy.limited
+        ? 'One-off purchase limited time offer! <s>' + copy.listPrice + '</s> <strong>' + copy.offerPrice + '</strong> · ' + copy.countdown + '. Same Google account can Restore later.'
+        : 'Remove all ads forever for <strong>' + copy.offerPrice + '</strong> (one-time Play purchase). Restore on a new phone with the same Google account.';
+    }
+  }
+
+  function startOfferTick() {
+    if (offerTimer) return;
+    offerTimer = setInterval(() => {
+      if (!Core.shouldShowAds(settings())) {
+        stopOfferTick();
+        return;
+      }
+      fillAdsOffer();
+    }, 1000);
+  }
+
+  function stopOfferTick() {
+    if (offerTimer) {
+      clearInterval(offerTimer);
+      offerTimer = null;
+    }
+  }
+
+  function renderAdsUi() {
+    const show = Core.shouldShowAds(settings());
+    const banner = document.getElementById('adBanner');
+    if (banner) banner.hidden = !show;
+    document.body.classList.toggle('has-ads', show);
+    fillAdsOffer();
+    if (show) startOfferTick();
+    else stopOfferTick();
+    const status = document.getElementById('adsStatus');
+    if (status) {
+      status.className = 'sync-status-panel' + (show ? '' : ' connected');
+      status.innerHTML = show
+        ? '<strong>Ads are on</strong><div class="small-note" style="margin-top:6px">House banner above the tab bar. Buy once to remove ads for life.</div>'
+        : '<strong>Ads removed</strong><div class="small-note" style="margin-top:6px">Lifetime purchase is on this device.</div>';
+    }
+    const buy = document.getElementById('removeAdsBtn');
+    if (buy) buy.classList.toggle('hidden-action', !show);
+  }
+
+  async function grantAdsRemoved() {
+    const st = state();
+    Object.assign(st.settings, Core.markAdsRemoved(st.settings));
+    await app().save(true, { render: 'none' });
+    renderAdsUi();
+    try { await cap().AdMob?.hideBanner?.(); } catch (e) { /* ignore */ }
+  }
+
+  async function listStorePurchases() {
+    const plugin = cap().NativePurchases;
+    if (!plugin) return [];
+    const query = { productType: 'inapp' };
+    try {
+      if (typeof plugin.restorePurchases === 'function') {
+        try { await plugin.restorePurchases(); } catch (e) { /* continue to list */ }
+      }
+      if (typeof plugin.getPurchases === 'function') {
+        const res = await plugin.getPurchases(query);
+        return res?.purchases || res || [];
+      }
+    } catch (e) { return []; }
+    return [];
+  }
+
+  async function restoreAdsPurchase(silent) {
+    const owned = Core.purchaseOwnsRemoveAds(await listStorePurchases());
+    if (owned && !Core.adsRemoved(settings())) {
+      await grantAdsRemoved();
+      if (!silent) app().toast('Purchase restored. Ads removed.');
+      return true;
+    }
+    if (owned) {
+      renderAdsUi();
+      if (!silent) app().toast('Ads already removed.');
+      return true;
+    }
+    if (!silent) {
+      if (!isNative() || !cap().NativePurchases) {
+        app().toast('Restore works in the Play Store app after you buy HK$38 remove-ads.');
+      } else {
+        app().toast('No remove-ads purchase found for this Google account.');
+      }
+    }
+    renderAdsUi();
+    return false;
+  }
+
+  async function purchaseRemoveAds() {
+    if (Core.adsRemoved(settings())) {
+      app().toast('Ads are already removed.');
+      return;
+    }
+    const plugin = cap().NativePurchases;
+    if (!isNative() || !plugin) {
+      app().toast('HK$38 lifetime remove-ads is a Play Store purchase. Install the Android app to buy.');
+      return;
+    }
+    try {
+      if (typeof plugin.isBillingSupported === 'function') {
+        const billing = await plugin.isBillingSupported();
+        if (billing && billing.isBillingSupported === false) {
+          app().toast('Google Play Billing is not available on this device.');
+          return;
+        }
+      }
+      await plugin.purchaseProduct({
+        productIdentifier: Core.ADS_PRODUCT_ID,
+        productType: 'inapp',
+        quantity: 1,
+      });
+      await grantAdsRemoved();
+      app().toast('Ads removed for life. Thank you!');
+    } catch (e) {
+      const msg = String(e?.message || e || '');
+      if (/cancel/i.test(msg)) app().toast('Purchase cancelled');
+      else app().toast(msg || 'Purchase failed');
+    }
+  }
+
+  async function showAdsIfNeeded() {
+    renderAdsUi();
+    try { await cap().AdMob?.hideBanner?.(); } catch (e) { /* ignore */ }
+  }
+
   async function saveWidgetConfig(patch) {
     const st = state();
     st.settings.widget = Core.normalizeWidgetConfig(Object.assign({}, st.settings.widget, patch));
@@ -592,6 +825,7 @@
   async function onStateSaved() {
     await writeWidgetSnapshot();
     await scheduleReminders();
+    renderAdsUi();
   }
 
   function bindUi() {
@@ -610,10 +844,6 @@
       state().settings.driveBackupFreq = e.target.value;
       await app().save(true, { render: 'none' });
       if (Core.shouldDriveBackup(settings(), app().todayKey())) void maybeAutoDriveBackup();
-    });
-    document.getElementById('googleClientIdInput')?.addEventListener('change', async (e) => {
-      state().settings.googleClientId = e.target.value.trim();
-      await app().save(true, { render: 'none' });
     });
     document.getElementById('testReminderBtn')?.addEventListener('click', async () => {
       const ok = await requestNotifPermission();
@@ -639,6 +869,9 @@
       } else ids = ids.filter((x) => x !== id);
       void saveWidgetConfig({ habitIds: ids, layout: Math.max(ids.length, 1) });
     });
+    document.getElementById('removeAdsBtn')?.addEventListener('click', () => { void purchaseRemoveAds(); });
+    document.getElementById('restoreAdsPurchaseBtn')?.addEventListener('click', () => { void restoreAdsPurchase(); });
+    document.getElementById('adBannerCta')?.addEventListener('click', () => { void purchaseRemoveAds(); });
   }
 
   let booted = false;
@@ -648,17 +881,20 @@
     bindUi();
     renderDriveUi();
     renderWidgetUi();
+    renderAdsUi();
     await applyPendingFromNative();
     consumeLaunchQuery();
     await writeWidgetSnapshot();
     if (settings().reminders) await requestNotifPermission();
     await scheduleReminders();
+    await restoreAdsPurchase(true);
+    await showAdsIfNeeded();
     await maybeAutoDriveBackup();
     try {
       cap().App?.addListener?.('appUrlOpen', (event) => {
-        const action = Core.parseAppUrl(event.url);
-        if (action) void handleWidgetAction(action);
+        void ingestNativeWidgetPending(Core.parseAppUrl(event.url));
       });
+      cap().App?.addListener?.('resume', () => { void applyPendingFromNative(); });
       cap().LocalNotifications?.addListener?.('localNotificationActionPerformed', (event) => {
         const extra = event?.notification?.extra || {};
         if (extra.habitId) void handleWidgetAction({ type: 'open', view: 'homeView' });
@@ -672,6 +908,7 @@
     maybeAutoDriveBackup,
     renderDriveUi,
     renderWidgetUi,
+    renderAdsUi,
     handleWidgetAction,
     requestNotifPermission,
     isNative,

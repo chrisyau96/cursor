@@ -71,4 +71,115 @@ const repeating = Launch.buildRepeatingNative([
 assert(repeating.length === 2, 'one native alarm per weekday');
 assert(repeating[0].weekday === 2 && repeating[1].weekday === 4, 'Capacitor weekday is Sunday=1');
 
+const mixedRepeating = Launch.buildRepeatingNative([
+  { id: 'daily', name: 'Water', reminder: { enabled: true, time: '08:00' }, frequency: { mode: 'daily', days: [0, 1, 2, 3, 4, 5, 6] } },
+  { id: 'flex', name: 'Gym', reminder: { enabled: true, time: '08:00' }, frequency: { mode: 'weekly', schedule: { type: 'any' } } },
+  { id: 'month', name: 'Review', reminder: { enabled: true, time: '08:00' }, frequency: { mode: 'monthly', schedule: { type: 'any' } } },
+  { id: 'paused', name: 'Off', reminder: { enabled: true, time: '08:00' }, paused: true, frequency: { mode: 'daily' } },
+], { reminderBody: (h) => h.name });
+assert(mixedRepeating.length === 7, 'only daily habits use repeating weekdays');
+assert(mixedRepeating.every((n) => n.extra.habitId === 'daily'), 'flex and monthly stay on one-shot slots');
+
+const past = Launch.buildReminderSlots([
+  { id: 'h1', name: 'Read', reminder: { enabled: true, time: '07:00' } },
+], {
+  todayKey: '2026-08-31',
+  remindersEnabled: true,
+  days: 3,
+  now: new Date(2026, 7, 31, 10, 0, 0),
+  habitNeedsReminderOn: () => true,
+});
+assert(past.length === 2, 'past time today is skipped');
+assert(past[0].dateKey === '2026-09-01', 'first remaining slot is tomorrow');
+
+const many = Launch.buildReminderSlots(
+  Array.from({ length: 20 }, (_, i) => ({ id: 'h' + i, name: 'H' + i, reminder: { enabled: true, time: '21:00' } })),
+  {
+    todayKey: '2026-08-31',
+    remindersEnabled: true,
+    days: 21,
+    now: new Date(2026, 7, 31, 10, 0, 0),
+    habitNeedsReminderOn: () => true,
+  },
+);
+assert(many.length === Launch.NATIVE_SLOT_LIMIT, 'native slot cap');
+
+const nativeNotes = Launch.toNativeNotifications([
+  { id: 42, title: 'Momentum', body: 'Time for Read', at: Date.parse('2026-09-01T21:00:00'), habitId: 'h1', dateKey: '2026-09-01' },
+]);
+assert(nativeNotes.length === 1 && nativeNotes[0].id === 42, 'oneshot maps id');
+assert(nativeNotes[0].schedule.allowWhileIdle === true, 'idle alarm');
+assert(typeof nativeNotes[0].schedule.at.getTime === 'function', 'schedule.at is a Date');
+assert(nativeNotes[0].extra.habitId === 'h1' && nativeNotes[0].extra.date === '2026-09-01', 'extra carries habit and day');
+
+assert(Launch.adsRemoved({ adsRemoved: true }) === true, 'ads removed flag');
+assert(Launch.shouldShowAds({ adsRemoved: false }) === true, 'show ads by default');
+assert(Launch.shouldShowAds({ adsRemoved: true }) === false, 'hide ads after purchase');
+assert(Launch.shouldShowAds({}) === true, 'missing flag still shows ads');
+const marked = Launch.markAdsRemoved({ adsRemoved: false }, '2026-09-01T00:00:00.000Z');
+assert(marked.adsRemoved === true && marked.adsRemovedAt === '2026-09-01T00:00:00.000Z', 'mark lifetime purchase');
+assert(Launch.ADS_PRODUCT_ID === 'remove_ads_lifetime', 'Play product id');
+assert(Launch.ADS_PRICE_LABEL === 'HK$38', 'Hong Kong lifetime price');
+assert(Launch.ADS_LIST_PRICE_LABEL === 'HK$158', 'intro list price');
+assert(Launch.ADS_OFFER_DAYS === 7, 'seven-day intro window');
+
+const memStore = (() => {
+  const m = {};
+  return {
+    getItem: (k) => (Object.prototype.hasOwnProperty.call(m, k) ? m[k] : null),
+    setItem: (k, v) => { m[k] = String(v); },
+  };
+})();
+const firstInstall = Date.parse('2026-09-01T00:00:00.000Z');
+assert(Launch.readInstalledAt(memStore, firstInstall) === firstInstall, 'records first install');
+assert(Launch.readInstalledAt(memStore, firstInstall + 1000) === firstInstall, 'keeps first install');
+const midOffer = Launch.adsIntroOffer(firstInstall + 2 * 86400000, firstInstall);
+assert(midOffer.active === true && midOffer.remainingMs === 5 * 86400000, 'offer active for 7 days');
+const afterOffer = Launch.adsIntroOffer(firstInstall + 8 * 86400000, firstInstall);
+assert(afterOffer.active === false && afterOffer.remainingMs === 0, 'offer ends after 7 days');
+assert(Launch.formatCountdown(2 * 86400000 + 3 * 3600000) === '2d 3h left', 'countdown days');
+assert(Launch.formatCountdown(90 * 60 * 1000) === '1h 30m left', 'countdown hours');
+assert(Launch.formatCountdown(45 * 1000) === '0m 45s left', 'countdown seconds');
+const liveCopy = Launch.adsOfferCopy(firstInstall + 1000, firstInstall);
+assert(liveCopy.limited === true && liveCopy.kicker === 'One-off purchase limited time offer!', 'limited-time kicker');
+assert(liveCopy.listPrice === 'HK$158' && liveCopy.offerPrice === 'HK$38', 'shows 158 then 38');
+assert(liveCopy.cta === 'Remove ads · HK$38', 'cta stays 38');
+const expiredCopy = Launch.adsOfferCopy(firstInstall + 8 * 86400000, firstInstall);
+assert(expiredCopy.limited === false && expiredCopy.kicker === 'One-off purchase', 'regular copy after window');
+assert(expiredCopy.countdown === '' && expiredCopy.offerPrice === 'HK$38', 'still HK$38 after window');
+assert(Launch.purchaseOwnsRemoveAds([{ productIdentifier: 'remove_ads_lifetime', purchaseState: 'PURCHASED' }]) === true, 'owns purchased sku');
+assert(Launch.purchaseOwnsRemoveAds([{ productId: 'remove_ads_lifetime', state: 'owned' }]) === true, 'owns alt field names');
+assert(Launch.purchaseOwnsRemoveAds([{ sku: 'remove_ads_lifetime' }]) === true, 'owns sku without state');
+assert(Launch.purchaseOwnsRemoveAds([{ productIdentifier: 'remove_ads_lifetime', purchaseState: 'cancelled' }]) === false, 'ignore cancelled');
+assert(Launch.purchaseOwnsRemoveAds([{ productIdentifier: 'other', purchaseState: 'purchased' }]) === false, 'ignore other sku');
+assert(Launch.purchaseOwnsRemoveAds([]) === false, 'empty purchase list');
+
+const multi = { records: [] };
+const multiApplied = Launch.applyPendingActions(multi, [
+  { type: 'complete', habitId: 'water', date: '2026-08-31' },
+  { type: 'complete', habitId: 'water', date: '2026-08-31' },
+  { type: 'complete', habitId: 'water', date: '2026-08-31' },
+], { uid: () => 'w' + Math.random(), todayKey: '2026-08-31', nowIso: 't' });
+assert(multiApplied.length === 3, 'each widget complete is one count');
+assert(multi.records.filter((r) => r.habitId === 'water').length === 3, 'multi-count habit can complete from widget more than once');
+
+const resetAfter = Launch.applyPendingActions(multi, [
+  { type: 'reset', habitId: 'water', date: '2026-08-31' },
+], { uid: () => 'x', todayKey: '2026-08-31' });
+assert(resetAfter.length === 1 && multi.records.length === 0, 'widget reset clears that day');
+
+const journal = Launch.applyPendingActions({ records: [] }, [{ type: 'journal' }], { uid: () => 'j', todayKey: '2026-08-31' });
+assert(journal[0].type === 'journal', 'journal pending is forwarded');
+
+assert(Launch.normalizeWidgetConfig(null).mode === 'today', 'default widget mode');
+assert(Launch.normalizeWidgetConfig({ mode: 'nope' }).mode === 'today', 'unknown widget mode falls back');
+assert(Launch.parseAppUrl('momentum://widget/journal').type === 'journal', 'journal widget url');
+assert(Launch.parseAppUrl('momentum://widget/open').type === 'open', 'open widget url');
+assert(Launch.parseAppUrl('https://example.com/?widgetAction=complete&habitId=h9&date=2026-08-31').date === '2026-08-31', 'web query keeps date');
+assert(Launch.parseAppUrl('ftp://nope') === null, 'bad protocol ignored');
+
+const delay = Launch.nextWebTimerDelay([{ at: Date.parse('2026-08-31T22:00:00') }], Date.parse('2026-08-31T10:00:00'));
+assert(delay && delay.delay > 0, 'web timer finds next slot');
+assert(Launch.nextWebTimerDelay([], Date.now()) === null, 'no slots means no timer');
+
 console.log('launch-core tests passed');

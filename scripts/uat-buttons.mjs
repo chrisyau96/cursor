@@ -50,6 +50,7 @@ function demoState() {
       reminders: true, globalReminderTime: '20:30', defaultReminderMessage: 'Hi {habit}!',
       dataMode: 'real', autoBackup: false, dailyBackup: false, fileConnected: false, backupFileName: '',
       onboardingComplete: true, vacations: [],
+      adsRemoved: false, adsRemovedAt: '',
       rewards: {
         creditRules: [{ id: uid(), pct: 50, amount: 2 }, { id: uid(), pct: 100, amount: 10 }],
         giftRules: [{ id: giftRuleId, gift: 'Buffet', icon: '🍽️', pct: 80, days: 30 }],
@@ -916,12 +917,134 @@ await test('Settings expose Google Drive backup, reminders, and widgets', async 
   await page.click('#topSettingsBtn');
   await page.waitForTimeout(400);
   assert(await page.locator('#driveConnectBtn').count() === 1, 'Drive connect button missing');
-  const freq = await page.locator('#driveBackupFreq option').count();
-  assert(freq >= 3, 'daily/weekly/off schedules missing');
+  assert(await page.locator('#googleClientIdInput').count() === 0, 'web client ID field should stay out of Settings');
+  assert(await page.locator('#googleAndroidOauthNote').count() === 0, 'Android OAuth note should stay out of Settings');
+  const freqLabels = await page.locator('#driveBackupFreq option').allTextContents();
+  assert(freqLabels.includes('Daily') && freqLabels.includes('Weekly') && freqLabels.includes('Off'), 'schedules should be Daily / Weekly / Off, got ' + freqLabels.join(','));
   assert(await page.locator('#widgetModeTabs button').count() === 6, 'six widget modes expected');
   assert(await page.locator('#testReminderBtn').count() === 1, 'test reminder button missing');
   const note = await page.locator('#reminderRuntimeNote').textContent();
   assert(!!note, 'reminder runtime note should render');
+  assert(await page.locator('#removeAdsBtn').count() === 1, 'remove-ads button missing');
+  assert(await page.locator('#restoreAdsPurchaseBtn').count() === 1, 'restore purchase button missing');
+  const adsCopy = await page.locator('#adsStatus').textContent();
+  assert(/Ads are on|Free version/i.test(adsCopy || ''), 'ads status should say ads are on');
+});
+
+await test('House ad banner shows until lifetime purchase is on device', async () => {
+  await page.evaluate(() => {
+    const s = JSON.parse(localStorage.getItem('habitTrackerProductionV7'));
+    s.settings.adsRemoved = false;
+    s.settings.adsRemovedAt = '';
+    localStorage.setItem('habitTrackerProductionV7', JSON.stringify(s));
+    localStorage.setItem('momentumInstalledAt', new Date().toISOString());
+  });
+  await page.reload({ waitUntil: 'domcontentloaded' });
+  await page.waitForTimeout(800);
+  const shown = await page.evaluate(() => {
+    const el = document.getElementById('adBanner');
+    const kicker = document.getElementById('adOfferKicker')?.textContent || '';
+    const price = document.getElementById('adOfferPrice')?.textContent || '';
+    const count = document.getElementById('adOfferCountdown')?.textContent || '';
+    return {
+      visible: !!(el && !el.hidden && document.body.classList.contains('has-ads')),
+      kicker,
+      price,
+      count,
+      nativeOverlay: !!(window.Capacitor?.Plugins?.AdMob),
+    };
+  });
+  assert(shown.visible, 'free users should see the house ad banner');
+  assert(/One-off purchase limited time offer/.test(shown.kicker), 'banner should use limited-time offer copy, got ' + shown.kicker);
+  assert(/HK\$158/.test(shown.price) && /HK\$38/.test(shown.price), 'banner should show HK$158 then HK$38, got ' + shown.price);
+  assert(/left/.test(shown.count), 'banner should show a countdown while the intro offer is valid, got ' + shown.count);
+  await page.click('#adBannerCta');
+  await page.waitForTimeout(400);
+  const toast = await page.locator('#toast').textContent().catch(() => '');
+  assert(/Play|HK\$38|purchase/i.test(toast || ''), 'web buy should point to Play HK$38 purchase, got ' + toast);
+});
+
+await test('adsRemoved hides banner and buy button', async () => {
+  await page.evaluate(() => {
+    const s = JSON.parse(localStorage.getItem('habitTrackerProductionV7'));
+    s.settings.adsRemoved = true;
+    s.settings.adsRemovedAt = '2026-09-01T00:00:00.000Z';
+    localStorage.setItem('habitTrackerProductionV7', JSON.stringify(s));
+  });
+  await page.reload({ waitUntil: 'domcontentloaded' });
+  await page.waitForTimeout(800);
+  const hidden = await page.evaluate(() => {
+    const el = document.getElementById('adBanner');
+    return !!(el && el.hidden && !document.body.classList.contains('has-ads'));
+  });
+  assert(hidden, 'purchased users should not see ads');
+  await page.click('#topSettingsBtn');
+  await page.waitForTimeout(400);
+  const status = await page.locator('#adsStatus').textContent();
+  assert(/removed/i.test(status || ''), 'settings should say ads removed');
+  const buyHidden = await page.locator('#removeAdsBtn').evaluate((el) => el.classList.contains('hidden-action'));
+  assert(buyHidden, 'remove-ads button hides after purchase');
+});
+
+await test('Dark mode quote and onboard label stay readable', async () => {
+  await page.evaluate(() => {
+    const s = JSON.parse(localStorage.getItem('habitTrackerProductionV7'));
+    s.settings.colorMode = 'dark';
+    s.settings.onboardingComplete = true;
+    s.settings.adsRemoved = false;
+    localStorage.setItem('habitTrackerProductionV7', JSON.stringify(s));
+  });
+  await page.reload({ waitUntil: 'domcontentloaded' });
+  await page.waitForTimeout(700);
+  const quote = await page.evaluate(() => {
+    const el = document.getElementById('dailyQuote');
+    const text = el?.querySelector('.quote-text');
+    const cs = el ? getComputedStyle(el) : null;
+    const ts = text ? getComputedStyle(text) : null;
+    return {
+      theme: document.documentElement.getAttribute('data-theme'),
+      bg: cs?.backgroundColor || '',
+      color: ts?.color || '',
+    };
+  });
+  assert(quote.theme === 'dark', 'appearance should be dark');
+  assert(!/rgb\(\s*243\s*,\s*239\s*,\s*255\s*\)/.test(quote.bg), 'quote card should not keep the light lilac wash, got ' + quote.bg);
+  await page.click('#topSettingsBtn');
+  await page.waitForTimeout(300);
+  await page.locator('#replayOnboardingBtn').click();
+  await page.waitForTimeout(500);
+  const label = await page.evaluate(() => {
+    const el = document.querySelector('.onboard-spotlight-label');
+    if (!el) return null;
+    const cs = getComputedStyle(el);
+    return { color: cs.color, bg: cs.backgroundColor, text: el.textContent };
+  });
+  assert(!!label && /tour/i.test(label.text || ''), 'onboard first-step label missing');
+  assert(/rgb\(\s*255\s*,\s*255\s*,\s*255\s*\)/.test(label.color), 'onboard label should be white in dark mode, got ' + label.color);
+  await page.evaluate(() => {
+    const s = JSON.parse(localStorage.getItem('habitTrackerProductionV7'));
+    s.settings.colorMode = 'light';
+    s.settings.onboardingComplete = true;
+    localStorage.setItem('habitTrackerProductionV7', JSON.stringify(s));
+  });
+  await page.reload({ waitUntil: 'domcontentloaded' });
+  await page.waitForTimeout(500);
+});
+
+await test('Widget preview switches through all six modes', async () => {
+  await page.click('#topSettingsBtn');
+  await page.waitForTimeout(300);
+  const modes = ['today', 'habits', 'streak', 'credits', 'gift', 'journal'];
+  for (const mode of modes) {
+    await page.locator(`#widgetModeTabs button[data-widget-mode="${mode}"]`).click();
+    await page.waitForTimeout(250);
+    const on = await page.locator(`#widgetModeTabs button[data-widget-mode="${mode}"]`).evaluate((el) => el.classList.contains('active'));
+    assert(on, mode + ' tab should be active');
+    const preview = await page.locator('#widgetPreview').innerHTML();
+    assert(preview.length > 10, mode + ' preview should render');
+  }
+  const stored = await page.evaluate(() => JSON.parse(localStorage.getItem('habitTrackerProductionV7')).settings.widget.mode);
+  assert(stored === 'journal', 'last widget mode should persist, got ' + stored);
 });
 
 await test('Widget complete query records a habit without opening a habit row', async () => {
