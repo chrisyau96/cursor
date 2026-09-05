@@ -1,0 +1,67 @@
+---
+description: Operating model for substantial product development — capture, think, foundation, increment, review, release
+alwaysApply: true
+---
+
+# Product Build Operating Model
+
+Use this lifecycle for all substantial product work:
+
+Capture ideas → Define problem → Research options → Design solution → Plan build → Build foundation → Validate foundation → Build features → Test continuously → Review system → Release safely → Learn & improve.
+
+## Capture ideas
+
+- Capture every idea, feature, constraint, and future possibility.
+- Do not treat an idea dump as a build-now instruction.
+- Organize into **Now / Next / Later** when useful.
+- New ideas during implementation enter the backlog unless they reveal a fundamental design flaw.
+
+## THINK before major implementation
+
+Complete before coding:
+
+1. **Define problem** — users, scope, success criteria
+2. **Research options** — official docs and proven GitHub/open-source approaches when architecture, libraries, integrations, or hard problems benefit
+3. **Design solution** — architecture, assumptions, risks, trade-offs
+4. **Plan build** — smallest sound foundation / thin vertical slice
+
+THINK has two jobs:
+
+- Align with the user on scope, assumptions, priorities, architecture, risks, trade-offs, and success criteria.
+- Produce decisions that guide later implementation.
+
+Do not rush from an idea dump into coding.
+
+## Build foundation
+
+- After alignment, build the smallest sound foundation first.
+- Prove the real end-to-end flow before expanding features.
+- **PAUSE** after the foundation. Validate architecture, schema, deployment, security, integrations, tests, and extensibility before adding features.
+
+## Build features incrementally
+
+Once the foundation is validated:
+
+Build feature → Test feature → Fix issue → Integrate feature → Verify regression → Continue.
+
+- Investigate root causes before patching symptoms.
+- Do not treat generated code or a successful deploy as done. Verify the real user workflow.
+
+## Choose models
+
+- Use higher-capability / reasoning models for ambiguous, architectural, security-sensitive, cross-system, high-impact, or difficult debugging work.
+- Use mid-tier models for well-defined implementation work.
+
+## Review system before release
+
+Before important releases, perform a fresh system-level review:
+
+Requirements → Architecture → Bugs → Security → Data integrity → Performance → Tests → Deployment → Unnecessary complexity.
+
+```text
+❌ BAD: User dumps 12 features + future sync ideas → start coding all of them.
+✅ GOOD: Capture all 12, split Now/Next/Later, complete THINK, align on the thin slice, then build and pause to validate.
+
+❌ BAD: Foundation deploys → keep adding features immediately.
+✅ GOOD: Pause, validate schema/security/tests/extensibility, then increment features with regression checks.
+```
