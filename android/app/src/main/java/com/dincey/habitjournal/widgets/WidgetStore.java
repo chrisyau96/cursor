@@ -84,11 +84,21 @@ public final class WidgetStore {
   }
 
   public static void refreshAll(Context ctx) {
-    Intent intent = new Intent(ctx, MomentumWidgetProvider.class);
-    intent.setAction(AppWidgetManager.ACTION_APPWIDGET_UPDATE);
-    int[] ids = AppWidgetManager.getInstance(ctx)
-      .getAppWidgetIds(new ComponentName(ctx, MomentumWidgetProvider.class));
-    intent.putExtra(AppWidgetManager.EXTRA_APPWIDGET_IDS, ids);
-    ctx.sendBroadcast(intent);
+    Class<?>[] types = {
+      MomentumWidgetProvider.class,
+      StreakWidgetProvider.class,
+      CreditsWidgetProvider.class,
+      GiftWidgetProvider.class,
+      JournalWidgetProvider.class
+    };
+    AppWidgetManager manager = AppWidgetManager.getInstance(ctx);
+    for (Class<?> type : types) {
+      Intent intent = new Intent(ctx, type);
+      intent.setAction(AppWidgetManager.ACTION_APPWIDGET_UPDATE);
+      int[] ids = manager.getAppWidgetIds(new ComponentName(ctx, type));
+      if (ids == null || ids.length == 0) continue;
+      intent.putExtra(AppWidgetManager.EXTRA_APPWIDGET_IDS, ids);
+      ctx.sendBroadcast(intent);
+    }
   }
 }

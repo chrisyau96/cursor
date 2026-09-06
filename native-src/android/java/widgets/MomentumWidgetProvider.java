@@ -13,10 +13,14 @@ import org.json.JSONObject;
 import com.dincey.habitjournal.R;
 
 public class MomentumWidgetProvider extends AppWidgetProvider {
+  protected String widgetMode() {
+    return "today";
+  }
+
   @Override
   public void onUpdate(Context context, AppWidgetManager manager, int[] appWidgetIds) {
     JSONObject snap = WidgetStore.readSnapshot(context);
-    String mode = snap.optString("mode", "today");
+    String mode = widgetMode();
     for (int id : appWidgetIds) {
       RemoteViews views = new RemoteViews(context.getPackageName(), R.layout.widget_momentum);
       bind(context, views, snap, mode);

@@ -64,7 +64,7 @@
     return ensureGis().then(() => new Promise((resolve, reject) => {
       tokenClient = window.google.accounts.oauth2.initTokenClient({
         client_id: cid,
-        scope: Core.DRIVE_SCOPE,
+        scope: Core.DRIVE_SCOPE + ' https://www.googleapis.com/auth/userinfo.email',
         callback: (resp) => {
           if (resp?.error) { reject(new Error(resp.error_description || resp.error)); return; }
           writeToken({
@@ -108,7 +108,7 @@
   async function nativeGoogleToken(interactive) {
     const social = await ensureSocialGoogle();
     if (!social) return null;
-    const scopes = ['email', 'profile', 'openid', Core.DRIVE_SCOPE];
+    const scopes = ['email', 'profile', 'openid', Core.DRIVE_SCOPE, 'https://www.googleapis.com/auth/userinfo.email'];
     if (!interactive) {
       try {
         const logged = await social.isLoggedIn({ provider: 'google' });
@@ -123,9 +123,9 @@
       provider: 'google',
       options: {
         scopes,
-        forceRefreshToken: false,
-        filterByAuthorizedAccounts: !interactive,
-        autoSelectEnabled: true,
+        forceRefreshToken: !!interactive,
+        filterByAuthorizedAccounts: false,
+        autoSelectEnabled: !interactive,
         style: interactive ? 'standard' : 'bottom',
       },
     });
@@ -179,11 +179,22 @@
 
   async function findDriveFile() {
     const s = settings();
-    if (s.driveFileId) return s.driveFileId;
-    const q = encodeURIComponent("name='" + Core.DRIVE_FILE_NAME + "'");
-    const res = await driveFetch('https://www.googleapis.com/drive/v3/files?spaces=appDataFolder&fields=files(id,name)&q=' + q, { method: 'GET' });
+    if (s.driveFileId) {
+      try {
+        const res = await driveFetch('https://www.googleapis.com/drive/v3/files/' + encodeURIComponent(s.driveFileId) + '?fields=id,name,trashed', { method: 'GET' });
+        const data = await res.json();
+        if (data?.id && !data.trashed) {
+          if (data.name && state()?.settings) state().settings.driveFileName = data.name;
+          return data.id;
+        }
+      } catch (e) { /* look up by name */ }
+    }
+    const q = encodeURIComponent("name='" + Core.DRIVE_FILE_NAME + "' and trashed=false");
+    const res = await driveFetch('https://www.googleapis.com/drive/v3/files?fields=files(id,name)&q=' + q + '&pageSize=1&spaces=drive', { method: 'GET' });
     const data = await res.json();
-    return data.files?.[0]?.id || '';
+    const file = data.files?.[0];
+    if (file?.name && state()?.settings) state().settings.driveFileName = file.name;
+    return file?.id || '';
   }
 
   function backupJson() {
@@ -201,8 +212,8 @@
       const body = backupJson();
       let fileId = await findDriveFile();
       if (!fileId) {
-        const meta = { name: Core.DRIVE_FILE_NAME, parents: ['appDataFolder'] };
-        const boundary = 'momentum' + Date.now();
+        const meta = { name: Core.DRIVE_FILE_NAME, mimeType: 'application/json' };
+        const boundary = 'habitjournal' + Date.now();
         const mixed = `--${boundary}\r\nContent-Type: application/json; charset=UTF-8\r\n\r\n${JSON.stringify(meta)}\r\n--${boundary}\r\nContent-Type: application/json\r\n\r\n${body}\r\n--${boundary}--`;
         const res = await driveFetch('https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart', {
           method: 'POST',
@@ -221,6 +232,7 @@
       const st = state();
       st.settings.driveConnected = true;
       st.settings.driveFileId = fileId;
+      st.settings.driveFileName = st.settings.driveFileName || Core.DRIVE_FILE_NAME;
       st.settings.lastDriveBackupAt = new Date().toISOString();
       await app().save(true, { render: 'none' });
       renderDriveUi();
@@ -240,6 +252,7 @@
       driveEmail: settings().driveEmail,
       driveBackupFreq: settings().driveBackupFreq || 'daily',
       driveFileId: fileId,
+      driveFileName: settings().driveFileName || Core.DRIVE_FILE_NAME,
       googleClientId: settings().googleClientId,
       googleAndroidClientId: settings().googleAndroidClientId,
       lastDriveBackupAt: new Date().toISOString(),
@@ -265,7 +278,8 @@
     if (!st.settings.driveBackupFreq) st.settings.driveBackupFreq = 'daily';
     await app().save(true, { render: 'none' });
     await uploadBackup();
-    app().toast('Google Drive backup connected');
+    const file = settings().driveFileName || Core.DRIVE_FILE_NAME;
+    app().toast('Connected · ' + file);
     renderDriveUi();
   }
 
@@ -283,6 +297,7 @@
     st.settings.driveConnected = false;
     st.settings.driveEmail = '';
     st.settings.driveFileId = '';
+    st.settings.driveFileName = '';
     await app().save(true, { render: 'none' });
     renderDriveUi();
     app().toast('Google Drive disconnected');
@@ -314,9 +329,10 @@
     if (status) {
       status.className = 'sync-status-panel' + (s.driveConnected ? ' connected' : '');
       if (s.driveConnected) {
-        status.innerHTML = `<strong>Google Drive connected</strong>${s.driveEmail ? ' · ' + escape(s.driveEmail) : ''}<div class="small-note" style="margin-top:6px">Last auto backup: <strong>${formatStamp(s.lastDriveBackupAt)}</strong></div>`;
+        const file = s.driveFileName || Core.DRIVE_FILE_NAME;
+        status.innerHTML = `<strong>Connected</strong>${s.driveEmail ? ' · ' + escape(s.driveEmail) : ''}<div class="small-note" style="margin-top:6px">${escape(file)} · last backup <strong>${formatStamp(s.lastDriveBackupAt)}</strong></div>`;
       } else {
-        status.innerHTML = `<strong>Not connected</strong><div class="small-note" style="margin-top:6px">Tap Connect to sign in with Google.</div>`;
+        status.innerHTML = `<strong>Not connected</strong><div class="small-note" style="margin-top:6px">Sign in with Google to create a Drive backup file and keep it updated.</div>`;
       }
     }
     document.getElementById('driveConnectBtn')?.classList.toggle('hidden-action', !!s.driveConnected);
@@ -332,13 +348,7 @@
     const date = a.parseDate(dateKey);
     if (!h.reminder?.enabled || h.paused || h.archived) return false;
     if (a.completionOfHabit(h, date).done) return false;
-    if (a.isNotSpecific(h)) {
-      const due = a.habitDueDate(h, date);
-      const daysBefore = Number(h.reminder.daysBeforeDue ?? 1);
-      const remindDate = new Date(a.parseDate(due));
-      remindDate.setDate(remindDate.getDate() - daysBefore);
-      return a.dateKey(remindDate) === dateKey;
-    }
+    if (a.isNotSpecific(h)) return false;
     return a.isScheduledToday(h, date) || a.isFlexibleHabit(h, date);
   }
 
@@ -354,17 +364,41 @@
     localStorage.setItem(Core.REMINDER_FIRED_KEY, JSON.stringify(map));
   }
 
+  function nativeNotifPayload(slot, allowIdle) {
+    const payload = {
+      id: Number(slot.id) || Core.TEST_NOTIF_ID,
+      title: slot.title || Core.APP_TITLE,
+      body: slot.body || '',
+      channelId: Core.NOTIF_CHANNEL_ID,
+      smallIcon: 'ic_stat_momentum',
+      iconColor: '#4F46E5',
+      sound: 'default',
+      extra: slot.extra || {},
+    };
+    if (slot.at) {
+      payload.schedule = { at: new Date(slot.at), allowWhileIdle: !!allowIdle };
+    }
+    return payload;
+  }
+
   async function showLocalNotification(slot) {
-    const title = slot.title || 'Momentum';
+    const title = slot.title || Core.APP_TITLE;
     const body = slot.body || '';
-    try {
-      if (isNative() && cap().LocalNotifications) {
-        await cap().LocalNotifications.schedule({
-          notifications: [{ id: slot.id, title, body, schedule: { at: new Date(slot.at) }, extra: slot.extra }],
-        });
+    if (isNative() && cap().LocalNotifications) {
+      await ensureNotifChannel();
+      try {
+        await cap().LocalNotifications.schedule({ notifications: [nativeNotifPayload(slot, true)] });
         return;
+      } catch (e) {
+        const fallback = nativeNotifPayload(slot, false);
+        try {
+          await cap().LocalNotifications.schedule({ notifications: [fallback] });
+          return;
+        } catch (e2) {
+          throw (e2 instanceof Error ? e2 : new Error(String(e2?.message || e2 || e)));
+        }
       }
-    } catch (e) { /* fall through */ }
+    }
     if (navigator.serviceWorker) {
       try {
         const reg = await navigator.serviceWorker.ready;
@@ -380,10 +414,31 @@
     app()?.toast(body);
   }
 
+  async function ensureNotifChannel() {
+    if (!isNative() || !cap().LocalNotifications?.createChannel) return;
+    try {
+      await cap().LocalNotifications.createChannel({
+        id: Core.NOTIF_CHANNEL_ID,
+        name: Core.APP_TITLE,
+        description: 'Habit reminders',
+        importance: 5,
+        visibility: 1,
+        sound: 'default',
+        vibration: true,
+        lights: true,
+      });
+    } catch (e) { /* channel may already exist */ }
+  }
+
   async function requestNotifPermission() {
     if (isNative() && cap().LocalNotifications) {
-      const perm = await cap().LocalNotifications.requestPermissions();
+      let perm = {};
+      try { perm = await cap().LocalNotifications.checkPermissions(); } catch (e) { perm = {}; }
+      if (perm?.display !== 'granted') {
+        try { perm = await cap().LocalNotifications.requestPermissions(); } catch (e) { perm = perm || {}; }
+      }
       const granted = perm?.display === 'granted' || perm?.granted === true;
+      if (granted) await ensureNotifChannel();
       try {
         const exact = await cap().LocalNotifications.checkExactNotificationSetting?.();
         if (granted && exact && exact.exact_alarm !== 'granted') {
@@ -416,8 +471,11 @@
   async function scheduleNative(slots) {
     if (!isNative() || !cap().LocalNotifications) return;
     try {
+      await ensureNotifChannel();
       const pending = await cap().LocalNotifications.getPending();
-      const ids = (pending?.notifications || []).map((n) => ({ id: n.id }));
+      const ids = (pending?.notifications || [])
+        .filter((n) => Number(n.id) !== Core.TEST_NOTIF_ID && !n.extra?.test)
+        .map((n) => ({ id: n.id }));
       if (ids.length) await cap().LocalNotifications.cancel({ notifications: ids });
       const notifications = Core.toNativeNotifications(slots || []);
       if (!notifications.length) return;
@@ -477,10 +535,10 @@
     }
     const n = (slots || currentSlots()).length;
     if (isNative()) {
-      note.textContent = 'Device reminders are scheduled on this phone. They still fire if Momentum is closed or swiped away (Android OS alarms — not web push). Grant notification permission when asked.';
+      note.textContent = 'Reminders fire on this phone even if the app is closed. Allow notifications when asked.';
     } else {
       note.textContent = n
-        ? `${n} reminder${n === 1 ? '' : 's'} queued. In the browser they fire only while Momentum is open. The Play / App Store app fires them when closed.`
+        ? `${n} reminder${n === 1 ? '' : 's'} queued. Browser alerts only work while the tab is open.`
         : 'No upcoming habit reminders in the next 21 days.';
     }
   }
@@ -552,6 +610,10 @@
     return snap;
   }
 
+  function renderWidgetPreview() {}
+
+  function renderWidgetUi() {}
+
   function readPending() {
     try { return JSON.parse(localStorage.getItem(Core.PENDING_KEY) || '[]'); }
     catch (e) { return []; }
@@ -617,79 +679,30 @@
     void handleWidgetAction(action);
   }
 
-  function renderWidgetPreview(snap) {
-    const box = document.getElementById('widgetPreview');
-    if (!box) return;
-    const data = snap || buildSnapshot();
-    const cfg = Core.normalizeWidgetConfig(settings().widget);
-    let html = '';
-    if (cfg.mode === 'today') {
-      const rows = data.outstanding.slice(0, 6).map((h) => `<div class="widget-row"><span>${h.emoji} ${escape(h.name)}</span><strong>${h.count}/${h.target}</strong></div>`).join('') || '<div class="small-note">No outstanding tasks today</div>';
-      html = `<div class="widget-frame"><div class="widget-kicker">Today</div>${rows}</div>`;
-    } else if (cfg.mode === 'habits') {
-      const rows = data.habits.map((h) => `<div class="widget-row"><span>${h.emoji} ${escape(h.name)}</span><strong>${h.dueLabel}</strong></div>`).join('') || '<div class="small-note">Select 1–6 habits</div>';
-      html = `<div class="widget-frame layout-${cfg.layout}">${rows}</div>`;
-    } else if (cfg.mode === 'streak') {
-      html = `<div class="widget-frame widget-stat"><div class="widget-kicker">Streak</div><div class="widget-big">${data.streak.current}</div><div class="small-note">Best ${data.streak.best}</div></div>`;
-    } else if (cfg.mode === 'credits') {
-      html = `<div class="widget-frame widget-stat"><div class="widget-kicker">Credits</div><div class="widget-big">HK$${data.credits}</div></div>`;
-    } else if (cfg.mode === 'gift') {
-      html = data.gift
-        ? `<div class="widget-frame widget-stat"><div class="widget-kicker">${data.gift.icon} ${escape(data.gift.label)}</div><div class="widget-big">${data.gift.current}/${data.gift.target}</div></div>`
-        : `<div class="widget-frame"><div class="small-note">No gift goal yet</div></div>`;
-    } else {
-      html = `<div class="widget-frame widget-stat"><div class="widget-kicker">Journal</div><div class="widget-big">${data.journal.done ? '✓' : '✎'}</div><div class="small-note">${data.journal.done ? 'Logged today' : 'Tap to log'}</div></div>`;
-    }
-    box.innerHTML = html;
-  }
-
-  function renderWidgetUi() {
-    const st = state();
-    if (!st) return;
-    const cfg = Core.normalizeWidgetConfig(st.settings.widget);
-    document.querySelectorAll('#widgetModeTabs button').forEach((b) => b.classList.toggle('active', b.dataset.widgetMode === cfg.mode));
-    const layout = document.getElementById('widgetLayout');
-    if (layout) layout.value = String(cfg.layout);
-    const list = document.getElementById('widgetHabitPicker');
-    if (list) {
-      const habits = app().activeHabits().filter((h) => !h.paused);
-      list.innerHTML = habits.map((h) => {
-        const on = cfg.habitIds.includes(h.id);
-        return `<label class="widget-habit ${on ? 'on' : ''}"><input type="checkbox" data-widget-habit="${h.id}" ${on ? 'checked' : ''}> ${h.emoji || ''} ${escape(h.name)}</label>`;
-      }).join('') || '<div class="small-note">Add habits first</div>';
-      list.style.display = cfg.mode === 'habits' ? 'grid' : 'none';
-    }
-    const layoutWrap = document.getElementById('widgetLayoutWrap');
-    if (layoutWrap) layoutWrap.style.display = cfg.mode === 'habits' ? 'block' : 'none';
-    renderWidgetPreview();
-  }
-
   let offerTimer = null;
 
   function fillAdsOffer() {
     const copy = Core.adsOfferCopy(Date.now(), installedAt());
-    const kicker = document.getElementById('adOfferKicker');
     const price = document.getElementById('adOfferPrice');
     const count = document.getElementById('adOfferCountdown');
     const cta = document.getElementById('adBannerCta');
     const buy = document.getElementById('removeAdsBtn');
     const note = document.getElementById('adsOfferNote');
-    if (kicker) kicker.textContent = copy.kicker;
     if (price) {
       price.innerHTML = copy.limited
-        ? '<s>' + copy.listPrice + '</s> ' + copy.offerPrice
-        : copy.offerPrice;
+        ? '<s>' + copy.listPrice + '</s> <strong>' + copy.offerPrice + '</strong>'
+        : '<strong>' + copy.offerPrice + '</strong>';
     }
     if (count) {
       count.hidden = !copy.limited;
       count.textContent = copy.countdown;
     }
-    if (cta) cta.textContent = copy.cta;
-    if (buy) buy.textContent = copy.cta;
+    if (cta) cta.textContent = 'Remove Ads';
+    if (buy) buy.textContent = 'Remove Ads';
     if (note) {
       note.innerHTML = copy.limited
-        ? 'One-off purchase limited time offer! <s>' + copy.listPrice + '</s> <strong>' + copy.offerPrice + '</strong> · ' + copy.countdown + '. Same Google account can Restore later.'
-        : 'Remove all ads forever for <strong>' + copy.offerPrice + '</strong> (one-time Play purchase). Restore on a new phone with the same Google account.';
+        ? '<s>' + copy.listPrice + '</s> <strong>' + copy.offerPrice + '</strong>'
+        : '<strong>' + copy.offerPrice + '</strong>';
     }
   }
 
@@ -723,8 +736,8 @@
     if (status) {
       status.className = 'sync-status-panel' + (show ? '' : ' connected');
       status.innerHTML = show
-        ? '<strong>Ads are on</strong><div class="small-note" style="margin-top:6px">House banner above the tab bar. Buy once to remove ads for life.</div>'
-        : '<strong>Ads removed</strong><div class="small-note" style="margin-top:6px">Lifetime purchase is on this device.</div>';
+        ? '<strong>Ads on</strong>'
+        : '<strong>Ads removed</strong>';
     }
     const buy = document.getElementById('removeAdsBtn');
     if (buy) buy.classList.toggle('hidden-action', !show);
@@ -768,7 +781,7 @@
     }
     if (!silent) {
       if (!isNative() || !cap().NativePurchases) {
-        app().toast('Restore works in the Play Store app after you buy HK$38 remove-ads.');
+        app().toast('Restore works in the Play app after you buy Remove Ads.');
       } else {
         app().toast('No remove-ads purchase found for this Google account.');
       }
@@ -784,7 +797,7 @@
     }
     const plugin = cap().NativePurchases;
     if (!isNative() || !plugin) {
-      app().toast('HK$38 lifetime remove-ads is a Play Store purchase. Install the Android app to buy.');
+      app().toast('Remove Ads is a Play Store purchase. Install the Android app to buy.');
       return;
     }
     try {
@@ -822,10 +835,20 @@
     await writeWidgetSnapshot();
   }
 
+  let driveDebounce = null;
+  function queueDriveBackup() {
+    if (!settings().driveConnected) return;
+    clearTimeout(driveDebounce);
+    driveDebounce = setTimeout(() => {
+      void uploadBackup().catch(() => {});
+    }, 2000);
+  }
+
   async function onStateSaved() {
     await writeWidgetSnapshot();
     await scheduleReminders();
     renderAdsUi();
+    queueDriveBackup();
   }
 
   function bindUi() {
@@ -847,27 +870,22 @@
     });
     document.getElementById('testReminderBtn')?.addEventListener('click', async () => {
       const ok = await requestNotifPermission();
-      await showLocalNotification({ id: 1, title: 'Momentum', body: 'Reminders are working.', at: Date.now() + 1500 });
-      if (!ok && !isNative()) app().toast('Allow notifications in the browser or install the store app for lock-screen alerts.');
-    });
-    document.getElementById('widgetModeTabs')?.addEventListener('click', (e) => {
-      const btn = e.target.closest('button[data-widget-mode]');
-      if (!btn) return;
-      void saveWidgetConfig({ mode: btn.dataset.widgetMode });
-    });
-    document.getElementById('widgetLayout')?.addEventListener('change', (e) => {
-      void saveWidgetConfig({ layout: Number(e.target.value) });
-    });
-    document.getElementById('widgetHabitPicker')?.addEventListener('change', (e) => {
-      const box = e.target.closest('input[data-widget-habit]');
-      if (!box) return;
-      const cfg = Core.normalizeWidgetConfig(settings().widget);
-      const id = box.getAttribute('data-widget-habit');
-      let ids = cfg.habitIds.slice();
-      if (box.checked) {
-        if (!ids.includes(id) && ids.length < 6) ids.push(id);
-      } else ids = ids.filter((x) => x !== id);
-      void saveWidgetConfig({ habitIds: ids, layout: Math.max(ids.length, 1) });
+      if (!ok) {
+        app()?.toast('Allow notifications, then tap Send test notification again.');
+        return;
+      }
+      try {
+        await showLocalNotification({
+          id: Core.TEST_NOTIF_ID,
+          title: Core.APP_TITLE,
+          body: 'Reminders are working.',
+          at: Date.now() + 3000,
+          extra: { test: true },
+        });
+        app()?.toast(isNative() ? 'Test notification in 3 seconds' : 'Test notification sent');
+      } catch (e) {
+        app()?.toast(String(e?.message || e || 'Could not send test notification'));
+      }
     });
     document.getElementById('removeAdsBtn')?.addEventListener('click', () => { void purchaseRemoveAds(); });
     document.getElementById('restoreAdsPurchaseBtn')?.addEventListener('click', () => { void restoreAdsPurchase(); });
@@ -911,6 +929,7 @@
     renderAdsUi,
     handleWidgetAction,
     requestNotifPermission,
+    queueDriveBackup,
     isNative,
   };
 

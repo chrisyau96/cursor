@@ -3,24 +3,26 @@
 (function (root) {
   const Launch = {};
 
-  Launch.DRIVE_FILE_NAME = 'momentum-backup.json';
-  Launch.DRIVE_SCOPE = 'https://www.googleapis.com/auth/drive.appdata';
+  Launch.DRIVE_FILE_NAME = 'Habit-Journal-backup.json';
+  Launch.DRIVE_SCOPE = 'https://www.googleapis.com/auth/drive.file';
   Launch.TOKEN_KEY = 'momentumDriveToken';
   Launch.PENDING_KEY = 'momentumWidgetPending';
   Launch.SNAPSHOT_KEY = 'momentumWidgetSnapshot';
   Launch.REMINDER_FIRED_KEY = 'momentumReminderFired';
   Launch.ADS_PRODUCT_ID = 'remove_ads_lifetime';
-  Launch.ADS_PRICE_LABEL = 'HK$38';
-  Launch.ADS_LIST_PRICE_LABEL = 'HK$158';
+  Launch.ADS_PRICE_LABEL = 'HK$8';
+  Launch.ADS_LIST_PRICE_LABEL = 'HK$38';
   Launch.ADS_OFFER_DAYS = 7;
+  Launch.APP_TITLE = 'Habit & Journal';
+  Launch.NOTIF_CHANNEL_ID = 'habit_journal';
+  Launch.TEST_NOTIF_ID = 900001;
   Launch.INSTALLED_AT_KEY = 'momentumInstalledAt';
   Launch.ADMOB_TEST_APP_ID = 'ca-app-pub-3940256099942544~3347511713';
   Launch.ADMOB_TEST_BANNER = 'ca-app-pub-3940256099942544/6300978111';
   Launch.NATIVE_SLOT_LIMIT = 200;
   Launch.WIDGET_MODES = [
-    { id: 'today', label: 'Today tasks', hint: 'Outstanding habits with complete / reset' },
-    { id: 'habits', label: 'Selected habits', hint: 'Due in X days for 1–6 habits' },
-    { id: 'streak', label: 'Current streak', hint: '100% completion streak' },
+    { id: 'today', label: 'Today', hint: 'Outstanding habits with complete / reset' },
+    { id: 'streak', label: 'Streak', hint: '100% completion streak' },
     { id: 'credits', label: 'Credits', hint: 'Available credit balance' },
     { id: 'gift', label: 'Next gift', hint: 'Gift streak progress' },
     { id: 'journal', label: 'Journal', hint: 'Tap to log today’s journal' },
@@ -29,12 +31,26 @@
   Launch.pad2 = (n) => String(n).padStart(2, '0');
   Launch.dateKeyFromParts = (y, m, d) => `${y}-${Launch.pad2(m)}-${Launch.pad2(d)}`;
 
-  Launch.weekStartKey = function (dateKey) {
+  Launch.weekStartDow = function (weekStart) {
+    const v = String(weekStart || 'mon');
+    if (v === 'sat') return 6;
+    if (v === 'sun') return 0;
+    return 1;
+  };
+
+  Launch.weekStartKey = function (dateKey, weekStart) {
     const [y, m, d] = String(dateKey || '').split('-').map(Number);
     if (!y || !m || !d) return '';
     const dt = new Date(y, m - 1, d);
-    dt.setDate(dt.getDate() - dt.getDay());
+    const start = Launch.weekStartDow(weekStart);
+    dt.setDate(dt.getDate() - ((dt.getDay() - start + 7) % 7));
     return Launch.dateKeyFromParts(dt.getFullYear(), dt.getMonth() + 1, dt.getDate());
+  };
+
+  Launch.isNotSpecificHabit = function (habit) {
+    const f = (habit && habit.frequency) || {};
+    if (f.mode === 'daily') return f.schedule?.type === 'any';
+    return !f.schedule || f.schedule.type === 'any';
   };
 
   Launch.addDaysKey = function (dateKey, days) {
@@ -58,7 +74,10 @@
     const last = String(settings.lastDriveBackupAt || '').slice(0, 10);
     if (!last) return true;
     if (freq === 'daily') return last !== todayKey;
-    if (freq === 'weekly') return Launch.weekStartKey(last) !== Launch.weekStartKey(todayKey);
+    if (freq === 'weekly') {
+      const ws = settings.weekStart || 'mon';
+      return Launch.weekStartKey(last, ws) !== Launch.weekStartKey(todayKey, ws);
+    }
     return false;
   };
 
@@ -86,6 +105,7 @@
     if (!opts.remindersEnabled) return slots;
     (habits || []).forEach((h) => {
       if (!h || !h.reminder?.enabled || h.paused || h.archived) return;
+      if (Launch.isNotSpecificHabit(h)) return;
       const t = Launch.parseHm(h.reminder.time);
       for (let i = 0; i < days; i++) {
         const dateKey = Launch.addDaysKey(todayKey, i);
@@ -99,7 +119,7 @@
           dateKey,
           time: `${Launch.pad2(t.hour)}:${Launch.pad2(t.minute)}`,
           at: at.getTime(),
-          title: 'Momentum',
+          title: Launch.APP_TITLE,
           body: bodyFn(h),
           extra: { habitId: h.id, date: dateKey },
         });
@@ -114,6 +134,7 @@
     const notes = [];
     (habits || []).forEach((h) => {
       if (!h || !h.reminder?.enabled || h.paused || h.archived) return;
+      if (Launch.isNotSpecificHabit(h)) return;
       const f = h.frequency || {};
       if (f.mode !== 'daily') return;
       const t = Launch.parseHm(h.reminder.time);
@@ -124,7 +145,7 @@
       days.forEach((d) => {
         notes.push({
           id: Launch.notifId(h.id, 'w' + d),
-          title: 'Momentum',
+          title: Launch.APP_TITLE,
           body: bodyFn(h),
           weekday: d + 1,
           hour: t.hour,
@@ -182,29 +203,29 @@
     const h = Math.floor((total % 86400000) / 3600000);
     const m = Math.floor((total % 3600000) / 60000);
     const s = Math.floor((total % 60000) / 1000);
-    if (d > 0) return d + 'd ' + h + 'h left';
-    if (h > 0) return h + 'h ' + m + 'm left';
-    return m + 'm ' + s + 's left';
+    if (d > 0) return d + 'd ' + Launch.pad2(h) + 'h ' + Launch.pad2(m) + 'm ' + Launch.pad2(s) + 's';
+    if (h > 0) return h + 'h ' + Launch.pad2(m) + 'm ' + Launch.pad2(s) + 's';
+    return m + 'm ' + Launch.pad2(s) + 's';
   };
 
   Launch.adsOfferCopy = function (nowMs, installedAt) {
     const offer = Launch.adsIntroOffer(nowMs, installedAt);
     if (offer.active) {
       return {
-        kicker: 'One-off purchase limited time offer!',
+        kicker: '',
         listPrice: offer.listPrice,
         offerPrice: offer.offerPrice,
         countdown: Launch.formatCountdown(offer.remainingMs),
-        cta: 'Remove ads · ' + offer.offerPrice,
+        cta: 'Remove Ads',
         limited: true,
       };
     }
     return {
-      kicker: 'One-off purchase',
+      kicker: '',
       listPrice: '',
       offerPrice: Launch.ADS_PRICE_LABEL,
       countdown: '',
-      cta: 'Remove ads · ' + Launch.ADS_PRICE_LABEL,
+      cta: 'Remove Ads',
       limited: false,
     };
   };
@@ -223,8 +244,11 @@
   Launch.toNativeNotifications = function (slots) {
     return (slots || []).map((s) => ({
       id: s.id,
-      title: s.title || 'Momentum',
+      title: s.title || Launch.APP_TITLE,
       body: s.body || '',
+      channelId: Launch.NOTIF_CHANNEL_ID,
+      smallIcon: 'ic_stat_momentum',
+      iconColor: '#4F46E5',
       schedule: { at: new Date(s.at), allowWhileIdle: true },
       extra: s.extra || { habitId: s.habitId, date: s.dateKey },
     }));

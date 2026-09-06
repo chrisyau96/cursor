@@ -1,6 +1,6 @@
 {
   "appId": "com.dincey.habitjournal",
-  "appName": "Momentum",
+  "appName": "Habit & Journal",
   "webDir": "www",
   "bundledWebRuntime": false,
   "plugins": {

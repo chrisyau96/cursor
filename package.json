@@ -1,8 +1,8 @@
 {
   "name": "momentum",
   "private": true,
-  "version": "58.0.0",
-  "description": "Momentum habit tracker — PWA and Capacitor store shell",
+  "version": "59.0.0",
+  "description": "Habit & Journal — PWA and Capacitor store shell",
   "scripts": {
     "test:launch": "node scripts/test-launch.mjs",
     "uat": "node scripts/uat-buttons.mjs",

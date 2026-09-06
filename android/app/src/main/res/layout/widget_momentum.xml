@@ -8,7 +8,7 @@
     android:background="@android:color/white">
 
     <TextView android:id="@+id/widget_title" android:layout_width="match_parent" android:layout_height="wrap_content"
-        android:text="Momentum" android:textStyle="bold" android:textSize="13sp" android:textColor="#4f46e5"/>
+        android:text="Today" android:textStyle="bold" android:textSize="13sp" android:textColor="#4f46e5"/>
 
     <LinearLayout android:id="@+id/widget_stat" android:layout_width="match_parent" android:layout_height="wrap_content"
         android:orientation="vertical" android:gravity="center" android:paddingTop="6dp">

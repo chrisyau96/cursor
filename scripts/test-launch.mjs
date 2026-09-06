@@ -20,19 +20,21 @@ function assert(cond, msg) {
 assert(Launch.shouldDriveBackup({ driveConnected: true, driveBackupFreq: 'daily' }, '2026-08-31') === true, 'missing last backup should run');
 assert(Launch.shouldDriveBackup({ driveConnected: true, driveBackupFreq: 'daily', lastDriveBackupAt: '2026-08-31T01:00:00.000Z' }, '2026-08-31') === false, 'same day should skip');
 assert(Launch.shouldDriveBackup({ driveConnected: true, driveBackupFreq: 'daily', lastDriveBackupAt: '2026-08-30' }, '2026-08-31') === true, 'new day should backup');
-assert(Launch.shouldDriveBackup({ driveConnected: true, driveBackupFreq: 'weekly', lastDriveBackupAt: '2026-08-30' }, '2026-08-31') === false, 'same week should skip');
-assert(Launch.shouldDriveBackup({ driveConnected: true, driveBackupFreq: 'weekly', lastDriveBackupAt: '2026-08-23' }, '2026-08-31') === true, 'new week should backup');
+assert(Launch.shouldDriveBackup({ driveConnected: true, driveBackupFreq: 'weekly', lastDriveBackupAt: '2026-08-31' }, '2026-09-02') === false, 'same week should skip');
+assert(Launch.shouldDriveBackup({ driveConnected: true, driveBackupFreq: 'weekly', lastDriveBackupAt: '2026-08-24' }, '2026-08-31') === true, 'new week should backup');
 assert(Launch.shouldDriveBackup({ driveConnected: false, driveBackupFreq: 'daily' }, '2026-08-31') === false, 'disconnected should skip');
 assert(Launch.shouldDriveBackup({ driveConnected: true, driveBackupFreq: 'off', lastDriveBackupAt: '' }, '2026-08-31') === false, 'off should skip');
 
-assert(Launch.weekStartKey('2026-08-31') === '2026-08-30', 'week starts Sunday');
+assert(Launch.weekStartKey('2026-08-31') === '2026-08-31', 'week starts Monday by default');
+assert(Launch.weekStartKey('2026-08-31', 'sun') === '2026-08-30', 'Sunday week start');
+assert(Launch.weekStartKey('2026-08-31', 'sat') === '2026-08-29', 'Saturday week start');
 assert(Launch.duePhrase('2026-08-31', '2026-08-31') === 'Due today', 'due today');
 assert(Launch.duePhrase('2026-08-31', '2026-09-01') === 'Due tmr', 'due tmr');
 assert(Launch.duePhrase('2026-08-31', '2026-09-02') === 'Due in 3 days', 'inclusive day count');
 
 const slots = Launch.buildReminderSlots([
-  { id: 'h1', name: 'Read', reminder: { enabled: true, time: '21:00' } },
-  { id: 'h2', name: 'Skip', reminder: { enabled: false, time: '08:00' } },
+  { id: 'h1', name: 'Read', reminder: { enabled: true, time: '21:00' }, frequency: { mode: 'daily', days: [1], schedule: { type: 'days' } } },
+  { id: 'h2', name: 'Skip', reminder: { enabled: false, time: '08:00' }, frequency: { mode: 'daily', days: [1], schedule: { type: 'days' } } },
 ], {
   todayKey: '2026-08-31',
   remindersEnabled: true,
@@ -45,7 +47,7 @@ assert(slots.length === 1, 'one future slot');
 assert(slots[0].body === 'Time for Read', 'reminder body');
 assert(slots[0].id > 0, 'notification id');
 
-const none = Launch.buildReminderSlots([{ id: 'h1', reminder: { enabled: true, time: '07:00' } }], {
+const none = Launch.buildReminderSlots([{ id: 'h1', reminder: { enabled: true, time: '07:00' }, frequency: { mode: 'daily', days: [1], schedule: { type: 'days' } } }], {
   todayKey: '2026-08-31', remindersEnabled: false, days: 2, now: new Date(2026, 7, 31, 10, 0, 0),
   habitNeedsReminderOn: () => true,
 });
@@ -80,8 +82,17 @@ const mixedRepeating = Launch.buildRepeatingNative([
 assert(mixedRepeating.length === 7, 'only daily habits use repeating weekdays');
 assert(mixedRepeating.every((n) => n.extra.habitId === 'daily'), 'flex and monthly stay on one-shot slots');
 
+const skipFlexSlots = Launch.buildReminderSlots([
+  { id: 'flex', name: 'Gym', reminder: { enabled: true, time: '08:00' }, frequency: { mode: 'weekly', schedule: { type: 'any' } } },
+], {
+  todayKey: '2026-08-31', remindersEnabled: true, days: 3, now: new Date(2026, 7, 31, 10, 0, 0),
+  habitNeedsReminderOn: () => true,
+  reminderBody: (h) => h.name,
+});
+assert(skipFlexSlots.length === 0, 'Not Specific habits are not scheduled');
+
 const past = Launch.buildReminderSlots([
-  { id: 'h1', name: 'Read', reminder: { enabled: true, time: '07:00' } },
+  { id: 'h1', name: 'Read', reminder: { enabled: true, time: '07:00' }, frequency: { mode: 'daily', days: [1], schedule: { type: 'days' } } },
 ], {
   todayKey: '2026-08-31',
   remindersEnabled: true,
@@ -93,7 +104,7 @@ assert(past.length === 2, 'past time today is skipped');
 assert(past[0].dateKey === '2026-09-01', 'first remaining slot is tomorrow');
 
 const many = Launch.buildReminderSlots(
-  Array.from({ length: 20 }, (_, i) => ({ id: 'h' + i, name: 'H' + i, reminder: { enabled: true, time: '21:00' } })),
+  Array.from({ length: 20 }, (_, i) => ({ id: 'h' + i, name: 'H' + i, reminder: { enabled: true, time: '21:00' }, frequency: { mode: 'daily', days: [1], schedule: { type: 'days' } } })),
   {
     todayKey: '2026-08-31',
     remindersEnabled: true,
@@ -119,9 +130,12 @@ assert(Launch.shouldShowAds({}) === true, 'missing flag still shows ads');
 const marked = Launch.markAdsRemoved({ adsRemoved: false }, '2026-09-01T00:00:00.000Z');
 assert(marked.adsRemoved === true && marked.adsRemovedAt === '2026-09-01T00:00:00.000Z', 'mark lifetime purchase');
 assert(Launch.ADS_PRODUCT_ID === 'remove_ads_lifetime', 'Play product id');
-assert(Launch.ADS_PRICE_LABEL === 'HK$38', 'Hong Kong lifetime price');
-assert(Launch.ADS_LIST_PRICE_LABEL === 'HK$158', 'intro list price');
+assert(Launch.ADS_PRICE_LABEL === 'HK$8', 'Hong Kong intro price');
+assert(Launch.ADS_LIST_PRICE_LABEL === 'HK$38', 'intro list price');
 assert(Launch.ADS_OFFER_DAYS === 7, 'seven-day intro window');
+assert(Launch.DRIVE_SCOPE === 'https://www.googleapis.com/auth/drive.file', 'Drive file scope');
+assert(Launch.DRIVE_FILE_NAME === 'Habit-Journal-backup.json', 'visible Drive backup name');
+assert(Launch.APP_TITLE === 'Habit & Journal', 'app title');
 
 const memStore = (() => {
   const m = {};
@@ -137,16 +151,17 @@ const midOffer = Launch.adsIntroOffer(firstInstall + 2 * 86400000, firstInstall)
 assert(midOffer.active === true && midOffer.remainingMs === 5 * 86400000, 'offer active for 7 days');
 const afterOffer = Launch.adsIntroOffer(firstInstall + 8 * 86400000, firstInstall);
 assert(afterOffer.active === false && afterOffer.remainingMs === 0, 'offer ends after 7 days');
-assert(Launch.formatCountdown(2 * 86400000 + 3 * 3600000) === '2d 3h left', 'countdown days');
-assert(Launch.formatCountdown(90 * 60 * 1000) === '1h 30m left', 'countdown hours');
-assert(Launch.formatCountdown(45 * 1000) === '0m 45s left', 'countdown seconds');
+assert(Launch.formatCountdown(2 * 86400000 + 3 * 3600000) === '2d 03h 00m 00s', 'countdown days with seconds');
+assert(Launch.formatCountdown(90 * 60 * 1000) === '1h 30m 00s', 'countdown hours with seconds');
+assert(Launch.formatCountdown(45 * 1000) === '0m 45s', 'countdown seconds');
 const liveCopy = Launch.adsOfferCopy(firstInstall + 1000, firstInstall);
-assert(liveCopy.limited === true && liveCopy.kicker === 'One-off purchase limited time offer!', 'limited-time kicker');
-assert(liveCopy.listPrice === 'HK$158' && liveCopy.offerPrice === 'HK$38', 'shows 158 then 38');
-assert(liveCopy.cta === 'Remove ads · HK$38', 'cta stays 38');
+assert(liveCopy.limited === true && liveCopy.kicker === '', 'no extra kicker copy');
+assert(liveCopy.listPrice === 'HK$38' && liveCopy.offerPrice === 'HK$8', 'shows 38 then 8');
+assert(liveCopy.cta === 'Remove Ads', 'cta is Remove Ads only');
+assert(/\d+s$/.test(liveCopy.countdown), 'countdown includes seconds, got ' + liveCopy.countdown);
 const expiredCopy = Launch.adsOfferCopy(firstInstall + 8 * 86400000, firstInstall);
-assert(expiredCopy.limited === false && expiredCopy.kicker === 'One-off purchase', 'regular copy after window');
-assert(expiredCopy.countdown === '' && expiredCopy.offerPrice === 'HK$38', 'still HK$38 after window');
+assert(expiredCopy.limited === false && expiredCopy.kicker === '', 'no kicker after window');
+assert(expiredCopy.countdown === '' && expiredCopy.offerPrice === 'HK$8', 'still HK$8 after window');
 assert(Launch.purchaseOwnsRemoveAds([{ productIdentifier: 'remove_ads_lifetime', purchaseState: 'PURCHASED' }]) === true, 'owns purchased sku');
 assert(Launch.purchaseOwnsRemoveAds([{ productId: 'remove_ads_lifetime', state: 'owned' }]) === true, 'owns alt field names');
 assert(Launch.purchaseOwnsRemoveAds([{ sku: 'remove_ads_lifetime' }]) === true, 'owns sku without state');
