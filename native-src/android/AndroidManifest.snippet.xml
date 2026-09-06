@@ -1,4 +1,4 @@
-        <receiver
+<receiver
             android:name=".widgets.MomentumWidgetProvider"
             android:exported="true"
             android:label="@string/widget_name">
@@ -10,10 +10,54 @@
                 android:resource="@xml/momentum_widget_info" />
         </receiver>
         <receiver
+            android:name=".widgets.StreakWidgetProvider"
+            android:exported="true"
+            android:label="@string/widget_streak">
+            <intent-filter>
+                <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
+            </intent-filter>
+            <meta-data
+                android:name="android.appwidget.provider"
+                android:resource="@xml/widget_streak_info" />
+        </receiver>
+        <receiver
+            android:name=".widgets.CreditsWidgetProvider"
+            android:exported="true"
+            android:label="@string/widget_credits">
+            <intent-filter>
+                <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
+            </intent-filter>
+            <meta-data
+                android:name="android.appwidget.provider"
+                android:resource="@xml/widget_credits_info" />
+        </receiver>
+        <receiver
+            android:name=".widgets.GiftWidgetProvider"
+            android:exported="true"
+            android:label="@string/widget_gift">
+            <intent-filter>
+                <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
+            </intent-filter>
+            <meta-data
+                android:name="android.appwidget.provider"
+                android:resource="@xml/widget_gift_info" />
+        </receiver>
+        <receiver
+            android:name=".widgets.JournalWidgetProvider"
+            android:exported="true"
+            android:label="@string/widget_journal">
+            <intent-filter>
+                <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
+            </intent-filter>
+            <meta-data
+                android:name="android.appwidget.provider"
+                android:resource="@xml/widget_journal_info" />
+        </receiver>
+        <receiver
             android:name=".widgets.WidgetActionReceiver"
             android:exported="false">
             <intent-filter>
-                <action android:name="app.momentum.habits.WIDGET_COMPLETE" />
-                <action android:name="app.momentum.habits.WIDGET_RESET" />
+                <action android:name="com.dincey.habitjournal.WIDGET_COMPLETE" />
+                <action android:name="com.dincey.habitjournal.WIDGET_RESET" />
             </intent-filter>
         </receiver>
