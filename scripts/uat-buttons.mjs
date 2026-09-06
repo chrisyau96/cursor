@@ -766,6 +766,8 @@ await test('Daily habit EXP awarded after yesterday completion', async () => {
   await page.waitForTimeout(500);
   const xpPop = await page.evaluate(() => document.querySelector('#expPopLayer .xp-pop')?.textContent || '');
   assert(xpPop.includes('5'), `today completion should show EXP pop, got ${xpPop}`);
+  await page.click('#topSettingsBtn');
+  await page.locator('#openLevelBtn').scrollIntoViewIfNeeded();
   await page.click('#openLevelBtn');
   await page.waitForTimeout(300);
   const xpText = await page.locator('#levelPageXp').textContent();
