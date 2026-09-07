@@ -1,6 +1,6 @@
 <svg xmlns="http://www.w3.org/2000/svg" width="360" height="240" viewBox="0 0 360 240">
   <rect width="360" height="240" rx="28" fill="#eef2ff"/>
-  <text x="24" y="36" font-family="system-ui,sans-serif" font-size="18" font-weight="800" fill="#4f46e5">Habits 1–5</text>
+  <text x="24" y="36" font-family="system-ui,sans-serif" font-size="18" font-weight="800" fill="#4f46e5">Habits 1-5</text>
   <g font-family="system-ui,sans-serif" font-size="15" font-weight="700" fill="#152033">
     <text x="24" y="78">Bible Time</text><text x="248" y="78" fill="#4f46e5">+1</text>
     <text x="24" y="114">Movement</text><text x="248" y="114" fill="#4f46e5">+1</text>
