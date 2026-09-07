@@ -1204,17 +1204,17 @@
           row.classList.remove('dragging');
           handle.classList.remove('dragging');
           document.body.style.userSelect=prevSelect;
-          handle.removeEventListener('pointermove',onMove);
-          handle.removeEventListener('pointerup',onUp);
-          handle.removeEventListener('pointercancel',onUp);
+          window.removeEventListener('pointermove',onMove);
+          window.removeEventListener('pointerup',onUp);
+          window.removeEventListener('pointercancel',onUp);
           try{handle.releasePointerCapture(e.pointerId);}catch(err){}
           if(!dragged) return;
           const ids=[...list.querySelectorAll(rowSelector)].map(r=>r.dataset[idAttr]).filter(Boolean);
           applyOrder(ids);
         };
-        handle.addEventListener('pointermove',onMove);
-        handle.addEventListener('pointerup',onUp);
-        handle.addEventListener('pointercancel',onUp);
+        window.addEventListener('pointermove',onMove);
+        window.addEventListener('pointerup',onUp);
+        window.addEventListener('pointercancel',onUp);
       });
     });
   }

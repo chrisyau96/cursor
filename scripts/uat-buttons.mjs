@@ -282,13 +282,24 @@ await test('Habit drag handle reorders habits', async () => {
   assert(before === 'Alpha', 'Alpha should be first');
   const handle = page.locator('#allHabitList .habit-row[data-habit-id="habit-a"] .drag-handle');
   const target = page.locator('#allHabitList .habit-row[data-habit-id="habit-b"]');
+  await handle.scrollIntoViewIfNeeded();
   const from = await handle.boundingBox();
   const to = await target.boundingBox();
   assert(from && to, 'habit rows should be visible for drag');
-  await page.mouse.move(from.x + from.width / 2, from.y + from.height / 2);
-  await page.mouse.down();
-  await page.mouse.move(to.x + to.width / 2, to.y + to.height / 2 + 12, { steps: 16 });
-  await page.mouse.up();
+  await page.evaluate(({ fromY, toY }) => {
+    const a = document.querySelector('#allHabitList .habit-row[data-habit-id="habit-a"]');
+    const handle = a?.querySelector('.drag-handle');
+    if (!handle) return;
+    const x = handle.getBoundingClientRect().left + 8;
+    const fire = (type, y) => handle.dispatchEvent(new PointerEvent(type, {
+      bubbles: true, cancelable: true, composed: true, pointerId: 1, pointerType: 'touch',
+      clientX: x, clientY: y, buttons: type === 'pointerup' ? 0 : 1, button: 0,
+    }));
+    fire('pointerdown', fromY);
+    fire('pointermove', fromY + 6);
+    fire('pointermove', toY);
+    fire('pointerup', toY);
+  }, { fromY: from.y + from.height / 2, toY: to.y + to.height / 2 + 16 });
   await page.waitForTimeout(400);
   const after = await page.locator('#allHabitList .habit-row .habit-name').first().textContent();
   const orders = await page.evaluate(() => JSON.parse(localStorage.getItem('habitTrackerProductionV7')).habits.map(h => ({ id: h.id, sortOrder: h.sortOrder })));
