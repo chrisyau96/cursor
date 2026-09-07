@@ -63,7 +63,7 @@ assert(state.records.every((r) => r.habitId !== 'h1'), 'reset removes today reco
 assert(state.records.some((r) => r.habitId === 'h2' && r.note === 'widget'), 'widget complete added');
 
 const cfg = Launch.normalizeWidgetConfig({ mode: 'habits', habitIds: ['a', 'b', 'c', 'd', 'e', 'f', 'g'], layout: 9 });
-assert(cfg.habitIds.length === 6 && cfg.layout === 6, 'widget config capped at 6');
+assert(cfg.habitIds.length === 5 && cfg.layout === 5, 'widget config capped at 5');
 assert(Launch.parseQueryActions('?widgetAction=complete&habitId=abc').habitId === 'abc', 'query action');
 assert(Launch.parseAppUrl('momentum://widget/reset?habitId=z').type === 'reset', 'app url action');
 

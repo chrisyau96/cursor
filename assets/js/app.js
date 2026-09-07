@@ -83,13 +83,16 @@
   const PREVIEW=3;
   const LAZY_CHUNK=10;
   const REMINDER_MSG_LIMIT=80;
-  const APP_VERSION='v59';
+  const APP_VERSION='v60';
+  const WIDGET_HABIT_MAX=5;
   const iconBtn=(cls,svg,title)=>{const b=document.createElement('button'); b.className='act-btn '+cls; b.innerHTML=svg; b.title=title; b.setAttribute('aria-label',title); return b;};
 
   const USER_NAME_MAX=12;
-  function rewardDefaults(includeGifts=false){return{creditRules:[{id:uid(),pct:50,amount:2},{id:uid(),pct:100,amount:10}],giftRules:includeGifts?[{id:uid(),gift:'Buffet',icon:'🍽️',pct:80,days:30}]:[],penaltyCredit:5,penaltyXp:20,penaltyZeroDays:2,penaltyMissPct:0};}
+  function rewardDefaults(includeGifts=false){return{creditRules:[{id:uid(),pct:50,amount:2},{id:uid(),pct:100,amount:10}],giftRules:includeGifts?[{id:uid(),gift:'Buffet',icon:'🍽️',pct:80,days:30}]:[],penaltyCredit:5,penaltyXp:20,penaltyZeroDays:1,penaltyMissPct:0};}
   function pickSettings(overrides={}){const gifts=overrides.includeGifts===true; const {includeGifts,...rest}=overrides; return{autoSync:false,autoBackup:false,dailyBackup:false,fileConnected:false,backupFileName:'',reminders:false,colorMode:'system',styleTheme:'vivid',accentColor:'indigo',weekStart:'mon',globalReminderTime:'20:30',profileIcon:'',userName:'',onboardingComplete:false,statusRowOpen:false,lastExportAt:'',lastBackupAt:'',lastScheduledBackupAt:'',vacations:[],dataMode:'real',defaultReminderMessage:'Time for {habit}!',driveConnected:false,driveEmail:'',driveBackupFreq:'daily',lastDriveBackupAt:'',driveFileId:'',driveFileName:'',googleClientId:'',googleAndroidClientId:'',adsRemoved:false,adsRemovedAt:'',admobAppId:'',admobBannerId:'',widget:{mode:'today',habitIds:[],layout:3},rewards:rewardDefaults(gifts),...rest};}
   function defaultGroups(){return[{id:uid(),name:'Morning',emoji:'🌅',color:'#ea580c',sortOrder:0},{id:uid(),name:'Afternoon',emoji:'☀️',color:'#ca8a04',sortOrder:1},{id:uid(),name:'Evening',emoji:'🌙',color:'#4f46e5',sortOrder:2}];}
+  function hexToRgb(hex){const h=String(hex||'').replace('#',''); if(h.length!==6) return [79,70,229]; return [parseInt(h.slice(0,2),16),parseInt(h.slice(2,4),16),parseInt(h.slice(4,6),16)];}
+  function mixHex(a,b,t){const A=hexToRgb(a), B=hexToRgb(b); const m=A.map((v,i)=>Math.round(v+(B[i]-v)*t)); return '#'+m.map(x=>x.toString(16).padStart(2,'0')).join('');}
   function freshState(opts={}){const keep=opts.keep||{}; return{habits:[],records:[],journals:{},redemptions:[],groups:defaultGroups(),settings:pickSettings({dataMode:'real',includeGifts:false,startDate:todayKey(),onboardingComplete:opts.onboardingComplete??true,colorMode:keep.colorMode||'system',styleTheme:keep.styleTheme||'vivid',userName:keep.userName||'',profileIcon:keep.profileIcon||'',adsRemoved:!!keep.adsRemoved,adsRemovedAt:keep.adsRemovedAt||'',googleClientId:keep.googleClientId||''})};}
   function demoState(opts={}){const keep=opts.keep||{};
     const habits=[
@@ -177,15 +180,30 @@
     const dark=mode==='dark'||(mode==='system'&&window.matchMedia('(prefers-color-scheme:dark)').matches);
     const accent=accentOf(state.settings.accentColor||'indigo');
     const root=document.documentElement;
+    const brand=accent.brand, brand2=accent.brand2;
+    const soft=dark?mixHex(brand,'#0b1120',0.78):mixHex(brand,'#ffffff',0.88);
+    const soft2=dark?mixHex(brand2,'#0b1120',0.78):mixHex(brand2,'#ffffff',0.90);
+    const bg=dark?mixHex(brand,'#0b1120',0.88):mixHex(brand,'#f4f6fb',0.55);
+    const bg1=dark?mixHex(brand,'#0b1120',0.70):mixHex(brand,'#f4f6fb',0.62);
+    const bg2=dark?mixHex(brand2,'#0b1120',0.66):mixHex(brand2,'#f4f6fb',0.68);
+    const wash=dark?mixHex(brand,'#0b1120',0.82):mixHex(brand,'#ffffff',0.93);
     root.setAttribute('data-theme',dark?'dark':'light');
     root.setAttribute('data-style','vivid');
     root.setAttribute('data-accent',accent.id);
-    root.style.setProperty('--brand',accent.brand);
-    root.style.setProperty('--brand2',accent.brand2);
-    root.style.setProperty('--pink',accent.brand);
-    root.style.setProperty('--brand-text',dark?'#e8edf7':accent.brand);
+    root.style.setProperty('--brand',brand);
+    root.style.setProperty('--brand2',brand2);
+    root.style.setProperty('--pink',brand);
+    root.style.setProperty('--purple',brand2);
+    root.style.setProperty('--brand-soft',soft);
+    root.style.setProperty('--soft-pink',soft);
+    root.style.setProperty('--soft-purple',soft2);
+    root.style.setProperty('--bg',bg);
+    root.style.setProperty('--bg1',bg1);
+    root.style.setProperty('--bg2',bg2);
+    root.style.setProperty('--wash',wash);
+    root.style.setProperty('--brand-text',dark?'#e8edf7':brand);
     const meta=document.querySelector('meta[name="theme-color"]');
-    if(meta) meta.setAttribute('content',accent.brand);
+    if(meta) meta.setAttribute('content',brand);
   }
   function applyTheme(){applyAppearance();}
   function resetDefaultAppIcons(){
@@ -659,7 +677,7 @@
     }
     r.giftRules.forEach(g=>{if(!g.id)g.id=uid(); if(!g.icon)g.icon=(g.gift==='Buffet'?'🍽️':'🎁');});
     if(!r.activeGiftId || !r.giftRules.some(g=>g.id===r.activeGiftId)) r.activeGiftId=r.giftRules[0]?.id||null;
-    if(r.penaltyCredit===undefined) r.penaltyCredit=5; if(r.penaltyXp===undefined) r.penaltyXp=20; if(r.penaltyZeroDays===undefined) r.penaltyZeroDays=2; if(r.penaltyMissPct===undefined) r.penaltyMissPct=0;
+    if(r.penaltyCredit===undefined) r.penaltyCredit=5; if(r.penaltyXp===undefined) r.penaltyXp=20; if(r.penaltyZeroDays===undefined) r.penaltyZeroDays=1; if(r.penaltyMissPct===undefined) r.penaltyMissPct=0;
   }
   function autoLedger(){
     ensureRewardShape(); const rewards=state.settings.rewards; const entries=[];
@@ -673,8 +691,6 @@
     for(let d=new Date(start); d<=end; d.setDate(d.getDate()+1)){
       if(isVacationDay(dateKey(d))) continue;
       const p=dayPct(d); if(!isMissDay(p,rewards.penaltyMissPct)) continue;
-      const zero=zeroStreakAt(d); const every=Math.max(1,Number(rewards.penaltyZeroDays||2));
-      if(zero<every || zero%every!==0) continue;
       const creditPen=Math.abs(Number(rewards.penaltyCredit||0));
       const xpPen=Math.abs(Number(rewards.penaltyXp||0));
       if(creditPen===0 && xpPen===0) continue;
@@ -685,7 +701,7 @@
       const xpDeduct=xpPen>0 && xpBal>0 ? -Math.min(xpPen,xpBal) : 0;
       if(creditDeduct===0 && xpDeduct===0) continue;
       const miss=Number(rewards.penaltyMissPct||0);
-      const why=miss>0?`${zero} consecutive days below ${miss}%`:`${zero} consecutive 0% days`;
+      const why=miss>0?`Below ${miss}%`:`0% day`;
       entries.push({id:'auto-penalty-'+dk,date:dk,type:'penalty',desc:why,credit:creditDeduct,xp:xpDeduct});
     }
     return entries;
@@ -1018,10 +1034,10 @@
     void save(false,{render:'none'});
   }
 
-  /* Shared: preview 1 row + "View all" modal with lazy loading (10 at a time). */
-  function renderPreview(box,items,itemFn,moreTitle){
+  /* Shared: preview N rows + "View all" modal with lazy loading (10 at a time). */
+  function renderPreview(box,items,itemFn,moreTitle,limit=PREVIEW){
     if(!box)return; box.innerHTML=''; if(!items.length){box.innerHTML='<div class="empty">Nothing here yet.</div>'; return;}
-    items.slice(0,PREVIEW).forEach(x=>box.appendChild(itemFn(x)));
+    items.slice(0,limit).forEach(x=>box.appendChild(itemFn(x)));
     const more=document.createElement('button'); more.className='view-all-btn'; more.textContent='View all'; more.onclick=()=>openLazyModal(moreTitle,items,itemFn); box.appendChild(more);
   }
   function openLazyModal(title,items,itemFn){
@@ -1059,15 +1075,45 @@
   function renderRecentActivity(){const box=$('#recentActivityLog'); if(!box)return; const logs=state.records.filter(r=>afterStart(r.date)).slice().sort((a,b)=>b.at.localeCompare(a.at)); renderPreview(box,logs,r=>activityItem(r),'Habit Records');}
   function openFullLog(){const logs=state.records.filter(r=>afterStart(r.date)).slice().sort((a,b)=>b.at.localeCompare(a.at)); openLazyModal('Habit Records',logs,r=>activityItem(r));}
   function activityItem(r){const h=state.habits.find(x=>x.id===r.habitId)||{}; const div=document.createElement('div'); div.className='activity'; div.innerHTML=`<div class="activity-emoji" style="background:${(h.color||'#4f46e5')}22">${h.emoji||'✓'}</div><div class="a-main"><div class="activity-title"></div><div class="activity-sub">${r.date} · ${new Date(r.at).toLocaleTimeString([], {hour:'2-digit',minute:'2-digit',timeZone:'Asia/Hong_Kong'})}</div></div>`; div.querySelector('.activity-title').textContent=h.name||'Habit'; const acts=document.createElement('div'); acts.className='row-actions'; const d=iconBtn('del',ICON_DEL,'Remove'); d.onclick=()=>confirm('Remove this record?')&&removeRecord(r.id); acts.appendChild(d); div.appendChild(acts); return div;}
+  function energyScaleHtml(inputId,valueId,value){
+    const v=Math.max(0,Math.min(10,Number(value??5)));
+    const ticks=Array.from({length:11},(_,i)=>`<button type="button" class="energy-tick" data-tick="${i}" style="--i:${i}" aria-label="Energy ${i}"><span class="tick-n">${i}</span><span class="tick-dot"></span></button>`).join('');
+    return `<div class="energy-panel"><div class="range-value" id="${valueId}">${v}</div><div class="energy-scale" data-energy-scale style="--val:${v}"><div class="energy-rail">${ticks}</div><input type="range" min="0" max="10" step="1" value="${v}" id="${inputId}"></div></div>`;
+  }
+  function bindEnergyScale(input,valueEl){
+    if(!input) return;
+    const scale=input.closest('.energy-scale');
+    const paint=()=>{
+      const val=Number(input.value);
+      if(scale){
+        scale.style.setProperty('--val',val);
+        scale.querySelectorAll('[data-tick]').forEach(el=>{
+          const i=Number(el.dataset.tick);
+          const tilt=Math.max(-36,Math.min(36,(val-i)*6));
+          el.style.setProperty('--tilt',tilt+'deg');
+          el.classList.toggle('is-current',i===val);
+        });
+      }
+      if(valueEl) valueEl.textContent=String(val);
+    };
+    scale?.querySelectorAll('[data-tick]').forEach(el=>{
+      el.addEventListener('click',()=>{
+        input.value=String(el.dataset.tick);
+        input.dispatchEvent(new Event('input',{bubbles:true}));
+      });
+    });
+    input.addEventListener('input',paint);
+    paint();
+  }
   function renderHomeJournal(){
     const k=todayKey(), j=state.journals[k]||{mood:'',energy:5,text:''};
     const el=$('#homeJournalForm');
     if(!el)return;
     if(el.dataset.built===k && el.querySelector('#homeJournalText')) return;
     el.dataset.built=k;
-    el.innerHTML=`<div class="field"><label>Mood</label><div class="mood-row">${MOODS.map(m=>`<button class="mood ${j.mood===m?'active':''}" data-mood="${m}">${m}</button>`).join('')}</div></div><div class="field"><label>Energy Score</label><div class="energy-panel"><div class="range-value" id="homeEnergyValue">${j.energy}</div><div class="energy-scale"><input type="range" min="0" max="10" value="${j.energy}" id="homeEnergy"><div class="ticks">${Array.from({length:11},(_,i)=>`<span style="--i:${i}">${i}</span>`).join('')}</div></div></div></div><div class="field journal-area"><label>Reflection</label><textarea id="homeJournalText" placeholder="What went well? What needs adjustment?">${escapeHtml(j.text)}</textarea></div><button class="btn-primary" id="saveJournalHome">Save Journal</button>`;
+    el.innerHTML=`<div class="field"><label>Mood</label><div class="mood-row">${MOODS.map(m=>`<button class="mood ${j.mood===m?'active':''}" data-mood="${m}">${m}</button>`).join('')}</div></div><div class="field"><label>Energy Score</label>${energyScaleHtml('homeEnergy','homeEnergyValue',j.energy)}</div><div class="field journal-area"><label>Reflection</label><textarea id="homeJournalText" placeholder="What went well? What needs adjustment?">${escapeHtml(j.text)}</textarea></div><button class="btn-primary" id="saveJournalHome">Save Journal</button>`;
     $$('.mood',el).forEach(b=>b.onclick=()=>{$$('.mood',el).forEach(x=>x.classList.remove('active')); b.classList.add('active')});
-    $('#homeEnergy').oninput=e=>$('#homeEnergyValue').textContent=e.target.value;
+    bindEnergyScale($('#homeEnergy'),$('#homeEnergyValue'));
     $('#saveJournalHome').onclick=async()=>{const mood=$('#homeJournalForm .mood.active')?.dataset.mood||''; const wasNew=!state.journals[k]; state.journals[k]={mood,energy:Number($('#homeEnergy').value),text:$('#homeJournalText').value.trim(),updatedAt:new Date().toISOString()}; if(wasNew) showXpPop('+5 EXP'); await save(false,{render:'none'}); toast('Journal saved');};
     const viewBtn=$('#homeJournalViewAll'); if(viewBtn) viewBtn.onclick=()=>openJournalListModal();
   }
@@ -1122,16 +1168,78 @@
     renderHome();
     haptic();
   }
+  function bindSortableList(list,rowSelector,idAttr,applyOrder){
+    if(!list) return;
+    list.querySelectorAll(rowSelector).forEach(row=>{
+      const handle=row.querySelector('.drag-handle');
+      if(!handle) return;
+      handle.addEventListener('pointerdown',e=>{
+        if(e.button && e.button!==0) return;
+        e.preventDefault();
+        e.stopPropagation();
+        const startY=e.clientY;
+        let dragged=false;
+        row.classList.add('dragging');
+        handle.classList.add('dragging');
+        const prevSelect=document.body.style.userSelect;
+        document.body.style.userSelect='none';
+        try{handle.setPointerCapture(e.pointerId);}catch(err){}
+        const onMove=ev=>{
+          if(Math.abs(ev.clientY-startY)>4) dragged=true;
+          const others=[...list.querySelectorAll(rowSelector)].filter(r=>r!==row);
+          const over=others.find(r=>{
+            const b=r.getBoundingClientRect();
+            return ev.clientY>=b.top && ev.clientY<=b.bottom;
+          });
+          if(!over) return;
+          const rows=[...list.querySelectorAll(rowSelector)];
+          const from=rows.indexOf(row);
+          const to=rows.indexOf(over);
+          if(from<0||to<0||from===to) return;
+          if(from<to) list.insertBefore(row, over.nextSibling);
+          else list.insertBefore(row, over);
+        };
+        const onUp=()=>{
+          row.classList.remove('dragging');
+          handle.classList.remove('dragging');
+          document.body.style.userSelect=prevSelect;
+          handle.removeEventListener('pointermove',onMove);
+          handle.removeEventListener('pointerup',onUp);
+          handle.removeEventListener('pointercancel',onUp);
+          try{handle.releasePointerCapture(e.pointerId);}catch(err){}
+          if(!dragged) return;
+          const ids=[...list.querySelectorAll(rowSelector)].map(r=>r.dataset[idAttr]).filter(Boolean);
+          applyOrder(ids);
+        };
+        handle.addEventListener('pointermove',onMove);
+        handle.addEventListener('pointerup',onUp);
+        handle.addEventListener('pointercancel',onUp);
+      });
+    });
+  }
+  function applyHabitOrder(ids){
+    ids.forEach((id,i)=>{const h=state.habits.find(x=>x.id===id); if(h) h.sortOrder=i;});
+    void save(false,{render:'none'});
+    renderHome();
+    haptic();
+  }
+  function applyGroupOrder(ids){
+    ids.forEach((id,i)=>{const g=state.groups.find(x=>x.id===id); if(g) g.sortOrder=i;});
+    void save(false,{render:'none'});
+    renderHome();
+    haptic();
+  }
   function renderGroupManager(){
     const box=$('#groupManager'); if(!box)return;
     if(!state.groups.length){box.innerHTML='<div class="empty">No groups yet. Add a group like Morning, Afternoon, or Evening before creating habits.</div>'; return;}
     box.innerHTML='';
     sortedGroups().forEach(g=>{
       const div=document.createElement('div'); div.className='group-manage-item'; div.dataset.groupId=g.id;
-      div.innerHTML=`<div class="sort-btns group-sort"><button type="button" data-gup data-group-id="${g.id}" aria-label="Move up">↑</button><button type="button" data-gdown data-group-id="${g.id}" aria-label="Move down">↓</button></div><button type="button" class="group-icon-btn" data-gicon data-group-id="${g.id}" title="Change icon">${g.emoji||'📋'}</button><input value="${escapeAttr(g.name)}" data-gname data-group-id="${g.id}" aria-label="Group name"><button class="group-del-btn" type="button" data-gdel data-group-id="${g.id}" aria-label="Delete group">×</button>`;
+      div.innerHTML=`<button type="button" class="drag-handle" aria-label="Drag to reorder" data-drag-group="${g.id}"><span></span><span></span><span></span></button><button type="button" class="group-icon-btn" data-gicon data-group-id="${g.id}" title="Change icon">${g.emoji||'📋'}</button><input value="${escapeAttr(g.name)}" data-gname data-group-id="${g.id}" aria-label="Group name"><button class="group-del-btn" type="button" data-gdel data-group-id="${g.id}" aria-label="Delete group">×</button>`;
       div.querySelector('[data-gname]').onchange=e=>{const grp=state.groups.find(x=>x.id===g.id); if(grp){grp.name=e.target.value.trim()||'Group'; invalidateHomeCaches(); renderHome(); void save(false,{render:'none'});}};
       box.appendChild(div);
     });
+    bindSortableList(box,'.group-manage-item','groupId',applyGroupOrder);
   }
   function openGroupIconPicker(group){
     openModal('Group Icon',`<div class="emoji-row">${EMOJIS.map(e=>`<button type="button" class="emoji-swatch ${group.emoji===e?'active':''}" data-emoji="${e}">${e}</button>`).join('')}</div><div class="field" style="margin-top:12px"><label>Custom emoji</label><input id="groupEmojiInput" data-group-id="${group.id}" value="${escapeAttr(group.emoji||'📋')}" maxlength="4"></div><div class="modal-actions"><button class="btn-secondary" data-close>Cancel</button><button class="btn-primary" id="saveGroupIcon">Save</button></div>`);
@@ -1146,12 +1254,13 @@
       const grp=state.groups.find(g=>g.id===h.groupId);
       const row=document.createElement('div'); row.className='habit-row'+(h.paused?' paused-habit':''); row.style.cursor='default';
       row.dataset.habitId=h.id;
-      row.innerHTML=`<div class="sort-btns"><button type="button" data-up data-habit-id="${h.id}">↑</button><button type="button" data-down data-habit-id="${h.id}">↓</button></div><div class="habit-icon" style="background:${h.color}22;color:${h.color}">${h.emoji}</div><div class="habit-main"><div class="habit-name"></div><div class="habit-meta"><span>${frequencyLabel(h)}</span>${grp?`<span class="mini-dot"></span><span>${escapeHtml(grp.name)}</span>`:''}<span class="mini-dot"></span><span>${fmtXp(h.xpReward||5)} EXP</span>${h.paused?'<span class="chip gray">Paused</span>':''}</div></div>`;
+      row.innerHTML=`<button type="button" class="drag-handle" aria-label="Drag to reorder" data-drag-habit="${h.id}"><span></span><span></span><span></span></button><div class="habit-icon" style="background:${h.color}22;color:${h.color}">${h.emoji}</div><div class="habit-main"><div class="habit-name"></div><div class="habit-meta"><span>${frequencyLabel(h)}</span>${grp?`<span class="mini-dot"></span><span>${escapeHtml(grp.name)}</span>`:''}<span class="mini-dot"></span><span>${fmtXp(h.xpReward||5)} EXP</span>${h.paused?'<span class="chip gray">Paused</span>':''}</div></div>`;
       row.querySelector('.habit-name').textContent=h.name;
       const actions=document.createElement('div'); actions.className='habit-actions';
       actions.innerHTML=`<button class="icon-btn" data-edit data-habit-id="${h.id}" aria-label="Edit">✎</button><button class="icon-btn" data-pause data-habit-id="${h.id}" aria-label="Pause">${h.paused?'▶':'⏸'}</button>`;
       row.appendChild(actions); list.appendChild(row);
     });
+    bindSortableList(list,'.habit-row','habitId',applyHabitOrder);
   }
   function renderHabitCompletionChart(){
     const table=$('#habitCompletionTable'), note=$('#habitChartRangeNote'); if(!table)return;
@@ -1364,7 +1473,7 @@
     else { box.innerHTML=`<button class="btn-inline pink" id="addDayJournal" data-journal-date="${k}">+ Add Journal</button>`; }
   }
   function renderJournals(){const box=$('#journalHistory'); if(!box)return; const items=Object.keys(state.journals).sort((a,b)=>b.localeCompare(a)).map(k=>({date:k})); renderPreview(box,items,x=>journalNode(x.date),'Journal History');}
-  function openJournalEditor(k=todayKey()){const j=state.journals[k]||{mood:'',energy:5,text:''}; openModal('Edit Journal',`<div class="form-grid journal-area"><div class="field"><label>Date</label><input type="date" id="journalDate" value="${k}"></div><div class="field"><label>Mood</label><div class="mood-row">${MOODS.map(m=>`<button class="mood ${j.mood===m?'active':''}" data-mood="${m}">${m}</button>`).join('')}</div></div><div class="field"><label>Energy Score</label><div class="energy-panel"><div class="range-value" id="modalEnergyValue">${j.energy}</div><div class="energy-scale"><input type="range" min="0" max="10" value="${j.energy}" id="modalEnergy"><div class="ticks">${Array.from({length:11},(_,i)=>`<span style="--i:${i}">${i}</span>`).join('')}</div></div></div></div><div class="field"><label>Reflection</label><textarea id="modalJournalText">${escapeHtml(j.text||'')}</textarea></div><div class="modal-actions"><button class="btn-secondary" data-close>Cancel</button><button class="btn-primary" id="saveJournalModal">Save</button></div></div>`); $$('.mood').forEach(b=>b.onclick=()=>{$$('.mood').forEach(x=>x.classList.remove('active')); b.classList.add('active')}); $('#modalEnergy').oninput=e=>$('#modalEnergyValue').textContent=e.target.value; $('#saveJournalModal').onclick=async()=>{const nk=$('#journalDate').value||k; const wasNew=!state.journals[k]&&!state.journals[nk]; if(nk!==k) delete state.journals[k]; state.journals[nk]={mood:$('#modalBody .mood.active')?.dataset.mood||'',energy:Number($('#modalEnergy').value),text:$('#modalJournalText').value.trim(),updatedAt:new Date().toISOString()}; await save(false,{render:'none'}); if(wasNew) showXpPop('+5 EXP'); closeModal(); toast('Journal saved')};}
+  function openJournalEditor(k=todayKey()){const j=state.journals[k]||{mood:'',energy:5,text:''}; openModal('Edit Journal',`<div class="form-grid journal-area"><div class="field"><label>Date</label><input type="date" id="journalDate" value="${k}"></div><div class="field"><label>Mood</label><div class="mood-row">${MOODS.map(m=>`<button class="mood ${j.mood===m?'active':''}" data-mood="${m}">${m}</button>`).join('')}</div></div><div class="field"><label>Energy Score</label>${energyScaleHtml('modalEnergy','modalEnergyValue',j.energy)}</div><div class="field"><label>Reflection</label><textarea id="modalJournalText">${escapeHtml(j.text||'')}</textarea></div><div class="modal-actions"><button class="btn-secondary" data-close>Cancel</button><button class="btn-primary" id="saveJournalModal">Save</button></div></div>`); $$('.mood').forEach(b=>b.onclick=()=>{$$('.mood').forEach(x=>x.classList.remove('active')); b.classList.add('active')}); bindEnergyScale($('#modalEnergy'),$('#modalEnergyValue')); $('#saveJournalModal').onclick=async()=>{const nk=$('#journalDate').value||k; const wasNew=!state.journals[k]&&!state.journals[nk]; if(nk!==k) delete state.journals[k]; state.journals[nk]={mood:$('#modalBody .mood.active')?.dataset.mood||'',energy:Number($('#modalEnergy').value),text:$('#modalJournalText').value.trim(),updatedAt:new Date().toISOString()}; await save(false,{render:'none'}); if(wasNew) showXpPop('+5 EXP'); closeModal(); toast('Journal saved')};}
 
   /* ---------- INSIGHTS / CELEBRATE ---------- */
   function periodAvgPct(fromK,toK){let sum=0,n=0; const a=parseDate(fromK), b=parseDate(toK); for(let d=new Date(a); d<=b; d.setDate(d.getDate()+1)){const k=dateKey(d); if(isVacationDay(k)||!afterStart(k)) continue; const p=dayPct(d); if(p===null) continue; sum+=p; n++;} return n?Math.round(sum/n):0;}
@@ -1378,27 +1487,31 @@
       const p=dayPct(d); if(p===null) continue;
       days.push({k,d:new Date(d),p,j:state.journals[k]||null,dow:d.getDay()});
     }
+    const nCls=v=>{const n=Number(v); if(!Number.isFinite(n)) return 'ins-n'; return n>=80?'ins-n hi':n>=50?'ins-n mid':'ins-n lo';};
+    const pct=(v)=>`<span class="${nCls(v)}">${v}%</span>`;
+    const num=(v,cls)=>{const n=Number(v); const c=cls||(n>0?'hi':n<0?'lo':'mid'); return `<span class="ins-n ${c}">${n}</span>`;};
+    const pts=(v)=>{const n=Number(v); const cls=n>0?'ins-n hi':n<0?'ins-n lo':'ins-n mid'; return `<span class="${cls}">${n>0?'+':''}${n}</span>`;};
     const rows=[];
-    const push=(ico,html)=>{rows.push(`<div class="insight-row"><div class="insight-ico">${ico}</div><div class="insight-text">${html}</div></div>`);};
+    const push=(ico,title,html,priority)=>{rows.push({priority,html:`<div class="insight-row"><div class="insight-ico">${ico}</div><div class="insight-text"><strong>${title}</strong>${html}</div></div>`});};
     if(!days.length){box.innerHTML='<div class="empty">Track a few days to see progress insights.</div>'; return;}
     const avg=Math.round(days.reduce((s,x)=>s+x.p,0)/days.length);
     const perfect=days.filter(x=>x.p>=100).length;
     const misses=days.filter(x=>x.p===0).length;
-    push('📈',`<strong>This range</strong>Average completion ${avg}% · ${perfect} perfect day${perfect===1?'':'s'} · ${misses} empty day${misses===1?'':'s'}.`);
+    push('📈','This range',`Average completion ${pct(avg)} · ${num(perfect,perfect?'hi':'mid')} perfect day${perfect===1?'':'s'} · ${num(misses,misses?'lo':'hi')} empty day${misses===1?'':'s'}.`,10);
     const byDow={};
     days.forEach(x=>{byDow[x.dow]=byDow[x.dow]||{s:0,n:0}; byDow[x.dow].s+=x.p; byDow[x.dow].n++;});
     const ranked=Object.entries(byDow).map(([dow,v])=>({dow:Number(dow),avg:Math.round(v.s/v.n),n:v.n})).sort((a,b)=>b.avg-a.avg);
     if(ranked.length>=2){
       const best=ranked[0], worst=ranked[ranked.length-1];
-      if(best.avg!==worst.avg) push('📅',`<strong>Best weekday</strong>${DOW[best.dow]} averages ${best.avg}% vs ${DOW[worst.dow]} at ${worst.avg}%.`);
+      if(best.avg!==worst.avg) push('📅','Best weekday',`${DOW[best.dow]} averages ${pct(best.avg)} vs ${DOW[worst.dow]} at ${pct(worst.avg)}.`,8);
     }
     const weekend=days.filter(x=>x.dow===0||x.dow===6);
     const weekday=days.filter(x=>x.dow!==0&&x.dow!==6);
     if(weekend.length>=2 && weekday.length>=2){
       const wAvg=Math.round(weekday.reduce((s,x)=>s+x.p,0)/weekday.length);
       const eAvg=Math.round(weekend.reduce((s,x)=>s+x.p,0)/weekend.length);
-      const better=wAvg===eAvg?'Weekdays and weekends are even':(wAvg>eAvg?`Weekdays outperform weekends ${wAvg}% vs ${eAvg}%`:`Weekends outperform weekdays ${eAvg}% vs ${wAvg}%`);
-      push('⚖️',`<strong>Weekday vs weekend</strong>${better}.`);
+      const better=wAvg===eAvg?'Weekdays and weekends are even':(wAvg>eAvg?`Weekdays outperform weekends ${pct(wAvg)} vs ${pct(eAvg)}`:`Weekends outperform weekdays ${pct(eAvg)} vs ${pct(wAvg)}`);
+      push('⚖️','Weekday vs weekend',`${better}.`,6);
     }
     const mid=Math.floor(days.length/2);
     if(days.length>=6){
@@ -1406,12 +1519,12 @@
       const a1=Math.round(first.reduce((s,x)=>s+x.p,0)/first.length);
       const a2=Math.round(second.reduce((s,x)=>s+x.p,0)/second.length);
       const delta=a2-a1;
-      push('🔁',`<strong>First half vs second</strong>${a1}% → ${a2}% (${delta>0?'+':''}${delta} pts). ${delta>0?'You are trending up.':delta<0?'A little slip — one strong day can turn it.':'Holding steady.'}`);
+      push('🔁','First half vs second',`${pct(a1)} → ${pct(a2)} (${pts(delta)} pts). ${delta>0?'You are trending up.':delta<0?'A little slip — one strong day can turn it.':'Holding steady.'}`,7);
     }
     const last3=days.slice(-3);
     if(last3.length===3){
       const recent=Math.round(last3.reduce((s,x)=>s+x.p,0)/3);
-      push('🔥',`<strong>Last 3 days</strong>${recent}% average. ${recent>=80?'Keep that pace.':recent>=50?'Solid — one more complete day would lift this.':'A reset day would help the next streak.'}`);
+      push('🔥','Last 3 days',`${pct(recent)} average. ${recent>=80?'Keep that pace.':recent>=50?'Solid — one more complete day would lift this.':'A reset day would help the next streak.'}`,5);
     }
     const habitStats=activeHabits().map(h=>{
       const st=habitCompletionStats(h,range.from,range.to);
@@ -1419,10 +1532,10 @@
     }).filter(x=>x.total>0).sort((a,b)=>b.rate-a.rate);
     if(habitStats.length>=2){
       const top=habitStats[0], low=habitStats[habitStats.length-1];
-      push(top.h.emoji||'🏆',`<strong>Most consistent</strong>${escapeHtml(top.h.name)} at ${top.rate}% (${top.completed}/${top.total}).`);
-      if(low.rate<top.rate) push(low.h.emoji||'🎯',`<strong>Needs a lift</strong>${escapeHtml(low.h.name)} is at ${low.rate}%. A smaller target or a clearer cue can help.`);
+      push(top.h.emoji||'🏆','Most consistent',`${escapeHtml(top.h.name)} at ${pct(top.rate)} (${top.completed}/${top.total}).`,4);
+      if(low.rate<top.rate) push(low.h.emoji||'🎯','Needs a lift',`${escapeHtml(low.h.name)} is at ${pct(low.rate)}. A smaller target or a clearer cue can help.`,2);
     } else if(habitStats.length===1){
-      push(habitStats[0].h.emoji||'🏆',`<strong>Habit pace</strong>${escapeHtml(habitStats[0].h.name)} is at ${habitStats[0].rate}% this range.`);
+      push(habitStats[0].h.emoji||'🏆','Habit pace',`${escapeHtml(habitStats[0].h.name)} is at ${pct(habitStats[0].rate)} this range.`,4);
     }
     const journals=days.filter(x=>x.j && (x.j.energy!==undefined||x.j.mood||x.j.text));
     if(journals.length>=3){
@@ -1431,24 +1544,13 @@
       if(hiN&&loN){
         const hiAvg=Math.round(hiE/hiN), loAvg=Math.round(loE/loN);
         const better=hiAvg>=loAvg?'High-energy days win':'Low-energy days still deliver';
-        push('⚡',`<strong>Energy correlation</strong>${better}: ${hiAvg}% on 7–10 energy vs ${loAvg}% on 0–4.`);
+        push('⚡','Energy correlation',`${better}: ${pct(hiAvg)} on 7–10 energy vs ${pct(loAvg)} on 0–4.`,9);
       }
       let topMood=null,topV=-1,lowMood=null,lowV=101; Object.entries(moodMap).forEach(([m,v])=>{const av=v.s/v.n; if(av>topV){topV=av; topMood=m;} if(av<lowV){lowV=av; lowMood=m;}});
-      if(topMood) push(topMood,`<strong>Mood pattern</strong>${topMood} days average ${Math.round(topV)}% completion.`);
-      if(lowMood && lowMood!==topMood) push(lowMood,`<strong>Tougher mood</strong>${lowMood} days average ${Math.round(lowV)}%. Protect those days with a smaller plan.`);
-      const withText=journals.filter(x=>x.j.text);
-      const withoutText=journals.filter(x=>!x.j.text);
-      if(withText.length>=2 && withoutText.length>=2){
-        const tAvg=Math.round(withText.reduce((s,x)=>s+x.p,0)/withText.length);
-        const nAvg=Math.round(withoutText.reduce((s,x)=>s+x.p,0)/withoutText.length);
-        if(tAvg!==nAvg) push('✍️',`<strong>Writing vs skip</strong>Days with a reflection average ${tAvg}% vs ${nAvg}% without one.`);
-      }
-      const habitCorr=activeHabits().slice(0,8).map(h=>{let on=0,off=0,nOn=0,nOff=0; journals.forEach(x=>{const done=todayHabitCount(h,x.d)>0||periodCount(h,x.d)>0; if(done){on+=x.p;nOn++;}else{off+=x.p;nOff++;}}); const diff=nOn&&nOff?Math.round(on/nOn-off/nOff):0; return {h,diff};}).filter(x=>Math.abs(x.diff)>=8).sort((a,b)=>Math.abs(b.diff)-Math.abs(a.diff))[0];
-      if(habitCorr) push(habitCorr.h.emoji,`<strong>Habit × day</strong>Days with ${escapeHtml(habitCorr.h.name)} ${habitCorr.diff>0?'run +':''}${habitCorr.diff}% vs days without it.`);
-    } else {
-      push('📓',`<strong>Journal optional</strong>Completion patterns above work without a journal. Add a few energy scores to unlock mood and energy correlations.`);
+      if(topMood) push(topMood,'Mood pattern',`${topMood} days average ${pct(Math.round(topV))} completion.`,3);
     }
-    box.innerHTML=rows.join('')||'<div class="empty">Keep tracking — patterns will appear soon.</div>';
+    rows.sort((a,b)=>b.priority-a.priority);
+    box.innerHTML=rows.slice(0,3).map(r=>r.html).join('')||'<div class="empty">Keep tracking — patterns will appear soon.</div>';
   }
   function renderComparePeriods(){
     const box=$('#comparePeriodBox'); if(!box)return;
@@ -1576,11 +1678,14 @@
     return {current,target,pct:target?Math.min(100,Math.round(current/target*100)):0};
   }
   function renderTopProfile(){
-    const li=levelInfo(); const icon=settingsPendingProfile??state.settings.profileIcon??''; const avatarEls=['#topProfileAvatar','#levelProfileAvatar','#settingsProfileAvatar']; avatarEls.forEach(sel=>{const el=$(sel); if(!el)return; if(icon){el.style.backgroundImage=`url(${icon})`; el.textContent='';}else{el.style.backgroundImage=''; el.textContent=li.cur.icon||'🌱';}});
+    const li=levelInfo();
+    const avatarEls=['#topProfileAvatar','#levelProfileAvatar','#settingsProfileAvatar'];
+    avatarEls.forEach(sel=>{const el=$(sel); if(!el)return; el.style.backgroundImage=''; el.textContent=li.cur.icon||'🌱';});
     const topLevel=$('#topLevel'); if(topLevel) topLevel.textContent='Lv '+li.cur.level;
+    const topName=$('#topIdentityName'); if(topName) topName.textContent=li.cur.name||'';
     const fill=$('#topLevelFill'); if(fill) fill.style.width=li.pct+'%';
     const pctEl=$('#topLevelPct'); if(pctEl) pctEl.textContent=li.pct+'%';
-    const badge=$('#topGiftBadge'); if(badge){const ag=activeGiftRule(); badge.textContent=ag?giftCount(ag):0;}
+    const xpEl=$('#topLevelXp'); if(xpEl) xpEl.textContent=fmtXp(li.xp)+' EXP';
   }
   function renderAccentRow(){
     const row=$('#accentColorRow'); if(!row) return;
@@ -1627,7 +1732,7 @@
     $('#redeemGrid').innerHTML=`<div class="gift-card credit-spend" style="grid-column:1/-1"><div class="card-head"><h3>Credit Rewards</h3><span class="chip orange">HK$${bal} available</span></div><div class="redeem-form"><div class="field"><label>Redeemed For</label><input id="creditSpendText" placeholder="e.g. headphone, game, coffee"></div><div class="field"><label>Credit Amount</label><input id="creditSpendAmount" type="number" min="0" max="${bal}" step="1" value="${Math.min(10,bal)}"><input id="creditSpendSlider" type="range" min="0" max="${bal}" step="1" value="${Math.min(10,bal)}"><div class="inline-hint">Use the number box or slider, up to your balance.</div></div><button class="btn-primary ${canRedeemCredit?'':'btn-dim'}" id="spendCreditBtn" ${canRedeemCredit?'':'disabled'}>Redeem Credit</button></div></div>` + giftCardHtml;
 
     const slider=$('#creditSpendSlider'), amount=$('#creditSpendAmount'); if(slider&&amount){slider.oninput=()=>amount.value=slider.value; amount.oninput=()=>{let v=Math.max(0,Math.min(bal,Number(amount.value||0))); amount.value=v; slider.value=v;};}
-    renderPreview($('#ledgerList'),ledger(),ledgerNode,'Reward Ledger');
+    renderPreview($('#ledgerList'),ledger(),ledgerNode,'Reward Ledger',1);
   }
   async function spendCreditReward(){
     const bal=creditTotal(); if(bal<=0) return;
@@ -1804,12 +1909,16 @@
     if(tab==='credit'){
       p.innerHTML=`<div class="panel-intro"><div class="panel-intro-title">Credit rules ${infoTip('Each completion level can be used once. A 100% day also earns every lower level\'s reward.','Credit rules')}</div></div><div id="creditRulesBox"></div><button class="btn-secondary add-rule-btn" id="addCreditRule" type="button">+ Add credit rule</button>`;
       const box=$('#creditRulesBox'); box.innerHTML='';
-      (r.creditRules||[]).forEach((rule,idx)=>{const div=document.createElement('div'); div.className='rule-card'; div.innerHTML=`<div class="rule-card-head"><div class="rule-card-title">Credit rule</div><span class="gift-rule-chip" data-chip>HK$${rule.amount||0}</span></div><div class="rule-grid"><div class="rule-row"><div class="field"><label>Completion</label><select data-pct>${[50,60,70,80,90,100].map(n=>`<option value="${n}">${n}%+</option>`).join('')}</select></div><div class="field"><label>Amount</label><input type="number" data-amount min="0" step="1" inputmode="decimal" value="${rule.amount??2}"></div></div></div><div class="rule-actions"><button class="btn-text-danger" data-remove type="button">Remove</button></div>`; const pctSel=div.querySelector('[data-pct]'); const amtSel=div.querySelector('[data-amount]'); const chip=div.querySelector('[data-chip]'); pctSel.value=String(rule.pct??100); amtSel.value=String(rule.amount??2); const syncChip=()=>{if(chip) chip.textContent='HK$'+(Number(amtSel.value)||0);}; syncChip(); const persist=()=>{const rules=state.settings.rewards.creditRules||[]; const cur=rules[idx]; if(!cur)return; const pct=Number(pctSel.value); const dup=rules.some((x,i)=>i!==idx&&Number(x.pct)===pct); if(dup){toast('Duplicate completion %'); pctSel.value=String(cur.pct??100); return;} cur.pct=pct; cur.amount=Math.max(0,Number(amtSel.value)||0); syncChip(); markSettingsDirty();}; pctSel.onchange=persist; amtSel.onchange=persist; amtSel.oninput=persist; div.querySelector('[data-remove]').dataset.ruleRemove='credit'; div.querySelector('[data-remove]').dataset.ruleIdx=String(idx); box.appendChild(div);});
+      (r.creditRules||[]).forEach((rule,idx)=>{const div=document.createElement('div'); div.className='rule-card'; div.innerHTML=`<div class="rule-card-head"><div class="rule-card-title">Credit rule</div><span class="gift-rule-chip" data-chip>HK$${rule.amount||0}</span></div><div class="rule-grid"><div class="rule-row"><div class="field"><label>Completion</label><select data-pct>${[50,60,70,80,90,100].map(n=>`<option value="${n}">${n}%+</option>`).join('')}</select></div><div class="field"><label>Amount</label><div class="money-input"><span class="money-prefix">$</span><input type="number" data-amount min="0" step="1" inputmode="decimal" value="${rule.amount??2}"></div></div></div></div><div class="rule-actions"><button class="btn-text-danger" data-remove type="button">Remove</button></div>`; const pctSel=div.querySelector('[data-pct]'); const amtSel=div.querySelector('[data-amount]'); const chip=div.querySelector('[data-chip]'); pctSel.value=String(rule.pct??100); amtSel.value=String(rule.amount??2); const syncChip=()=>{if(chip) chip.textContent='HK$'+(Number(amtSel.value)||0);}; syncChip(); const persist=()=>{const rules=state.settings.rewards.creditRules||[]; const cur=rules[idx]; if(!cur)return; const pct=Number(pctSel.value); const dup=rules.some((x,i)=>i!==idx&&Number(x.pct)===pct); if(dup){toast('Duplicate completion %'); pctSel.value=String(cur.pct??100); return;} cur.pct=pct; cur.amount=Math.max(0,Number(amtSel.value)||0); syncChip(); markSettingsDirty();}; pctSel.onchange=persist; amtSel.onchange=persist; amtSel.oninput=persist; div.querySelector('[data-remove]').dataset.ruleRemove='credit'; div.querySelector('[data-remove]').dataset.ruleIdx=String(idx); box.appendChild(div);});
     } else if(tab==='penalty'){
-      p.innerHTML=`<div class="panel-intro"><div class="panel-intro-title">Penalty rules ${infoTip('A miss is a day below the completion trigger (0 means only empty days). Charged when you hit consecutive misses. No penalty if credit and EXP are already 0.','Penalty rules')}</div></div><div class="rule-card"><div class="rule-grid"><div class="field field-full"><label>Completion trigger</label><input type="number" id="penaltyMissPct" min="0" max="100" step="1" inputmode="decimal" value="${Number(r.penaltyMissPct||0)}"><div class="inline-hint">Default 0 = only 0% days. Set 50 to count anything below 50% as a miss.</div></div><div class="field field-full"><label>Consecutive misses</label><select id="penaltyZeroDays">${[1,2,3,4,5,7].map(n=>`<option value="${n}">${n} missed day${n>1?'s':''} in a row</option>`).join('')}</select></div><div class="rule-row"><div class="field"><label>Deduct credit</label><input type="number" id="penaltyCredit" min="0" step="1" inputmode="decimal" value="${Number(r.penaltyCredit??5)}"></div><div class="field"><label>Deduct EXP</label><select id="penaltyXp">${[0,10,20,30,50,100].map(n=>`<option value="${n}">${n} EXP</option>`).join('')}</select></div></div></div></div>`;
-      $('#penaltyZeroDays').value=r.penaltyZeroDays||2; $('#penaltyCredit').value=r.penaltyCredit??5; $('#penaltyXp').value=r.penaltyXp||20; $('#penaltyMissPct').value=r.penaltyMissPct??0;
-      const persist=()=>{r.penaltyZeroDays=Number($('#penaltyZeroDays').value); r.penaltyCredit=Math.max(0,Number($('#penaltyCredit').value)||0); r.penaltyXp=Number($('#penaltyXp').value); r.penaltyMissPct=Math.max(0,Math.min(100,Number($('#penaltyMissPct').value)||0)); markSettingsDirty();};
-      $('#penaltyZeroDays').onchange=persist; $('#penaltyCredit').onchange=persist; $('#penaltyCredit').oninput=persist; $('#penaltyXp').onchange=persist; $('#penaltyMissPct').onchange=persist; $('#penaltyMissPct').oninput=persist;
+      const missOpts=[50,40,30,20,10,0];
+      const curMiss=Number(r.penaltyMissPct??0);
+      const missList=missOpts.includes(curMiss)?missOpts:[curMiss,...missOpts].sort((a,b)=>b-a);
+      const missLabel=n=>n<=0?'0%':'<'+n+'%';
+      p.innerHTML=`<div class="panel-intro"><div class="panel-intro-title">Penalty rules ${infoTip('A miss is a day below the selected completion (0% means only empty days). Each miss day is charged once. No penalty if credit and EXP are already 0.','Penalty rules')}</div></div><div class="rule-card"><div class="rule-grid"><div class="field field-full"><label>Completion trigger</label><select id="penaltyMissPct">${missList.map(n=>`<option value="${n}">${missLabel(n)}</option>`).join('')}</select><div class="inline-hint">0% = only empty days. &lt;50% counts anything under 50% as a miss.</div></div><div class="rule-row"><div class="field"><label>Deduct credit</label><div class="money-input"><span class="money-prefix">$</span><input type="number" id="penaltyCredit" min="0" step="1" inputmode="decimal" value="${Number(r.penaltyCredit??5)}"></div></div><div class="field"><label>Deduct EXP</label><select id="penaltyXp">${[0,10,20,30,50,100].map(n=>`<option value="${n}">${n} EXP</option>`).join('')}</select></div></div></div></div>`;
+      $('#penaltyCredit').value=r.penaltyCredit??5; $('#penaltyXp').value=r.penaltyXp||20; $('#penaltyMissPct').value=String(curMiss);
+      const persist=()=>{r.penaltyZeroDays=1; r.penaltyCredit=Math.max(0,Number($('#penaltyCredit').value)||0); r.penaltyXp=Number($('#penaltyXp').value); r.penaltyMissPct=Math.max(0,Math.min(100,Number($('#penaltyMissPct').value)||0)); markSettingsDirty();};
+      $('#penaltyCredit').onchange=persist; $('#penaltyCredit').oninput=persist; $('#penaltyXp').onchange=persist; $('#penaltyMissPct').onchange=persist;
     } else {
       p.innerHTML=`<div class="panel-intro"><div class="panel-intro-title">Gift rules ${infoTip('Unlock a gift for keeping a streak. Earned gifts appear on the Rewards page.','Gift rules')}</div></div><div id="giftRulesBox"></div><button class="btn-secondary add-rule-btn" id="addGiftRule" type="button">+ Add gift rule</button>`;
       const box=$('#giftRulesBox'); box.innerHTML='';
@@ -2388,7 +2497,7 @@
     const nav=e.target.closest('.nav-item[data-view]');
     if(nav){showView(nav.dataset.view); return;}
     if(e.target.closest('#fabAdd')){openHabitModal(); return;}
-    if(e.target.closest('#openLevelBtn')){showView('levelView'); return;}
+    if(e.target.closest('#openLevelBtn')||e.target.closest('#profileQuick')){showView('levelView'); return;}
     if(e.target.closest('#homeCreditCard')){openRewardSettings('credit'); return;}
     if(e.target.closest('#homeGiftCard')){openRewardSettings('gift'); return;}
     const accentBtn=e.target.closest('#accentColorRow [data-accent]');
@@ -2409,16 +2518,8 @@
     if(e.target.closest('#addGroupBtn')){ tapAction('addGroup',e,addGroup); return; }
     const groupDel=e.target.closest('[data-gdel][data-group-id]');
     if(groupDel){ tapAction('gdel-'+groupDel.dataset.groupId,e,()=>deleteGroup(groupDel.dataset.groupId)); return; }
-    const groupUp=e.target.closest('[data-gup][data-group-id]');
-    if(groupUp){ tapAction('gup-'+groupUp.dataset.groupId,e,()=>moveGroup(groupUp.dataset.groupId,-1)); return; }
-    const groupDown=e.target.closest('[data-gdown][data-group-id]');
-    if(groupDown){ tapAction('gdown-'+groupDown.dataset.groupId,e,()=>moveGroup(groupDown.dataset.groupId,1)); return; }
     const groupIcon=e.target.closest('[data-gicon][data-group-id]');
     if(groupIcon){ tapAction('gicon-'+groupIcon.dataset.groupId,e,()=>{ const g=state.groups.find(x=>x.id===groupIcon.dataset.groupId); if(g) openGroupIconPicker(g); }); return; }
-    const habitUp=e.target.closest('[data-up][data-habit-id]');
-    if(habitUp){ tapAction('habit-up-'+habitUp.dataset.habitId,e,()=>moveHabit(habitUp.dataset.habitId,-1)); return; }
-    const habitDown=e.target.closest('[data-down][data-habit-id]');
-    if(habitDown){ tapAction('habit-down-'+habitDown.dataset.habitId,e,()=>moveHabit(habitDown.dataset.habitId,1)); return; }
     if(e.target.closest('#addHabitBtn')){openHabitModal(); return;}
     if(e.target.closest('#addVacationBtn')){openAddPauseModal(); return;}
     if(e.target.closest('#viewVacationLogBtn')){openVacationLog(); return;}

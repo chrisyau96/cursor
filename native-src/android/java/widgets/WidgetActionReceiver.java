@@ -17,6 +17,7 @@ public class WidgetActionReceiver extends BroadcastReceiver {
     if ("complete".equals(type) || "reset".equals(type)) {
       JSONObject snap = WidgetStore.readSnapshot(context);
       bump(snap.optJSONArray("outstanding"), habitId, "complete".equals(type));
+      bump(snap.optJSONArray("habits"), habitId, "complete".equals(type));
       WidgetStore.writeSnapshot(context, snap);
     }
     WidgetStore.refreshAll(context);

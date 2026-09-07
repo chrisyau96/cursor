@@ -20,12 +20,14 @@
   Launch.ADMOB_TEST_APP_ID = 'ca-app-pub-3940256099942544~3347511713';
   Launch.ADMOB_TEST_BANNER = 'ca-app-pub-3940256099942544/6300978111';
   Launch.NATIVE_SLOT_LIMIT = 200;
+  Launch.WIDGET_HABIT_MAX = 5;
   Launch.WIDGET_MODES = [
     { id: 'today', label: 'Today', hint: 'Outstanding habits with complete / reset' },
     { id: 'streak', label: 'Streak', hint: '100% completion streak' },
     { id: 'credits', label: 'Credits', hint: 'Available credit balance' },
     { id: 'gift', label: 'Next gift', hint: 'Gift streak progress' },
     { id: 'journal', label: 'Journal', hint: 'Tap to log today’s journal' },
+    { id: 'habits', label: 'Habits 1–5', hint: 'Pick up to 5 habits; resizes with the widget' },
   ];
 
   Launch.pad2 = (n) => String(n).padStart(2, '0');
@@ -286,10 +288,11 @@
   Launch.normalizeWidgetConfig = function (raw) {
     const cfg = raw && typeof raw === 'object' ? raw : {};
     const mode = Launch.WIDGET_MODES.some((m) => m.id === cfg.mode) ? cfg.mode : 'today';
-    const habitIds = Array.isArray(cfg.habitIds) ? cfg.habitIds.filter(Boolean).slice(0, 6) : [];
+    const max = Launch.WIDGET_HABIT_MAX || 5;
+    const habitIds = Array.isArray(cfg.habitIds) ? cfg.habitIds.filter(Boolean).slice(0, max) : [];
     let layout = Number(cfg.layout || habitIds.length || 3);
     if (!Number.isFinite(layout) || layout < 1) layout = 1;
-    if (layout > 6) layout = 6;
+    if (layout > max) layout = max;
     return { mode, habitIds, layout };
   };
 

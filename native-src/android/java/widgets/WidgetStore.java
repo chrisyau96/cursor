@@ -48,6 +48,32 @@ public final class WidgetStore {
     } catch (Exception ignored) {}
   }
 
+  private static android.content.SharedPreferences prefs(Context ctx) {
+    return ctx.getSharedPreferences("habit_widgets", Context.MODE_PRIVATE);
+  }
+
+  public static String[] habitIds(Context ctx, int appWidgetId) {
+    String raw = prefs(ctx).getString("h_" + appWidgetId, "");
+    if (raw == null || raw.isEmpty()) return new String[0];
+    return raw.split(",");
+  }
+
+  public static void setHabitIds(Context ctx, int appWidgetId, String[] ids) {
+    StringBuilder sb = new StringBuilder();
+    if (ids != null) {
+      for (int i = 0; i < ids.length && i < 5; i++) {
+        if (ids[i] == null || ids[i].isEmpty()) continue;
+        if (sb.length() > 0) sb.append(',');
+        sb.append(ids[i]);
+      }
+    }
+    prefs(ctx).edit().putString("h_" + appWidgetId, sb.toString()).apply();
+  }
+
+  public static void clearHabitIds(Context ctx, int appWidgetId) {
+    prefs(ctx).edit().remove("h_" + appWidgetId).apply();
+  }
+
   static JSONArray readPending(Context ctx) {
     try {
       File f = pendingFile(ctx);
@@ -89,7 +115,8 @@ public final class WidgetStore {
       StreakWidgetProvider.class,
       CreditsWidgetProvider.class,
       GiftWidgetProvider.class,
-      JournalWidgetProvider.class
+      JournalWidgetProvider.class,
+      HabitsWidgetProvider.class
     };
     AppWidgetManager manager = AppWidgetManager.getInstance(ctx);
     for (Class<?> type : types) {

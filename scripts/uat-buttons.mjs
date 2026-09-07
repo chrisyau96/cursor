@@ -646,7 +646,12 @@ await test('Greeting uses device time of day', async () => {
   const h = new Date().getHours();
   const expect = h < 12 ? 'Good morning' : h < 18 ? 'Good afternoon' : 'Good evening';
   assert(greet === expect, `greeting should be ${expect}, got ${greet}`);
-  assert(await page.locator('#profileQuick').count() === 0, 'profile shortcut should be gone');
+  assert(await page.locator('#profileQuick').count() === 1, 'identity EXP chip should be on the home header');
+  await page.click('#profileQuick');
+  await page.waitForTimeout(300);
+  assert(await page.locator('#levelView').evaluate((el) => el.classList.contains('active')), 'identity chip should open the ladder');
+  assert(await page.locator('#identityPath .tier-card').count() >= 11, 'identity ladder should list tiers');
+  await page.click('.nav-item[data-view="homeView"]');
 });
 
 await test('Credit and gift cards open their settings', async () => {
@@ -692,11 +697,17 @@ await test('Credit rules award credits only, not completion EXP', async () => {
   assert(credit?.includes('12'), `100% day should still earn stacked credits, got: ${credit}`);
   await page.click('.nav-item[data-view="rewardsView"]');
   await page.waitForTimeout(300);
-  const ledger = await page.locator('#ledgerList').textContent();
+  const ledgerPreview = await page.locator('#ledgerList .ledger-item').count();
+  assert(ledgerPreview === 1, 'reward ledger should show one row, got ' + ledgerPreview);
+  await page.click('#ledgerList .view-all-btn');
+  await page.waitForTimeout(300);
+  const ledger = await page.locator('#lfList').textContent();
   assert(ledger?.includes('50% daily completion'), '50% credit rule should appear in ledger');
   assert(ledger?.includes('100% daily completion'), '100% credit rule should appear in ledger');
   assert(!ledger?.includes('12 EXP'), '50% credit rule must not grant EXP');
   assert(!ledger?.includes('30 EXP'), '100% credit rule must not grant EXP');
+  await page.click('#modalClose');
+  await page.waitForTimeout(200);
 });
 
 await test('Today view resets for a new day', async () => {
@@ -889,13 +900,14 @@ await test('Settings expose Google Drive backup, reminders, and widgets', async 
   await page.click('#topSettingsBtn');
   await page.waitForTimeout(400);
   assert(await page.locator('#driveConnectBtn').count() === 1, 'Drive connect button missing');
-  assert(await page.locator('#googleClientIdInput').count() === 0, 'web client ID field should stay out of Settings');
-  assert(await page.locator('#googleAndroidOauthNote').count() === 0, 'Android OAuth note should stay out of Settings');
+  assert(await page.locator('#googleClientIdInput').count() === 1, 'web client ID field should be in Settings');
   const freqLabels = await page.locator('#driveBackupFreq option').allTextContents();
   assert(freqLabels.includes('Daily') && freqLabels.includes('Weekly') && freqLabels.includes('Off'), 'schedules should be Daily / Weekly / Off, got ' + freqLabels.join(','));
   assert(await page.locator('#widgetModeTabs').count() === 0, 'in-app widget tabs should be gone');
   const widgetNote = await page.locator('#settingsView').locator('text=long-press the home screen').count();
   assert(widgetNote >= 1, 'OS widget instructions should be visible');
+  assert(await page.locator('#widgetPreviewGrid img').count() === 6, 'six widget sample images');
+  assert(await page.locator('#widgetHabitPicker').count() === 1, 'habit widget picker missing');
   assert(await page.locator('#testReminderBtn').count() === 1, 'test reminder button missing');
   const note = await page.locator('#reminderRuntimeNote').textContent();
   assert(!!note, 'reminder runtime note should render');
@@ -906,11 +918,16 @@ await test('Settings expose Google Drive backup, reminders, and widgets', async 
   assert(/Ads on/i.test(adsCopy || ''), 'ads status should say ads are on');
   assert(await page.locator('#weekStartSelect').inputValue() === 'mon', 'week should default to Monday');
   assert(await page.locator('#accentColorRow .accent-swatch').count() === 7, 'seven accent colors');
-  assert(await page.locator('#penaltyMissPct').count() === 0 || true, 'penalty trigger exists after opening penalty tab');
   await page.locator('#rewardTabs [data-tab="penalty"]').click();
   await page.waitForTimeout(200);
   assert(await page.locator('#penaltyMissPct').count() === 1, 'completion trigger field missing');
   assert(await page.locator('#penaltyMissPct').inputValue() === '0', 'completion trigger default 0');
+  assert(await page.locator('#penaltyZeroDays').count() === 0, 'consecutive misses should be removed');
+  const missLabels = await page.locator('#penaltyMissPct option').allTextContents();
+  assert(missLabels.some((t) => t.includes('<50%')) && missLabels.some((t) => t.trim() === '0%'), 'penalty dropdown should list <50% down to 0%');
+  await page.locator('#rewardTabs [data-tab="credit"]').click();
+  await page.waitForTimeout(200);
+  assert(await page.locator('#creditRulesBox .money-prefix').first().textContent() === '$', 'credit amount should show a dollar prefix');
 });
 
 await test('House ad banner shows until lifetime purchase is on device', async () => {
@@ -1020,13 +1037,86 @@ await test('Home week strip starts on Monday by default', async () => {
   assert(firstDow === 'M', 'this week should start on Monday, got ' + firstDow);
 });
 
-await test('Widgets are configured on the OS, not in Settings', async () => {
+await test('Energy ticks sit above the bar and tilt toward the score', async () => {
+  await page.click('.nav-item[data-view="homeView"]');
+  await page.waitForSelector('#homeEnergy');
+  const geom = await page.evaluate(() => {
+    const input = document.querySelector('#homeEnergy');
+    const tick = document.querySelector('.energy-scale [data-tick="0"]');
+    const last = document.querySelector('.energy-scale [data-tick="10"]');
+    const dot = document.querySelector('.energy-scale [data-tick="0"] .tick-dot');
+    const ib = input.getBoundingClientRect();
+    const tb = tick.getBoundingClientRect();
+    const lb = last.getBoundingClientRect();
+    const db = dot.getBoundingClientRect();
+    input.value = '2';
+    input.dispatchEvent(new Event('input', { bubbles: true }));
+    const tiltLow = getComputedStyle(tick).getPropertyValue('--tilt');
+    input.value = '8';
+    input.dispatchEvent(new Event('input', { bubbles: true }));
+    const tiltAfter = getComputedStyle(tick).getPropertyValue('--tilt');
+    return {
+      tickBottom: tb.bottom,
+      dotBottom: db.bottom,
+      inputTop: ib.top,
+      lastBottom: lb.bottom,
+      tiltLow,
+      tiltAfter,
+      current: document.querySelector('.energy-scale [data-tick="8"]')?.classList.contains('is-current')
+    };
+  });
+  assert(geom.tickBottom <= geom.inputTop + 1, `ticks must stay above the slider (tick ${geom.tickBottom} vs input ${geom.inputTop})`);
+  assert(geom.dotBottom <= geom.inputTop + 1, `dots must stay above the slider (dot ${geom.dotBottom} vs input ${geom.inputTop})`);
+  assert(geom.lastBottom <= geom.inputTop + 1, 'rightmost tick must stay above the slider');
+  assert(geom.current, 'current score tick should be marked');
+  assert(geom.tiltAfter !== geom.tiltLow, 'ticks should tilt toward the selected score');
+});
+
+await test('Insights cap at 3 rows and color the numbers', async () => {
+  await page.click('.nav-item[data-view="reportView"]');
+  await page.waitForTimeout(400);
+  const n = await page.locator('#correlationInsights .insight-row').count();
+  assert(n <= 3, 'insights should show at most 3 rows, got ' + n);
+  const colored = await page.locator('#correlationInsights .ins-n').count();
+  assert(colored >= 1, 'insight numbers should use color classes');
+});
+
+await test('Accent color tints the page background', async () => {
+  await page.click('#topSettingsBtn');
+  await page.waitForTimeout(200);
+  const before = await page.evaluate(() => getComputedStyle(document.documentElement).getPropertyValue('--bg1').trim());
+  await page.locator('#accentColorRow [data-accent="rose"]').click();
+  await page.waitForTimeout(100);
+  const after = await page.evaluate(() => ({
+    bg1: getComputedStyle(document.documentElement).getPropertyValue('--bg1').trim(),
+    brand: getComputedStyle(document.documentElement).getPropertyValue('--brand').trim(),
+    purple: getComputedStyle(document.documentElement).getPropertyValue('--purple').trim(),
+  }));
+  assert(after.brand.toLowerCase() === '#f43f5e', 'rose accent should set brand, got ' + after.brand);
+  assert(after.bg1 !== before, 'background wash should follow the accent');
+  assert(after.purple.toLowerCase() === '#e11d48', 'purple token should follow the accent');
+  await page.locator('#accentColorRow [data-accent="indigo"]').click();
+});
+
+await test('Habit setup uses a left drag handle', async () => {
+  await page.click('.nav-item[data-view="habitsView"]');
+  await page.waitForTimeout(300);
+  const handle = await page.locator('#allHabitList .habit-row .drag-handle').first();
+  assert(await handle.count() === 1, 'habit rows need a drag handle');
+  const box = await handle.boundingBox();
+  const row = await page.locator('#allHabitList .habit-row').first().boundingBox();
+  assert(box && row && box.x < row.x + 48, 'drag handle should sit on the left');
+  assert(await page.locator('#allHabitList [data-up]').count() === 0, 'up/down buttons should be gone');
+});
+
+await test('Widgets include sample images and a 1–5 habit picker', async () => {
   await page.click('#topSettingsBtn');
   await page.waitForTimeout(300);
-  assert(await page.locator('#widgetModeTabs').count() === 0, 'in-app widget picker should be gone');
-  assert(await page.locator('#widgetPreview').count() === 0, 'in-app widget preview should be gone');
+  assert(await page.locator('#widgetModeTabs').count() === 0, 'old widget mode tabs should stay gone');
+  assert(await page.locator('#widgetPreviewGrid img').count() === 6, 'sample images for each widget');
   const copy = await page.locator('#settingsView').innerText();
-  assert(/Today/.test(copy) && /Streak/.test(copy) && /Journal/.test(copy), 'OS widget names should be listed');
+  assert(/Today/.test(copy) && /Streak/.test(copy) && /Journal/.test(copy) && /Habits/.test(copy), 'OS widget names should be listed');
+  assert(await page.locator('#widgetHabitPicker').count() === 1, 'habit picker missing');
 });
 
 await test('Widget complete query records a habit without opening a habit row', async () => {

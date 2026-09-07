@@ -23,6 +23,18 @@
         <span class="top-greeting-sub" id="todayEntryStamp"></span>
       </div>
       <div class="top-actions">
+        <button class="profile-pill" id="profileQuick" type="button" aria-label="Open identity ladder and EXP">
+          <div class="profile-avatar" id="topProfileAvatar">🌱</div>
+          <div class="profile-meta">
+            <div class="profile-title"><span id="topLevel">Lv 1</span> <span class="profile-identity" id="topIdentityName">Seed Planter</span></div>
+            <div class="profile-sub">
+              <div class="level-bar-wrap">
+                <div class="level-bar"><div class="level-fill" id="topLevelFill"></div></div>
+                <span class="level-pct" id="topLevelXp">0 EXP</span>
+              </div>
+            </div>
+          </div>
+        </button>
         <button class="top-icon" id="topSettingsBtn" type="button" aria-label="Settings">
           <svg class="nav-svg" viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M19.14 12.94c.04-.31.06-.63.06-.94s-.02-.63-.06-.94l2.03-1.58a.49.49 0 0 0 .12-.61l-1.92-3.32a.49.49 0 0 0-.59-.22l-2.39.96a7.04 7.04 0 0 0-1.63-.94l-.36-2.54a.49.49 0 0 0-.48-.42h-3.84a.49.49 0 0 0-.48.42l-.36 2.54a7.04 7.04 0 0 0-1.63.94l-2.39-.96a.49.49 0 0 0-.59.22L2.74 8.87a.49.49 0 0 0 .12.61l2.03 1.58c-.04.31-.06.63-.06.94s.02.63.06.94l-2.03 1.58a.49.49 0 0 0-.12.61l1.92 3.32a.49.49 0 0 0 .59.22l2.39-.96c.5.38 1.05.7 1.63.94l.36 2.54a.49.49 0 0 0 .48.42h3.84a.49.49 0 0 0 .48-.42l.36-2.54c.58-.24 1.13-.56 1.63-.94l2.39.96a.49.49 0 0 0 .59-.22l1.92-3.32a.49.49 0 0 0-.12-.61l-2.03-1.58zM12 15.6A3.6 3.6 0 1 1 12 8.4a3.6 3.6 0 0 1 0 7.2z"/></svg>
         </button>
@@ -181,6 +193,11 @@
         <p class="settings-section-label">Google Drive backup</p>
         <div class="card settings-card sync-card">
           <div class="sync-status-panel" id="driveStatus">Not connected</div>
+          <div class="field" id="googleClientIdField" style="margin-top:12px">
+            <label>Google Web client ID <button type="button" class="info-tip" aria-label="Help" data-tip-title="Google Drive setup" data-tip="Play Console login is info@dincey.com. In Google Cloud (same Google account), create an OAuth client of type Web application. Paste the ID that ends with .apps.googleusercontent.com. Testers never type this once it is saved.">ⓘ</button></label>
+            <input id="googleClientIdInput" placeholder="….apps.googleusercontent.com" autocomplete="off" spellcheck="false">
+            <div class="inline-hint">Required once so Connect can open Google. Use the <strong>Web application</strong> client ID from Google Cloud (ends with .apps.googleusercontent.com). Do not paste the Android client ID. Play login: info@dincey.com.</div>
+          </div>
           <div class="field" style="margin-top:12px"><label>Backup schedule</label><select id="driveBackupFreq"><option value="daily">Daily</option><option value="weekly">Weekly</option><option value="off">Off</option></select></div>
           <div class="sync-actions" style="margin-top:12px">
             <button type="button" class="btn-primary" id="driveConnectBtn">Connect Google Drive</button>
@@ -210,7 +227,20 @@
 
         <p class="settings-section-label">Home screen widgets</p>
         <div class="card settings-card">
-          <div class="small-note">Add widgets from your phone: long-press the home screen → Widgets → Habit &amp; Journal. Pick Today, Streak, Credits, Gift, or Journal. Each widget is set up in Android, not in this app.</div>
+          <div class="small-note">Long-press the home screen → Widgets → Habit &amp; Journal. Sample layouts:</div>
+          <div class="widget-preview-grid" id="widgetPreviewGrid">
+            <figure class="widget-preview-card"><img src="assets/widgets/today.svg" alt="Today widget sample"><figcaption>Today</figcaption></figure>
+            <figure class="widget-preview-card"><img src="assets/widgets/streak.svg" alt="Streak widget sample"><figcaption>Streak</figcaption></figure>
+            <figure class="widget-preview-card"><img src="assets/widgets/credits.svg" alt="Credits widget sample"><figcaption>Credits</figcaption></figure>
+            <figure class="widget-preview-card"><img src="assets/widgets/gift.svg" alt="Gift widget sample"><figcaption>Gift</figcaption></figure>
+            <figure class="widget-preview-card"><img src="assets/widgets/journal.svg" alt="Journal widget sample"><figcaption>Journal</figcaption></figure>
+            <figure class="widget-preview-card"><img src="assets/widgets/habits.svg" alt="Habits widget sample"><figcaption>Habits 1–5</figcaption></figure>
+          </div>
+          <div class="field" style="margin-top:12px">
+            <label>Habits widget (pick 1–5)</label>
+            <div class="small-note">Used by the Habits widget. Resize that widget to show more or fewer of your picks.</div>
+            <div id="widgetHabitPicker" class="widget-habit-picker"></div>
+          </div>
         </div>
 
         <p class="settings-section-label">Debug</p>
@@ -235,7 +265,7 @@
           <div class="field"><input id="confirmDeleteInput" placeholder="Type Confirm"></div>
           <button class="btn-danger settings-action" id="resetAllBtn" type="button">Erase all data</button>
         </div>
-        <p class="settings-version" id="settingsVersion">Habit &amp; Journal v59</p>
+        <p class="settings-version" id="settingsVersion">Habit &amp; Journal v60</p>
       </section>
     </main>
 
@@ -298,8 +328,8 @@
 
   <script>
     window.MOMENTUM_CONFIG = window.MOMENTUM_CONFIG || {
-      // Bake the Google Cloud *Web* OAuth client ID here. Testers never type it.
-      // googleClientId: 'xxxxx.apps.googleusercontent.com'
+      // Optional bake: googleClientId: 'xxxxx.apps.googleusercontent.com'
+      // If empty, Settings → Google Drive has a field to paste the Web client ID.
     };
   </script>
   <script src="assets/js/launch-core.js"></script>

@@ -1,6 +1,6 @@
 // Offline-first service worker for Habit & Journal.
 // Cross-origin requests always go to the network.
-const CACHE = "habit-journal-v59";
+const CACHE = "habit-journal-v60";
 
 const ASSETS = [
   ".",

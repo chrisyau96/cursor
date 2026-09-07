@@ -18,10 +18,22 @@
   }
   function cap() { return window.Capacitor?.Plugins || {}; }
 
+  function persistClientIdFromInput() {
+    const input = document.getElementById('googleClientIdInput');
+    const st = state();
+    if (!input || !st?.settings) return;
+    const v = String(input.value || '').trim();
+    if (v !== (st.settings.googleClientId || '')) {
+      st.settings.googleClientId = v;
+      socialReadyFor = '';
+    }
+  }
+
   function clientId() {
     const fromConfig = (window.MOMENTUM_CONFIG?.googleClientId || '').trim();
+    const fromInput = (document.getElementById('googleClientIdInput')?.value || '').trim();
     const fromSettings = (settings().googleClientId || '').trim();
-    return fromConfig || fromSettings;
+    return fromConfig || fromInput || fromSettings;
   }
 
   function installedAt() {
@@ -60,7 +72,7 @@
 
   function requestToken(prompt) {
     const cid = clientId();
-    if (!cid) return Promise.reject(new Error('Google Drive on the website needs the Play app.'));
+    if (!cid) return Promise.reject(new Error('Paste the Google Web client ID in Settings → Google Drive, then tap Connect.'));
     return ensureGis().then(() => new Promise((resolve, reject) => {
       tokenClient = window.google.accounts.oauth2.initTokenClient({
         client_id: cid,
@@ -106,6 +118,10 @@
   }
 
   async function nativeGoogleToken(interactive) {
+    const cid = clientId();
+    if (!cid) {
+      throw new Error('Paste the Google Web client ID in Settings → Google Drive, then tap Connect.');
+    }
     const social = await ensureSocialGoogle();
     if (!social) return null;
     const scopes = ['email', 'profile', 'openid', Core.DRIVE_SCOPE, 'https://www.googleapis.com/auth/userinfo.email'];
@@ -145,15 +161,15 @@
       } catch (e) {
         if (interactive) {
           const msg = String(e?.message || e || '');
-          if (/clientId is null or empty|webClientId/i.test(msg)) {
-            throw new Error('Google sign-in is not configured for this build.');
+          if (/clientId is null or empty|webClientId|not configured/i.test(msg)) {
+            throw new Error('Paste the Google Web client ID in Settings → Google Drive, then tap Connect.');
           }
           throw (e instanceof Error ? e : new Error(msg));
         }
       }
       if (!interactive) throw new Error('Google Drive needs Connect once');
     }
-    if (!clientId()) throw new Error('Google Drive on the website needs the Play app.');
+    if (!clientId()) throw new Error('Paste the Google Web client ID in Settings → Google Drive, then tap Connect.');
     return requestToken(interactive ? 'consent' : '');
   }
 
@@ -199,9 +215,6 @@
 
   function backupJson() {
     const st = JSON.parse(JSON.stringify(state()));
-    if (st.settings) {
-      delete st.settings.googleClientId;
-    }
     return JSON.stringify(st);
   }
 
@@ -266,6 +279,11 @@
   }
 
   async function connectDrive() {
+    persistClientIdFromInput();
+    if (!clientId()) {
+      throw new Error('Paste the Google Web client ID in Settings → Google Drive, then tap Connect.');
+    }
+    await app()?.save?.(true, { render: 'none' });
     const token = await accessToken(true);
     let email = '';
     try {
@@ -323,6 +341,11 @@
 
   function renderDriveUi() {
     const s = settings();
+    const baked = !!(window.MOMENTUM_CONFIG?.googleClientId || '').trim();
+    const field = document.getElementById('googleClientIdField');
+    const input = document.getElementById('googleClientIdInput');
+    if (field) field.hidden = baked;
+    if (input && document.activeElement !== input) input.value = s.googleClientId || '';
     const status = document.getElementById('driveStatus');
     const freq = document.getElementById('driveBackupFreq');
     if (freq && document.activeElement !== freq) freq.value = s.driveBackupFreq || 'daily';
@@ -331,6 +354,8 @@
       if (s.driveConnected) {
         const file = s.driveFileName || Core.DRIVE_FILE_NAME;
         status.innerHTML = `<strong>Connected</strong>${s.driveEmail ? ' · ' + escape(s.driveEmail) : ''}<div class="small-note" style="margin-top:6px">${escape(file)} · last backup <strong>${formatStamp(s.lastDriveBackupAt)}</strong></div>`;
+      } else if (!clientId()) {
+        status.innerHTML = `<strong>Not connected</strong><div class="small-note" style="margin-top:6px">Paste the Google <strong>Web</strong> client ID below (ends with .apps.googleusercontent.com), then tap Connect. Testers: this is a one-time developer field, not your Gmail password.</div>`;
       } else {
         status.innerHTML = `<strong>Not connected</strong><div class="small-note" style="margin-top:6px">Sign in with Google to create a Drive backup file and keep it updated.</div>`;
       }
@@ -561,12 +586,12 @@
     const now = a.hkNow();
     const today = a.todayKey();
     const ids = cfg.habitIds.length ? cfg.habitIds : a.activeHabits().filter((h) => !h.paused).slice(0, cfg.layout).map((h) => h.id);
-    return ids.slice(0, cfg.layout).map((id) => {
+    return ids.slice(0, Math.min(cfg.layout, Core.WIDGET_HABIT_MAX || 5)).map((id) => {
       const h = state().habits.find((x) => x.id === id);
       if (!h) return null;
       const due = a.habitDueDate(h, now);
       const c = a.completionOfHabit(h, now);
-      return { id: h.id, name: h.name, emoji: h.emoji || '✓', color: h.color, due, dueLabel: Core.duePhrase(today, due), count: c.count, target: c.target, done: !!c.done };
+      return { id: h.id, name: h.name, emoji: h.emoji || '✓', color: h.color, due, dueLabel: Core.duePhrase(today, due), count: c.count, target: c.target, done: !!c.done, date: today };
     }).filter(Boolean);
   }
 
@@ -584,6 +609,8 @@
       layout: cfg.layout,
       outstanding: outstandingToday(),
       habits: selectedHabitsSnapshot(cfg),
+      allHabits: a.activeHabits().filter((h) => !h.paused).map((h) => ({ id: h.id, name: h.name, emoji: h.emoji || '✓' })),
+      selectedIds: cfg.habitIds,
       streak: { current: a.streakAt(a.hkNow(), 100), best: a.longestPerfectStreak() },
       credits: a.creditTotal(),
       gift: gift ? { icon: gift.icon || '🎁', label: gift.gift || 'Gift', current: gp.current, target: gp.target, pct: gp.pct } : null,
@@ -612,7 +639,33 @@
 
   function renderWidgetPreview() {}
 
-  function renderWidgetUi() {}
+  function renderWidgetUi() {
+    const box = document.getElementById('widgetHabitPicker');
+    if (!box || !app()) return;
+    const st = state();
+    const cfg = Core.normalizeWidgetConfig(st.settings.widget);
+    const max = Core.WIDGET_HABIT_MAX || 5;
+    const habits = app().activeHabits().filter((h) => !h.paused);
+    if (!habits.length) {
+      box.innerHTML = '<div class="empty">Add habits first, then pick 1–5 for the Habits widget.</div>';
+      return;
+    }
+    box.innerHTML = habits.map((h) => {
+      const on = cfg.habitIds.includes(h.id);
+      return `<label class="widget-habit-pick ${on ? 'is-on' : ''}"><input type="checkbox" data-widget-habit="${h.id}" ${on ? 'checked' : ''}> <span>${h.emoji || '✓'} ${app().escapeHtml(h.name)}</span></label>`;
+    }).join('');
+    box.querySelectorAll('[data-widget-habit]').forEach((el) => {
+      el.onchange = () => {
+        const ids = [...box.querySelectorAll('[data-widget-habit]:checked')].map((x) => x.dataset.widgetHabit);
+        if (ids.length > max) {
+          el.checked = false;
+          app().toast('Pick up to ' + max + ' habits');
+          return;
+        }
+        saveWidgetConfig({ habitIds: ids, layout: Math.max(1, ids.length) });
+      };
+    });
+  }
 
   function readPending() {
     try { return JSON.parse(localStorage.getItem(Core.PENDING_KEY) || '[]'); }
@@ -867,6 +920,13 @@
       state().settings.driveBackupFreq = e.target.value;
       await app().save(true, { render: 'none' });
       if (Core.shouldDriveBackup(settings(), app().todayKey())) void maybeAutoDriveBackup();
+    });
+    document.getElementById('googleClientIdInput')?.addEventListener('change', async (e) => {
+      const st = state();
+      if (!st?.settings) return;
+      st.settings.googleClientId = String(e.target.value || '').trim();
+      socialReadyFor = '';
+      await app().save(true, { render: 'none' });
     });
     document.getElementById('testReminderBtn')?.addEventListener('click', async () => {
       const ok = await requestNotifPermission();

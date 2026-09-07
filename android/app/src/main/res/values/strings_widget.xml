@@ -10,4 +10,6 @@
     <string name="widget_credits_description">Available credit balance</string>
     <string name="widget_gift_description">Next gift progress</string>
     <string name="widget_journal_description">Open today’s journal</string>
+    <string name="widget_habits">Habits</string>
+    <string name="widget_habits_description">Pick 1–5 habits. Resize to show more or fewer.</string>
 </resources>
