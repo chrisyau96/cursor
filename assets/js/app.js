@@ -1196,6 +1196,7 @@
           const from=rows.indexOf(row);
           const to=rows.indexOf(over);
           if(from<0||to<0||from===to) return;
+          dragged=true;
           if(from<to) list.insertBefore(row, over.nextSibling);
           else list.insertBefore(row, over);
         };

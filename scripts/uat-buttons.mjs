@@ -263,9 +263,8 @@ await test('Delete group removes it and ungroups habits', async () => {
   assert(groupRows === 0, 'group row should disappear from UI');
 });
 
-await test('Habit sort buttons reorder habits', async () => {
+await test('Habit drag handle reorders habits', async () => {
   await page.evaluate(() => {
-    const uid = () => Date.now().toString(36) + Math.random().toString(36).slice(2, 7);
     const s = JSON.parse(localStorage.getItem('habitTrackerProductionV7'));
     s.groups = [];
     s.habits = [
@@ -281,11 +280,19 @@ await test('Habit sort buttons reorder habits', async () => {
   await page.waitForTimeout(300);
   const before = await page.locator('#allHabitList .habit-row .habit-name').first().textContent();
   assert(before === 'Alpha', 'Alpha should be first');
-  await page.locator('[data-down][data-habit-id="habit-a"]').click();
+  const handle = page.locator('#allHabitList .habit-row[data-habit-id="habit-a"] .drag-handle');
+  const target = page.locator('#allHabitList .habit-row[data-habit-id="habit-b"]');
+  const from = await handle.boundingBox();
+  const to = await target.boundingBox();
+  assert(from && to, 'habit rows should be visible for drag');
+  await page.mouse.move(from.x + from.width / 2, from.y + from.height / 2);
+  await page.mouse.down();
+  await page.mouse.move(to.x + to.width / 2, to.y + to.height / 2 + 12, { steps: 16 });
+  await page.mouse.up();
   await page.waitForTimeout(400);
   const after = await page.locator('#allHabitList .habit-row .habit-name').first().textContent();
   const orders = await page.evaluate(() => JSON.parse(localStorage.getItem('habitTrackerProductionV7')).habits.map(h => ({ id: h.id, sortOrder: h.sortOrder })));
-  assert(after === 'Beta', 'Beta should be first after moving Alpha down');
+  assert(after === 'Beta', 'Beta should be first after dragging Alpha down');
   const alpha = orders.find(o => o.id === 'habit-a');
   const beta = orders.find(o => o.id === 'habit-b');
   assert(alpha.sortOrder > beta.sortOrder, 'Alpha sortOrder should be greater than Beta');
@@ -1073,12 +1080,41 @@ await test('Energy ticks sit above the bar and tilt toward the score', async () 
 });
 
 await test('Insights cap at 3 rows and color the numbers', async () => {
+  const today = hkDateKey();
+  await page.evaluate((today) => {
+    const s = JSON.parse(localStorage.getItem('habitTrackerProductionV7'));
+    const hid = 'ins-habit';
+    const start = new Date(today + 'T12:00:00');
+    start.setDate(start.getDate() - 13);
+    const startKey = `${start.getFullYear()}-${String(start.getMonth() + 1).padStart(2, '0')}-${String(start.getDate()).padStart(2, '0')}`;
+    s.habits = [{
+      id: hid, name: 'Insight Habit', emoji: '📖', color: '#4f46e5', target: 1, xpReward: 5,
+      frequency: { mode: 'daily', days: [0, 1, 2, 3, 4, 5, 6], schedule: { type: 'days' } },
+      reminder: { enabled: false, time: '20:30', message: '' },
+      sortOrder: 0, paused: false, archived: false, groupId: null,
+    }];
+    s.records = [];
+    s.journals = {};
+    s.settings.startDate = startKey;
+    s.settings.onboardingComplete = true;
+    for (let i = 0; i < 14; i++) {
+      const d = new Date(start);
+      d.setDate(start.getDate() + i);
+      const k = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+      if (i % 2 === 0) s.records.push({ id: 'ins-' + i, habitId: hid, date: k, at: k + 'T12:00:00.000Z', note: '' });
+    }
+    localStorage.setItem('habitTrackerProductionV7', JSON.stringify(s));
+  }, today);
+  await page.reload({ waitUntil: 'domcontentloaded' });
+  await page.waitForTimeout(600);
   await page.click('.nav-item[data-view="reportView"]');
   await page.waitForTimeout(400);
+  const html = await page.locator('#correlationInsights').innerHTML();
   const n = await page.locator('#correlationInsights .insight-row').count();
+  assert(n > 0, 'insights should render rows, got: ' + html.slice(0, 180));
   assert(n <= 3, 'insights should show at most 3 rows, got ' + n);
   const colored = await page.locator('#correlationInsights .ins-n').count();
-  assert(colored >= 1, 'insight numbers should use color classes');
+  assert(colored >= 1, 'insight numbers should use color classes, got: ' + html.slice(0, 180));
 });
 
 await test('Accent color tints the page background', async () => {
