@@ -20,19 +20,21 @@ function assert(cond, msg) {
 assert(Launch.shouldDriveBackup({ driveConnected: true, driveBackupFreq: 'daily' }, '2026-08-31') === true, 'missing last backup should run');
 assert(Launch.shouldDriveBackup({ driveConnected: true, driveBackupFreq: 'daily', lastDriveBackupAt: '2026-08-31T01:00:00.000Z' }, '2026-08-31') === false, 'same day should skip');
 assert(Launch.shouldDriveBackup({ driveConnected: true, driveBackupFreq: 'daily', lastDriveBackupAt: '2026-08-30' }, '2026-08-31') === true, 'new day should backup');
-assert(Launch.shouldDriveBackup({ driveConnected: true, driveBackupFreq: 'weekly', lastDriveBackupAt: '2026-08-30' }, '2026-08-31') === false, 'same week should skip');
-assert(Launch.shouldDriveBackup({ driveConnected: true, driveBackupFreq: 'weekly', lastDriveBackupAt: '2026-08-23' }, '2026-08-31') === true, 'new week should backup');
+assert(Launch.shouldDriveBackup({ driveConnected: true, driveBackupFreq: 'weekly', lastDriveBackupAt: '2026-08-31' }, '2026-09-02') === false, 'same week should skip');
+assert(Launch.shouldDriveBackup({ driveConnected: true, driveBackupFreq: 'weekly', lastDriveBackupAt: '2026-08-24' }, '2026-08-31') === true, 'new week should backup');
 assert(Launch.shouldDriveBackup({ driveConnected: false, driveBackupFreq: 'daily' }, '2026-08-31') === false, 'disconnected should skip');
 assert(Launch.shouldDriveBackup({ driveConnected: true, driveBackupFreq: 'off', lastDriveBackupAt: '' }, '2026-08-31') === false, 'off should skip');
 
-assert(Launch.weekStartKey('2026-08-31') === '2026-08-30', 'week starts Sunday');
+assert(Launch.weekStartKey('2026-08-31') === '2026-08-31', 'week starts Monday by default');
+assert(Launch.weekStartKey('2026-08-31', 'sun') === '2026-08-30', 'Sunday week start');
+assert(Launch.weekStartKey('2026-08-31', 'sat') === '2026-08-29', 'Saturday week start');
 assert(Launch.duePhrase('2026-08-31', '2026-08-31') === 'Due today', 'due today');
 assert(Launch.duePhrase('2026-08-31', '2026-09-01') === 'Due tmr', 'due tmr');
 assert(Launch.duePhrase('2026-08-31', '2026-09-02') === 'Due in 3 days', 'inclusive day count');
 
 const slots = Launch.buildReminderSlots([
-  { id: 'h1', name: 'Read', reminder: { enabled: true, time: '21:00' } },
-  { id: 'h2', name: 'Skip', reminder: { enabled: false, time: '08:00' } },
+  { id: 'h1', name: 'Read', reminder: { enabled: true, time: '21:00' }, frequency: { mode: 'daily', days: [1], schedule: { type: 'days' } } },
+  { id: 'h2', name: 'Skip', reminder: { enabled: false, time: '08:00' }, frequency: { mode: 'daily', days: [1], schedule: { type: 'days' } } },
 ], {
   todayKey: '2026-08-31',
   remindersEnabled: true,
@@ -45,7 +47,7 @@ assert(slots.length === 1, 'one future slot');
 assert(slots[0].body === 'Time for Read', 'reminder body');
 assert(slots[0].id > 0, 'notification id');
 
-const none = Launch.buildReminderSlots([{ id: 'h1', reminder: { enabled: true, time: '07:00' } }], {
+const none = Launch.buildReminderSlots([{ id: 'h1', reminder: { enabled: true, time: '07:00' }, frequency: { mode: 'daily', days: [1], schedule: { type: 'days' } } }], {
   todayKey: '2026-08-31', remindersEnabled: false, days: 2, now: new Date(2026, 7, 31, 10, 0, 0),
   habitNeedsReminderOn: () => true,
 });
@@ -61,7 +63,7 @@ assert(state.records.every((r) => r.habitId !== 'h1'), 'reset removes today reco
 assert(state.records.some((r) => r.habitId === 'h2' && r.note === 'widget'), 'widget complete added');
 
 const cfg = Launch.normalizeWidgetConfig({ mode: 'habits', habitIds: ['a', 'b', 'c', 'd', 'e', 'f', 'g'], layout: 9 });
-assert(cfg.habitIds.length === 6 && cfg.layout === 6, 'widget config capped at 6');
+assert(cfg.habitIds.length === 5 && cfg.layout === 5, 'widget config capped at 5');
 assert(Launch.parseQueryActions('?widgetAction=complete&habitId=abc').habitId === 'abc', 'query action');
 assert(Launch.parseAppUrl('momentum://widget/reset?habitId=z').type === 'reset', 'app url action');
 
@@ -70,5 +72,129 @@ const repeating = Launch.buildRepeatingNative([
 ], { reminderBody: (h) => h.name });
 assert(repeating.length === 2, 'one native alarm per weekday');
 assert(repeating[0].weekday === 2 && repeating[1].weekday === 4, 'Capacitor weekday is Sunday=1');
+
+const mixedRepeating = Launch.buildRepeatingNative([
+  { id: 'daily', name: 'Water', reminder: { enabled: true, time: '08:00' }, frequency: { mode: 'daily', days: [0, 1, 2, 3, 4, 5, 6] } },
+  { id: 'flex', name: 'Gym', reminder: { enabled: true, time: '08:00' }, frequency: { mode: 'weekly', schedule: { type: 'any' } } },
+  { id: 'month', name: 'Review', reminder: { enabled: true, time: '08:00' }, frequency: { mode: 'monthly', schedule: { type: 'any' } } },
+  { id: 'paused', name: 'Off', reminder: { enabled: true, time: '08:00' }, paused: true, frequency: { mode: 'daily' } },
+], { reminderBody: (h) => h.name });
+assert(mixedRepeating.length === 7, 'only daily habits use repeating weekdays');
+assert(mixedRepeating.every((n) => n.extra.habitId === 'daily'), 'flex and monthly stay on one-shot slots');
+
+const skipFlexSlots = Launch.buildReminderSlots([
+  { id: 'flex', name: 'Gym', reminder: { enabled: true, time: '08:00' }, frequency: { mode: 'weekly', schedule: { type: 'any' } } },
+], {
+  todayKey: '2026-08-31', remindersEnabled: true, days: 3, now: new Date(2026, 7, 31, 10, 0, 0),
+  habitNeedsReminderOn: () => true,
+  reminderBody: (h) => h.name,
+});
+assert(skipFlexSlots.length === 0, 'Not Specific habits are not scheduled');
+
+const past = Launch.buildReminderSlots([
+  { id: 'h1', name: 'Read', reminder: { enabled: true, time: '07:00' }, frequency: { mode: 'daily', days: [1], schedule: { type: 'days' } } },
+], {
+  todayKey: '2026-08-31',
+  remindersEnabled: true,
+  days: 3,
+  now: new Date(2026, 7, 31, 10, 0, 0),
+  habitNeedsReminderOn: () => true,
+});
+assert(past.length === 2, 'past time today is skipped');
+assert(past[0].dateKey === '2026-09-01', 'first remaining slot is tomorrow');
+
+const many = Launch.buildReminderSlots(
+  Array.from({ length: 20 }, (_, i) => ({ id: 'h' + i, name: 'H' + i, reminder: { enabled: true, time: '21:00' }, frequency: { mode: 'daily', days: [1], schedule: { type: 'days' } } })),
+  {
+    todayKey: '2026-08-31',
+    remindersEnabled: true,
+    days: 21,
+    now: new Date(2026, 7, 31, 10, 0, 0),
+    habitNeedsReminderOn: () => true,
+  },
+);
+assert(many.length === Launch.NATIVE_SLOT_LIMIT, 'native slot cap');
+
+const nativeNotes = Launch.toNativeNotifications([
+  { id: 42, title: 'Momentum', body: 'Time for Read', at: Date.parse('2026-09-01T21:00:00'), habitId: 'h1', dateKey: '2026-09-01' },
+]);
+assert(nativeNotes.length === 1 && nativeNotes[0].id === 42, 'oneshot maps id');
+assert(nativeNotes[0].schedule.allowWhileIdle === true, 'idle alarm');
+assert(typeof nativeNotes[0].schedule.at.getTime === 'function', 'schedule.at is a Date');
+assert(nativeNotes[0].extra.habitId === 'h1' && nativeNotes[0].extra.date === '2026-09-01', 'extra carries habit and day');
+
+assert(Launch.adsRemoved({ adsRemoved: true }) === true, 'ads removed flag');
+assert(Launch.shouldShowAds({ adsRemoved: false }) === true, 'show ads by default');
+assert(Launch.shouldShowAds({ adsRemoved: true }) === false, 'hide ads after purchase');
+assert(Launch.shouldShowAds({}) === true, 'missing flag still shows ads');
+const marked = Launch.markAdsRemoved({ adsRemoved: false }, '2026-09-01T00:00:00.000Z');
+assert(marked.adsRemoved === true && marked.adsRemovedAt === '2026-09-01T00:00:00.000Z', 'mark lifetime purchase');
+assert(Launch.ADS_PRODUCT_ID === 'remove_ads_lifetime', 'Play product id');
+assert(Launch.ADS_PRICE_LABEL === 'HK$8', 'Hong Kong intro price');
+assert(Launch.ADS_LIST_PRICE_LABEL === 'HK$38', 'intro list price');
+assert(Launch.ADS_OFFER_DAYS === 7, 'seven-day intro window');
+assert(Launch.DRIVE_SCOPE === 'https://www.googleapis.com/auth/drive.file', 'Drive file scope');
+assert(Launch.DRIVE_FILE_NAME === 'Habit-Journal-backup.json', 'visible Drive backup name');
+assert(Launch.APP_TITLE === 'Habit & Journal', 'app title');
+
+const memStore = (() => {
+  const m = {};
+  return {
+    getItem: (k) => (Object.prototype.hasOwnProperty.call(m, k) ? m[k] : null),
+    setItem: (k, v) => { m[k] = String(v); },
+  };
+})();
+const firstInstall = Date.parse('2026-09-01T00:00:00.000Z');
+assert(Launch.readInstalledAt(memStore, firstInstall) === firstInstall, 'records first install');
+assert(Launch.readInstalledAt(memStore, firstInstall + 1000) === firstInstall, 'keeps first install');
+const midOffer = Launch.adsIntroOffer(firstInstall + 2 * 86400000, firstInstall);
+assert(midOffer.active === true && midOffer.remainingMs === 5 * 86400000, 'offer active for 7 days');
+const afterOffer = Launch.adsIntroOffer(firstInstall + 8 * 86400000, firstInstall);
+assert(afterOffer.active === false && afterOffer.remainingMs === 0, 'offer ends after 7 days');
+assert(Launch.formatCountdown(2 * 86400000 + 3 * 3600000) === '2d 03h 00m 00s', 'countdown days with seconds');
+assert(Launch.formatCountdown(90 * 60 * 1000) === '1h 30m 00s', 'countdown hours with seconds');
+assert(Launch.formatCountdown(45 * 1000) === '0m 45s', 'countdown seconds');
+const liveCopy = Launch.adsOfferCopy(firstInstall + 1000, firstInstall);
+assert(liveCopy.limited === true && liveCopy.kicker === '', 'no extra kicker copy');
+assert(liveCopy.listPrice === 'HK$38' && liveCopy.offerPrice === 'HK$8', 'shows 38 then 8');
+assert(liveCopy.cta === 'Remove Ads', 'cta is Remove Ads only');
+assert(/\d+s$/.test(liveCopy.countdown), 'countdown includes seconds, got ' + liveCopy.countdown);
+const expiredCopy = Launch.adsOfferCopy(firstInstall + 8 * 86400000, firstInstall);
+assert(expiredCopy.limited === false && expiredCopy.kicker === '', 'no kicker after window');
+assert(expiredCopy.countdown === '' && expiredCopy.offerPrice === 'HK$8', 'still HK$8 after window');
+assert(Launch.purchaseOwnsRemoveAds([{ productIdentifier: 'remove_ads_lifetime', purchaseState: 'PURCHASED' }]) === true, 'owns purchased sku');
+assert(Launch.purchaseOwnsRemoveAds([{ productId: 'remove_ads_lifetime', state: 'owned' }]) === true, 'owns alt field names');
+assert(Launch.purchaseOwnsRemoveAds([{ sku: 'remove_ads_lifetime' }]) === true, 'owns sku without state');
+assert(Launch.purchaseOwnsRemoveAds([{ productIdentifier: 'remove_ads_lifetime', purchaseState: 'cancelled' }]) === false, 'ignore cancelled');
+assert(Launch.purchaseOwnsRemoveAds([{ productIdentifier: 'other', purchaseState: 'purchased' }]) === false, 'ignore other sku');
+assert(Launch.purchaseOwnsRemoveAds([]) === false, 'empty purchase list');
+
+const multi = { records: [] };
+const multiApplied = Launch.applyPendingActions(multi, [
+  { type: 'complete', habitId: 'water', date: '2026-08-31' },
+  { type: 'complete', habitId: 'water', date: '2026-08-31' },
+  { type: 'complete', habitId: 'water', date: '2026-08-31' },
+], { uid: () => 'w' + Math.random(), todayKey: '2026-08-31', nowIso: 't' });
+assert(multiApplied.length === 3, 'each widget complete is one count');
+assert(multi.records.filter((r) => r.habitId === 'water').length === 3, 'multi-count habit can complete from widget more than once');
+
+const resetAfter = Launch.applyPendingActions(multi, [
+  { type: 'reset', habitId: 'water', date: '2026-08-31' },
+], { uid: () => 'x', todayKey: '2026-08-31' });
+assert(resetAfter.length === 1 && multi.records.length === 0, 'widget reset clears that day');
+
+const journal = Launch.applyPendingActions({ records: [] }, [{ type: 'journal' }], { uid: () => 'j', todayKey: '2026-08-31' });
+assert(journal[0].type === 'journal', 'journal pending is forwarded');
+
+assert(Launch.normalizeWidgetConfig(null).mode === 'today', 'default widget mode');
+assert(Launch.normalizeWidgetConfig({ mode: 'nope' }).mode === 'today', 'unknown widget mode falls back');
+assert(Launch.parseAppUrl('momentum://widget/journal').type === 'journal', 'journal widget url');
+assert(Launch.parseAppUrl('momentum://widget/open').type === 'open', 'open widget url');
+assert(Launch.parseAppUrl('https://example.com/?widgetAction=complete&habitId=h9&date=2026-08-31').date === '2026-08-31', 'web query keeps date');
+assert(Launch.parseAppUrl('ftp://nope') === null, 'bad protocol ignored');
+
+const delay = Launch.nextWebTimerDelay([{ at: Date.parse('2026-08-31T22:00:00') }], Date.parse('2026-08-31T10:00:00'));
+assert(delay && delay.delay > 0, 'web timer finds next slot');
+assert(Launch.nextWebTimerDelay([], Date.now()) === null, 'no slots means no timer');
 
 console.log('launch-core tests passed');

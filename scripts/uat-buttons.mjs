@@ -49,12 +49,13 @@ function demoState() {
       startDate: '2026-01-01', userName: 'UAT', colorMode: 'light', styleTheme: 'vivid',
       reminders: true, globalReminderTime: '20:30', defaultReminderMessage: 'Hi {habit}!',
       dataMode: 'real', autoBackup: false, dailyBackup: false, fileConnected: false, backupFileName: '',
-      onboardingComplete: true, vacations: [],
+      onboardingComplete: true, vacations: [], weekStart: 'mon', accentColor: 'indigo',
+      adsRemoved: false, adsRemovedAt: '',
       rewards: {
         creditRules: [{ id: uid(), pct: 50, amount: 2 }, { id: uid(), pct: 100, amount: 10 }],
         giftRules: [{ id: giftRuleId, gift: 'Buffet', icon: '🍽️', pct: 80, days: 30 }],
         activeGiftId: giftRuleId,
-        penaltyCredit: 5, penaltyXp: 20, penaltyZeroDays: 2,
+        penaltyCredit: 5, penaltyXp: 20, penaltyZeroDays: 2, penaltyMissPct: 0,
       },
     },
     _habitId: habitId,
@@ -153,21 +154,12 @@ await test('Add pause period twice', async () => {
   assert(count === 2, 'expected 2 pause periods, got ' + count);
 });
 
-await test('Create backup file (mocked picker)', async () => {
-  await page.evaluate(() => {
-    window.showSaveFilePicker = async () => ({
-      name: 'test-backup.json',
-      requestPermission: async () => 'granted',
-      getFile: async () => new File(['{}'], 'test-backup.json'),
-      createWritable: async () => ({ write: async () => {}, close: async () => {} }),
-    });
-  });
-  await page.locator('[data-sync-action="create"]').scrollIntoViewIfNeeded();
-  await page.click('[data-sync-action="create"]');
-  await page.waitForTimeout(600);
-  const settings = await page.evaluate(() => JSON.parse(localStorage.getItem('habitTrackerProductionV7')).settings);
-  assert(settings.fileConnected, 'backup file should be connected');
-  assert(settings.autoBackup === true, 'auto backup should remain enabled after create');
+await test('Google Drive backup is the only backup', async () => {
+  await page.click('#topSettingsBtn');
+  await page.waitForTimeout(200);
+  assert(await page.locator('#driveConnectBtn').count() === 1, 'Drive connect button missing');
+  assert(await page.locator('[data-sync-action="create"]').count() === 0, 'local create backup should be gone');
+  assert(await page.locator('#autoBackupSwitch').count() === 0, 'local auto backup switch should be gone');
 });
 
 await test('Weekly Not Specific hides due weekday field', async () => {
@@ -178,6 +170,13 @@ await test('Weekly Not Specific hides due weekday field', async () => {
   await page.waitForTimeout(100);
   const hasDue = await page.isVisible('#dueWeekday');
   assert(!hasDue, 'due weekday should be hidden for Not Specific');
+  const reminderHidden = await page.evaluate(() => {
+    const el = document.querySelector('#habitReminderBlock');
+    if (!el) return true;
+    const cs = getComputedStyle(el);
+    return cs.display === 'none';
+  });
+  assert(reminderHidden, 'reminder setup should be hidden for Not Specific');
   await page.evaluate(() => document.querySelector('#modalBackdrop')?.classList.remove('show'));
 });
 
@@ -234,6 +233,7 @@ await test('Delete group removes it and ungroups habits', async () => {
       { id: uid(), name: 'Beta', emoji: '🏃', color: '#059669', target: 1, xpReward: 5, frequency: { mode: 'daily', days: [0,1,2,3,4,5,6] }, reminder: { enabled: false, time: '20:30', message: '' }, sortOrder: 1, paused: false, archived: false, groupId: gid },
     ];
     s.settings.onboardingComplete = true;
+    s.settings.weekStart = 'mon';
     localStorage.setItem('habitTrackerProductionV7', JSON.stringify(s));
     return gid;
   });
@@ -263,9 +263,8 @@ await test('Delete group removes it and ungroups habits', async () => {
   assert(groupRows === 0, 'group row should disappear from UI');
 });
 
-await test('Habit sort buttons reorder habits', async () => {
+await test('Habit drag handle reorders habits', async () => {
   await page.evaluate(() => {
-    const uid = () => Date.now().toString(36) + Math.random().toString(36).slice(2, 7);
     const s = JSON.parse(localStorage.getItem('habitTrackerProductionV7'));
     s.groups = [];
     s.habits = [
@@ -281,11 +280,30 @@ await test('Habit sort buttons reorder habits', async () => {
   await page.waitForTimeout(300);
   const before = await page.locator('#allHabitList .habit-row .habit-name').first().textContent();
   assert(before === 'Alpha', 'Alpha should be first');
-  await page.locator('[data-down][data-habit-id="habit-a"]').click();
+  const handle = page.locator('#allHabitList .habit-row[data-habit-id="habit-a"] .drag-handle');
+  const target = page.locator('#allHabitList .habit-row[data-habit-id="habit-b"]');
+  await handle.scrollIntoViewIfNeeded();
+  const from = await handle.boundingBox();
+  const to = await target.boundingBox();
+  assert(from && to, 'habit rows should be visible for drag');
+  await page.evaluate(({ fromY, toY }) => {
+    const a = document.querySelector('#allHabitList .habit-row[data-habit-id="habit-a"]');
+    const handle = a?.querySelector('.drag-handle');
+    if (!handle) return;
+    const x = handle.getBoundingClientRect().left + 8;
+    const fire = (type, y) => handle.dispatchEvent(new PointerEvent(type, {
+      bubbles: true, cancelable: true, composed: true, pointerId: 1, pointerType: 'touch',
+      clientX: x, clientY: y, buttons: type === 'pointerup' ? 0 : 1, button: 0,
+    }));
+    fire('pointerdown', fromY);
+    fire('pointermove', fromY + 6);
+    fire('pointermove', toY);
+    fire('pointerup', toY);
+  }, { fromY: from.y + from.height / 2, toY: to.y + to.height / 2 + 16 });
   await page.waitForTimeout(400);
   const after = await page.locator('#allHabitList .habit-row .habit-name').first().textContent();
   const orders = await page.evaluate(() => JSON.parse(localStorage.getItem('habitTrackerProductionV7')).habits.map(h => ({ id: h.id, sortOrder: h.sortOrder })));
-  assert(after === 'Beta', 'Beta should be first after moving Alpha down');
+  assert(after === 'Beta', 'Beta should be first after dragging Alpha down');
   const alpha = orders.find(o => o.id === 'habit-a');
   const beta = orders.find(o => o.id === 'habit-b');
   assert(alpha.sortOrder > beta.sortOrder, 'Alpha sortOrder should be greater than Beta');
@@ -308,6 +326,7 @@ await test('Assigning habit group refreshes Today grouping', async () => {
     s.records = [];
     s.settings.startDate = today;
     s.settings.onboardingComplete = true;
+    s.settings.weekStart = 'mon';
     localStorage.setItem('habitTrackerProductionV7', JSON.stringify(s));
     return { habitId, groupId: gid };
   });
@@ -345,6 +364,7 @@ await test('Not Specific habits card starts expanded and toggles', async () => {
     s.records = [];
     s.settings.startDate = today;
     s.settings.onboardingComplete = true;
+    s.settings.weekStart = 'mon';
     localStorage.setItem('habitTrackerProductionV7', JSON.stringify(s));
     location.reload();
   });
@@ -381,6 +401,7 @@ await test('Not Specific habits show relative due dates', async () => {
     s.records = [];
     s.settings.startDate = today;
     s.settings.onboardingComplete = true;
+    s.settings.weekStart = 'mon';
     localStorage.setItem('habitTrackerProductionV7', JSON.stringify(s));
   }, today);
   await page.reload({ waitUntil: 'domcontentloaded' });
@@ -443,6 +464,7 @@ await test('Redeem credit updates balance and celebrates', async () => {
     s.settings.startDate = today;
     s.settings.vacations = [];
     s.settings.onboardingComplete = true;
+    s.settings.weekStart = 'mon';
     s.settings.rewards = s.settings.rewards || {};
     s.settings.rewards.creditRules = [{ id: 'c50', pct: 50, amount: 10 }];
     s.settings.rewards.giftRules = s.settings.rewards.giftRules || [];
@@ -484,6 +506,7 @@ await test('Week strip updates instantly after today habit reset', async () => {
     s.records = [{ id: uid(), habitId: h1, date: today, at: new Date().toISOString(), note: '' }];
     s.settings.startDate = today;
     s.settings.onboardingComplete = true;
+    s.settings.weekStart = 'mon';
     s.settings.vacations = [];
     localStorage.setItem('habitTrackerProductionV7', JSON.stringify(s));
   }, today);
@@ -627,72 +650,38 @@ await test('Erase all data clears habits, records, and UI', async () => {
   await page.click('.nav-item[data-view="habitsView"]');
   await page.waitForTimeout(300);
   const habitRows = await page.locator('#allHabitList .habit-row').count();
-  const activityRows = await page.locator('#recentActivityLog .activity').count();
   assert(habitRows === 0, 'habit list should be empty');
-  assert(activityRows === 0, 'recent records should be empty');
+  assert(await page.locator('#recentActivityLog').count() === 0, 'recent records section should be gone');
   await page.click('.nav-item[data-view="homeView"]');
   await page.waitForTimeout(200);
   const todayRows = await page.locator('#todayHabitGroups .habit-row').count();
   assert(todayRows === 0, 'today habits should be empty after erase');
 });
 
-await test('Auto backup sync runs after action', async () => {
-  await page.evaluate(() => {
-    const s = JSON.parse(localStorage.getItem('habitTrackerProductionV7'));
-    s.records = [];
-    s.redemptions = [];
-    s.settings.vacations = [];
-    s.habits = [{
-      id: 'sync-habit', name: 'Sync Habit', emoji: '📖', color: '#4f46e5', target: 1, xpReward: 5,
-      frequency: { mode: 'daily', days: [0, 1, 2, 3, 4, 5, 6], schedule: { type: 'days' } },
-      reminder: { enabled: false, time: '20:30', message: '' },
-      sortOrder: 0, paused: false, archived: false, groupId: null,
-    }];
-    window.__backupWrites = 0;
-    window.__backupPayloads = [];
-    localStorage.setItem('habitTrackerProductionV7', JSON.stringify(s));
-    location.reload();
-  });
-  await page.waitForLoadState('networkidle');
-  await page.waitForTimeout(500);
-  await page.evaluate(() => {
-    window.showSaveFilePicker = async () => ({
-      name: 'autosync.json',
-      requestPermission: async () => 'granted',
-      queryPermission: async () => 'granted',
-      getFile: async () => new File(['{}'], 'autosync.json'),
-      createWritable: async () => ({
-        write: async (data) => {
-          window.__backupWrites = (window.__backupWrites || 0) + 1;
-          window.__backupPayloads = window.__backupPayloads || [];
-          window.__backupPayloads.push(typeof data === 'string' ? data : '');
-        },
-        close: async () => {},
-      }),
-    });
-  });
-  await page.click('#topSettingsBtn');
-  await page.locator('[data-sync-action="create"]').scrollIntoViewIfNeeded();
-  await page.click('[data-sync-action="create"]');
-  await page.waitForTimeout(600);
-  const autoOn = await page.evaluate(() => document.querySelector('#autoBackupSwitch')?.classList.contains('on'));
-  if (!autoOn) await page.locator('#autoBackupSwitch').click();
-  await page.waitForTimeout(200);
+await test('Greeting uses device time of day', async () => {
+  await page.click('.nav-item[data-view="homeView"]');
+  const greet = await page.locator('#greeting').textContent();
+  const h = new Date().getHours();
+  const expect = h < 12 ? 'Good morning' : h < 18 ? 'Good afternoon' : 'Good evening';
+  assert(greet === expect, `greeting should be ${expect}, got ${greet}`);
+  assert(await page.locator('#profileQuick').count() === 1, 'identity EXP chip should be on the home header');
+  await page.click('#profileQuick');
+  await page.waitForTimeout(300);
+  assert(await page.locator('#levelView').evaluate((el) => el.classList.contains('active')), 'identity chip should open the ladder');
+  assert(await page.locator('#identityPath .tier-card').count() >= 11, 'identity ladder should list tiers');
+  await page.click('.nav-item[data-view="homeView"]');
+});
+
+await test('Credit and gift cards open their settings', async () => {
+  await page.click('#homeCreditCard');
+  await page.waitForTimeout(400);
+  assert(await page.locator('#settingsView').evaluate((el) => el.classList.contains('active')), 'credit card should open settings');
+  assert(await page.locator('#rewardTabs [data-tab="credit"]').evaluate((el) => el.classList.contains('active')), 'credit tab should be selected');
   await page.click('.nav-item[data-view="homeView"]');
   await page.waitForTimeout(200);
-  await page.locator('.check-btn:not(.done):not(:disabled)').first().click();
-  await page.waitForTimeout(3000);
-  const writes = await page.evaluate(() => window.__backupWrites || 0);
-  const lastBackup = await page.evaluate(() => JSON.parse(localStorage.getItem('habitTrackerProductionV7')).settings.lastBackupAt);
-  const fileBackupTs = await page.evaluate(() => {
-    const raw = window.__backupPayloads?.at(-1) || '{}';
-    try { return JSON.parse(raw)?.settings?.lastBackupAt || ''; } catch { return ''; }
-  });
-  assert(writes > 0, 'backup file should be written');
-  assert(!!lastBackup, 'lastBackupAt should be set after auto sync');
-  assert(!!fileBackupTs, 'backup payload should include lastBackupAt');
-  const autoBackupOn = await page.evaluate(() => JSON.parse(localStorage.getItem('habitTrackerProductionV7')).settings.autoBackup);
-  assert(autoBackupOn === true, 'auto backup should stay enabled after sync');
+  await page.click('#homeGiftCard');
+  await page.waitForTimeout(400);
+  assert(await page.locator('#rewardTabs [data-tab="gift"]').evaluate((el) => el.classList.contains('active')), 'gift tab should be selected');
 });
 
 await test('Credit rules award credits only, not completion EXP', async () => {
@@ -726,11 +715,17 @@ await test('Credit rules award credits only, not completion EXP', async () => {
   assert(credit?.includes('12'), `100% day should still earn stacked credits, got: ${credit}`);
   await page.click('.nav-item[data-view="rewardsView"]');
   await page.waitForTimeout(300);
-  const ledger = await page.locator('#ledgerList').textContent();
+  const ledgerPreview = await page.locator('#ledgerList .ledger-item').count();
+  assert(ledgerPreview === 1, 'reward ledger should show one row, got ' + ledgerPreview);
+  await page.click('#ledgerList .view-all-btn');
+  await page.waitForTimeout(300);
+  const ledger = await page.locator('#lfList').textContent();
   assert(ledger?.includes('50% daily completion'), '50% credit rule should appear in ledger');
   assert(ledger?.includes('100% daily completion'), '100% credit rule should appear in ledger');
   assert(!ledger?.includes('12 EXP'), '50% credit rule must not grant EXP');
   assert(!ledger?.includes('30 EXP'), '100% credit rule must not grant EXP');
+  await page.click('#modalClose');
+  await page.waitForTimeout(200);
 });
 
 await test('Today view resets for a new day', async () => {
@@ -800,7 +795,9 @@ await test('Daily habit EXP awarded after yesterday completion', async () => {
   await page.waitForTimeout(500);
   const xpPop = await page.evaluate(() => document.querySelector('#expPopLayer .xp-pop')?.textContent || '');
   assert(xpPop.includes('5'), `today completion should show EXP pop, got ${xpPop}`);
-  await page.click('#profileQuick');
+  await page.click('#topSettingsBtn');
+  await page.locator('#openLevelBtn').scrollIntoViewIfNeeded();
+  await page.click('#openLevelBtn');
   await page.waitForTimeout(300);
   const xpText = await page.locator('#levelPageXp').textContent();
   assert(xpText?.includes('10 /'), `two daily completions should total 10 EXP, got ${xpText}`);
@@ -812,7 +809,8 @@ await test('Reward rule edits show save bar until saved', async () => {
   await page.waitForTimeout(200);
   assert(await page.locator('#settingsSaveBar').isHidden(), 'save bar should be hidden initially');
   const amount = page.locator('#creditRulesBox [data-amount]').first();
-  await amount.selectOption('5');
+  await amount.fill('5');
+  await amount.dispatchEvent('input');
   await amount.dispatchEvent('change');
   await page.waitForTimeout(200);
   assert(!(await page.locator('#settingsSaveBar').isHidden()), 'save bar should appear after reward edit');
@@ -827,6 +825,7 @@ await test('Today shows paused banner during pause period', async () => {
     const s = JSON.parse(localStorage.getItem('habitTrackerProductionV7'));
     s.settings.vacations = [{ id: 'pause1', from: t, to: t, label: 'Holiday' }];
     s.settings.onboardingComplete = true;
+    s.settings.weekStart = 'mon';
     localStorage.setItem('habitTrackerProductionV7', JSON.stringify(s));
     location.reload();
   }, today);
@@ -844,9 +843,10 @@ await test('Not Specific habits carry cumulative progress within period', async 
     const parts = new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Hong_Kong', year: 'numeric', month: '2-digit', day: '2-digit' }).formatToParts(new Date()).reduce((a, x) => { a[x.type] = x.value; return a; }, {});
     const todayDt = new Date(Number(parts.year), Number(parts.month) - 1, Number(parts.day));
     const weekStartToday = new Date(todayDt);
-    weekStartToday.setDate(todayDt.getDate() - todayDt.getDay());
-    const recordDt = new Date(weekStartToday);
-    if (recordDt.getTime() === todayDt.getTime()) recordDt.setDate(recordDt.getDate() + 1);
+    weekStartToday.setDate(todayDt.getDate() - ((todayDt.getDay() + 6) % 7));
+    const recordDt = new Date(todayDt);
+    recordDt.setDate(todayDt.getDate() - 1);
+    if (recordDt < weekStartToday) recordDt.setTime(todayDt.getTime());
     const dateKey = (d) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
     const s = JSON.parse(localStorage.getItem('habitTrackerProductionV7'));
     s.groups = [];
@@ -861,6 +861,7 @@ await test('Not Specific habits carry cumulative progress within period', async 
     s.settings.startDate = dateKey(weekStartToday);
     s.settings.vacations = [];
     s.settings.onboardingComplete = true;
+    s.settings.weekStart = 'mon';
     localStorage.setItem('habitTrackerProductionV7', JSON.stringify(s));
   });
   await page.reload({ waitUntil: 'domcontentloaded' });
@@ -881,7 +882,7 @@ await test('Not Specific habits renew count after period ends', async () => {
     const parts = new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Hong_Kong', year: 'numeric', month: '2-digit', day: '2-digit' }).formatToParts(new Date()).reduce((a, x) => { a[x.type] = x.value; return a; }, {});
     const now = new Date(Number(parts.year), Number(parts.month) - 1, Number(parts.day));
     const weekStart = new Date(now);
-    weekStart.setDate(now.getDate() - now.getDay());
+    weekStart.setDate(now.getDate() - ((now.getDay() + 6) % 7));
     const lastWeekStart = new Date(weekStart);
     lastWeekStart.setDate(weekStart.getDate() - 7);
     const lastWeekMid = new Date(lastWeekStart);
@@ -900,6 +901,7 @@ await test('Not Specific habits renew count after period ends', async () => {
     s.settings.startDate = dateKey(lastWeekStart);
     s.settings.vacations = [];
     s.settings.onboardingComplete = true;
+    s.settings.weekStart = 'mon';
     localStorage.setItem('habitTrackerProductionV7', JSON.stringify(s));
   }, today);
   await page.reload({ waitUntil: 'domcontentloaded' });
@@ -916,12 +918,252 @@ await test('Settings expose Google Drive backup, reminders, and widgets', async 
   await page.click('#topSettingsBtn');
   await page.waitForTimeout(400);
   assert(await page.locator('#driveConnectBtn').count() === 1, 'Drive connect button missing');
-  const freq = await page.locator('#driveBackupFreq option').count();
-  assert(freq >= 3, 'daily/weekly/off schedules missing');
-  assert(await page.locator('#widgetModeTabs button').count() === 6, 'six widget modes expected');
+  assert(await page.locator('#googleClientIdInput').count() === 1, 'web client ID field should be in Settings');
+  const freqLabels = await page.locator('#driveBackupFreq option').allTextContents();
+  assert(freqLabels.includes('Daily') && freqLabels.includes('Weekly') && freqLabels.includes('Off'), 'schedules should be Daily / Weekly / Off, got ' + freqLabels.join(','));
+  assert(await page.locator('#widgetModeTabs').count() === 0, 'in-app widget tabs should be gone');
+  const widgetNote = await page.locator('#settingsView').locator('text=long-press the home screen').count();
+  assert(widgetNote >= 1, 'OS widget instructions should be visible');
+  assert(await page.locator('#widgetPreviewGrid img').count() === 6, 'six widget sample images');
+  assert(await page.locator('#widgetHabitPicker').count() === 1, 'habit widget picker missing');
   assert(await page.locator('#testReminderBtn').count() === 1, 'test reminder button missing');
   const note = await page.locator('#reminderRuntimeNote').textContent();
   assert(!!note, 'reminder runtime note should render');
+  assert(await page.locator('#removeAdsBtn').count() === 1, 'remove-ads button missing');
+  assert((await page.locator('#removeAdsBtn').textContent())?.trim() === 'Remove Ads', 'buy button should say Remove Ads');
+  assert(await page.locator('#restoreAdsPurchaseBtn').count() === 1, 'restore purchase button missing');
+  const adsCopy = await page.locator('#adsStatus').textContent();
+  assert(/Ads on/i.test(adsCopy || ''), 'ads status should say ads are on');
+  assert(await page.locator('#weekStartSelect').inputValue() === 'mon', 'week should default to Monday');
+  assert(await page.locator('#accentColorRow .accent-swatch').count() === 7, 'seven accent colors');
+  await page.locator('#rewardTabs [data-tab="penalty"]').click();
+  await page.waitForTimeout(200);
+  assert(await page.locator('#penaltyMissPct').count() === 1, 'completion trigger field missing');
+  assert(await page.locator('#penaltyMissPct').inputValue() === '0', 'completion trigger default 0');
+  assert(await page.locator('#penaltyZeroDays').count() === 0, 'consecutive misses should be removed');
+  const missLabels = await page.locator('#penaltyMissPct option').allTextContents();
+  assert(missLabels.some((t) => t.includes('<50%')) && missLabels.some((t) => t.trim() === '0%'), 'penalty dropdown should list <50% down to 0%');
+  await page.locator('#rewardTabs [data-tab="credit"]').click();
+  await page.waitForTimeout(200);
+  assert(await page.locator('#creditRulesBox .money-prefix').first().textContent() === '$', 'credit amount should show a dollar prefix');
+});
+
+await test('House ad banner shows until lifetime purchase is on device', async () => {
+  await page.evaluate(() => {
+    const s = JSON.parse(localStorage.getItem('habitTrackerProductionV7'));
+    s.settings.adsRemoved = false;
+    s.settings.adsRemovedAt = '';
+    localStorage.setItem('habitTrackerProductionV7', JSON.stringify(s));
+    localStorage.setItem('momentumInstalledAt', new Date().toISOString());
+  });
+  await page.reload({ waitUntil: 'domcontentloaded' });
+  await page.waitForTimeout(800);
+  const shown = await page.evaluate(() => {
+    const el = document.getElementById('adBanner');
+    const kicker = document.getElementById('adOfferKicker')?.textContent || '';
+    const price = document.getElementById('adOfferPrice')?.textContent || '';
+    const count = document.getElementById('adOfferCountdown')?.textContent || '';
+    return {
+      visible: !!(el && !el.hidden && document.body.classList.contains('has-ads')),
+      kicker,
+      price,
+      count,
+      nativeOverlay: !!(window.Capacitor?.Plugins?.AdMob),
+    };
+  });
+  assert(shown.visible, 'free users should see the house ad banner');
+  assert(/HK\$38/.test(shown.price) && /HK\$8/.test(shown.price), 'banner should show HK$38 then HK$8, got ' + shown.price);
+  assert(/\d+s/.test(shown.count), 'banner should countdown by seconds, got ' + shown.count);
+  await page.click('#adBannerCta');
+  await page.waitForTimeout(400);
+  const toast = await page.locator('#toast').textContent().catch(() => '');
+  assert(/Play|Remove Ads|purchase/i.test(toast || ''), 'web buy should point to Play purchase, got ' + toast);
+});
+
+await test('adsRemoved hides banner and buy button', async () => {
+  await page.evaluate(() => {
+    const s = JSON.parse(localStorage.getItem('habitTrackerProductionV7'));
+    s.settings.adsRemoved = true;
+    s.settings.adsRemovedAt = '2026-09-01T00:00:00.000Z';
+    localStorage.setItem('habitTrackerProductionV7', JSON.stringify(s));
+  });
+  await page.reload({ waitUntil: 'domcontentloaded' });
+  await page.waitForTimeout(800);
+  const hidden = await page.evaluate(() => {
+    const el = document.getElementById('adBanner');
+    return !!(el && el.hidden && !document.body.classList.contains('has-ads'));
+  });
+  assert(hidden, 'purchased users should not see ads');
+  await page.click('#topSettingsBtn');
+  await page.waitForTimeout(400);
+  const status = await page.locator('#adsStatus').textContent();
+  assert(/removed/i.test(status || ''), 'settings should say ads removed');
+  const buyHidden = await page.locator('#removeAdsBtn').evaluate((el) => el.classList.contains('hidden-action'));
+  assert(buyHidden, 'remove-ads button hides after purchase');
+});
+
+await test('Dark mode quote and onboard label stay readable', async () => {
+  await page.evaluate(() => {
+    const s = JSON.parse(localStorage.getItem('habitTrackerProductionV7'));
+    s.settings.colorMode = 'dark';
+    s.settings.onboardingComplete = true;
+    s.settings.weekStart = 'mon';
+    s.settings.adsRemoved = false;
+    localStorage.setItem('habitTrackerProductionV7', JSON.stringify(s));
+  });
+  await page.reload({ waitUntil: 'domcontentloaded' });
+  await page.waitForTimeout(700);
+  const quote = await page.evaluate(() => {
+    const el = document.getElementById('dailyQuote');
+    const text = el?.querySelector('.quote-text');
+    const cs = el ? getComputedStyle(el) : null;
+    const ts = text ? getComputedStyle(text) : null;
+    return {
+      theme: document.documentElement.getAttribute('data-theme'),
+      bg: cs?.backgroundColor || '',
+      color: ts?.color || '',
+    };
+  });
+  assert(quote.theme === 'dark', 'appearance should be dark');
+  assert(!/rgb\(\s*243\s*,\s*239\s*,\s*255\s*\)/.test(quote.bg), 'quote card should not keep the light lilac wash, got ' + quote.bg);
+  await page.click('#topSettingsBtn');
+  await page.waitForTimeout(300);
+  await page.locator('#replayOnboardingBtn').click();
+  await page.waitForTimeout(500);
+  const label = await page.evaluate(() => {
+    const el = document.querySelector('.onboard-spotlight-label');
+    if (!el) return null;
+    const cs = getComputedStyle(el);
+    return { color: cs.color, bg: cs.backgroundColor, text: el.textContent };
+  });
+  assert(!!label && /tour/i.test(label.text || ''), 'onboard first-step label missing');
+  assert(/rgb\(\s*255\s*,\s*255\s*,\s*255\s*\)/.test(label.color), 'onboard label should be white in dark mode, got ' + label.color);
+  await page.evaluate(() => {
+    const s = JSON.parse(localStorage.getItem('habitTrackerProductionV7'));
+    s.settings.colorMode = 'light';
+    s.settings.onboardingComplete = true;
+    s.settings.weekStart = 'mon';
+    localStorage.setItem('habitTrackerProductionV7', JSON.stringify(s));
+  });
+  await page.reload({ waitUntil: 'domcontentloaded' });
+  await page.waitForTimeout(500);
+});
+
+await test('Home week strip starts on Monday by default', async () => {
+  await page.click('.nav-item[data-view="homeView"]');
+  const firstDow = await page.locator('#weekStrip .wdow').first().textContent();
+  assert(firstDow === 'M', 'this week should start on Monday, got ' + firstDow);
+});
+
+await test('Energy ticks sit above the bar and tilt toward the score', async () => {
+  await page.click('.nav-item[data-view="homeView"]');
+  await page.waitForSelector('#homeEnergy');
+  const geom = await page.evaluate(() => {
+    const input = document.querySelector('#homeEnergy');
+    const tick = document.querySelector('.energy-scale [data-tick="0"]');
+    const last = document.querySelector('.energy-scale [data-tick="10"]');
+    const dot = document.querySelector('.energy-scale [data-tick="0"] .tick-dot');
+    const ib = input.getBoundingClientRect();
+    const tb = tick.getBoundingClientRect();
+    const lb = last.getBoundingClientRect();
+    const db = dot.getBoundingClientRect();
+    input.value = '2';
+    input.dispatchEvent(new Event('input', { bubbles: true }));
+    const tiltLow = getComputedStyle(tick).getPropertyValue('--tilt');
+    input.value = '8';
+    input.dispatchEvent(new Event('input', { bubbles: true }));
+    const tiltAfter = getComputedStyle(tick).getPropertyValue('--tilt');
+    return {
+      tickBottom: tb.bottom,
+      dotBottom: db.bottom,
+      inputTop: ib.top,
+      lastBottom: lb.bottom,
+      tiltLow,
+      tiltAfter,
+      current: document.querySelector('.energy-scale [data-tick="8"]')?.classList.contains('is-current')
+    };
+  });
+  assert(geom.tickBottom <= geom.inputTop + 1, `ticks must stay above the slider (tick ${geom.tickBottom} vs input ${geom.inputTop})`);
+  assert(geom.dotBottom <= geom.inputTop + 1, `dots must stay above the slider (dot ${geom.dotBottom} vs input ${geom.inputTop})`);
+  assert(geom.lastBottom <= geom.inputTop + 1, 'rightmost tick must stay above the slider');
+  assert(geom.current, 'current score tick should be marked');
+  assert(geom.tiltAfter !== geom.tiltLow, 'ticks should tilt toward the selected score');
+});
+
+await test('Insights cap at 3 rows and color the numbers', async () => {
+  const today = hkDateKey();
+  await page.evaluate((today) => {
+    const s = JSON.parse(localStorage.getItem('habitTrackerProductionV7'));
+    const hid = 'ins-habit';
+    const start = new Date(today + 'T12:00:00');
+    start.setDate(start.getDate() - 13);
+    const startKey = `${start.getFullYear()}-${String(start.getMonth() + 1).padStart(2, '0')}-${String(start.getDate()).padStart(2, '0')}`;
+    s.habits = [{
+      id: hid, name: 'Insight Habit', emoji: '📖', color: '#4f46e5', target: 1, xpReward: 5,
+      frequency: { mode: 'daily', days: [0, 1, 2, 3, 4, 5, 6], schedule: { type: 'days' } },
+      reminder: { enabled: false, time: '20:30', message: '' },
+      sortOrder: 0, paused: false, archived: false, groupId: null,
+    }];
+    s.records = [];
+    s.journals = {};
+    s.settings.startDate = startKey;
+    s.settings.onboardingComplete = true;
+    for (let i = 0; i < 14; i++) {
+      const d = new Date(start);
+      d.setDate(start.getDate() + i);
+      const k = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+      if (i % 2 === 0) s.records.push({ id: 'ins-' + i, habitId: hid, date: k, at: k + 'T12:00:00.000Z', note: '' });
+    }
+    localStorage.setItem('habitTrackerProductionV7', JSON.stringify(s));
+  }, today);
+  await page.reload({ waitUntil: 'domcontentloaded' });
+  await page.waitForTimeout(600);
+  await page.click('.nav-item[data-view="reportView"]');
+  await page.waitForTimeout(400);
+  const html = await page.locator('#correlationInsights').innerHTML();
+  const n = await page.locator('#correlationInsights .insight-row').count();
+  assert(n > 0, 'insights should render rows, got: ' + html.slice(0, 180));
+  assert(n <= 3, 'insights should show at most 3 rows, got ' + n);
+  const colored = await page.locator('#correlationInsights .ins-n').count();
+  assert(colored >= 1, 'insight numbers should use color classes, got: ' + html.slice(0, 180));
+});
+
+await test('Accent color tints the page background', async () => {
+  await page.click('#topSettingsBtn');
+  await page.waitForTimeout(200);
+  const before = await page.evaluate(() => getComputedStyle(document.documentElement).getPropertyValue('--bg1').trim());
+  await page.locator('#accentColorRow [data-accent="rose"]').click();
+  await page.waitForTimeout(100);
+  const after = await page.evaluate(() => ({
+    bg1: getComputedStyle(document.documentElement).getPropertyValue('--bg1').trim(),
+    brand: getComputedStyle(document.documentElement).getPropertyValue('--brand').trim(),
+    purple: getComputedStyle(document.documentElement).getPropertyValue('--purple').trim(),
+  }));
+  assert(after.brand.toLowerCase() === '#f43f5e', 'rose accent should set brand, got ' + after.brand);
+  assert(after.bg1 !== before, 'background wash should follow the accent');
+  assert(after.purple.toLowerCase() === '#e11d48', 'purple token should follow the accent');
+  await page.locator('#accentColorRow [data-accent="indigo"]').click();
+});
+
+await test('Habit setup uses a left drag handle', async () => {
+  await page.click('.nav-item[data-view="habitsView"]');
+  await page.waitForTimeout(300);
+  const handle = await page.locator('#allHabitList .habit-row .drag-handle').first();
+  assert(await handle.count() === 1, 'habit rows need a drag handle');
+  const box = await handle.boundingBox();
+  const row = await page.locator('#allHabitList .habit-row').first().boundingBox();
+  assert(box && row && box.x < row.x + 48, 'drag handle should sit on the left');
+  assert(await page.locator('#allHabitList [data-up]').count() === 0, 'up/down buttons should be gone');
+});
+
+await test('Widgets include sample images and a 1–5 habit picker', async () => {
+  await page.click('#topSettingsBtn');
+  await page.waitForTimeout(300);
+  assert(await page.locator('#widgetModeTabs').count() === 0, 'old widget mode tabs should stay gone');
+  assert(await page.locator('#widgetPreviewGrid img').count() === 6, 'sample images for each widget');
+  const copy = await page.locator('#settingsView').innerText();
+  assert(/Today/.test(copy) && /Streak/.test(copy) && /Journal/.test(copy) && /Habits/.test(copy), 'OS widget names should be listed');
+  assert(await page.locator('#widgetHabitPicker').count() === 1, 'habit picker missing');
 });
 
 await test('Widget complete query records a habit without opening a habit row', async () => {
@@ -937,6 +1179,7 @@ await test('Widget complete query records a habit without opening a habit row', 
     s.records = [];
     s.settings.startDate = today;
     s.settings.onboardingComplete = true;
+    s.settings.weekStart = 'mon';
     s.settings.vacations = [];
     localStorage.setItem('habitTrackerProductionV7', JSON.stringify(s));
   }, today);

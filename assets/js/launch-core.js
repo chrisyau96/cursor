@@ -3,30 +3,56 @@
 (function (root) {
   const Launch = {};
 
-  Launch.DRIVE_FILE_NAME = 'momentum-backup.json';
-  Launch.DRIVE_SCOPE = 'https://www.googleapis.com/auth/drive.appdata';
+  Launch.DRIVE_FILE_NAME = 'Habit-Journal-backup.json';
+  Launch.DRIVE_SCOPE = 'https://www.googleapis.com/auth/drive.file';
   Launch.TOKEN_KEY = 'momentumDriveToken';
   Launch.PENDING_KEY = 'momentumWidgetPending';
   Launch.SNAPSHOT_KEY = 'momentumWidgetSnapshot';
   Launch.REMINDER_FIRED_KEY = 'momentumReminderFired';
+  Launch.ADS_PRODUCT_ID = 'remove_ads_lifetime';
+  Launch.ADS_PRICE_LABEL = 'HK$8';
+  Launch.ADS_LIST_PRICE_LABEL = 'HK$38';
+  Launch.ADS_OFFER_DAYS = 7;
+  Launch.APP_TITLE = 'Habit & Journal';
+  Launch.NOTIF_CHANNEL_ID = 'habit_journal';
+  Launch.TEST_NOTIF_ID = 900001;
+  Launch.INSTALLED_AT_KEY = 'momentumInstalledAt';
+  Launch.ADMOB_TEST_APP_ID = 'ca-app-pub-3940256099942544~3347511713';
+  Launch.ADMOB_TEST_BANNER = 'ca-app-pub-3940256099942544/6300978111';
+  Launch.NATIVE_SLOT_LIMIT = 200;
+  Launch.WIDGET_HABIT_MAX = 5;
   Launch.WIDGET_MODES = [
-    { id: 'today', label: 'Today tasks', hint: 'Outstanding habits with complete / reset' },
-    { id: 'habits', label: 'Selected habits', hint: 'Due in X days for 1–6 habits' },
-    { id: 'streak', label: 'Current streak', hint: '100% completion streak' },
+    { id: 'today', label: 'Today', hint: 'Outstanding habits with complete / reset' },
+    { id: 'streak', label: 'Streak', hint: '100% completion streak' },
     { id: 'credits', label: 'Credits', hint: 'Available credit balance' },
     { id: 'gift', label: 'Next gift', hint: 'Gift streak progress' },
     { id: 'journal', label: 'Journal', hint: 'Tap to log today’s journal' },
+    { id: 'habits', label: 'Habits 1–5', hint: 'Pick up to 5 habits; resizes with the widget' },
   ];
 
   Launch.pad2 = (n) => String(n).padStart(2, '0');
   Launch.dateKeyFromParts = (y, m, d) => `${y}-${Launch.pad2(m)}-${Launch.pad2(d)}`;
 
-  Launch.weekStartKey = function (dateKey) {
+  Launch.weekStartDow = function (weekStart) {
+    const v = String(weekStart || 'mon');
+    if (v === 'sat') return 6;
+    if (v === 'sun') return 0;
+    return 1;
+  };
+
+  Launch.weekStartKey = function (dateKey, weekStart) {
     const [y, m, d] = String(dateKey || '').split('-').map(Number);
     if (!y || !m || !d) return '';
     const dt = new Date(y, m - 1, d);
-    dt.setDate(dt.getDate() - dt.getDay());
+    const start = Launch.weekStartDow(weekStart);
+    dt.setDate(dt.getDate() - ((dt.getDay() - start + 7) % 7));
     return Launch.dateKeyFromParts(dt.getFullYear(), dt.getMonth() + 1, dt.getDate());
+  };
+
+  Launch.isNotSpecificHabit = function (habit) {
+    const f = (habit && habit.frequency) || {};
+    if (f.mode === 'daily') return f.schedule?.type === 'any';
+    return !f.schedule || f.schedule.type === 'any';
   };
 
   Launch.addDaysKey = function (dateKey, days) {
@@ -50,7 +76,10 @@
     const last = String(settings.lastDriveBackupAt || '').slice(0, 10);
     if (!last) return true;
     if (freq === 'daily') return last !== todayKey;
-    if (freq === 'weekly') return Launch.weekStartKey(last) !== Launch.weekStartKey(todayKey);
+    if (freq === 'weekly') {
+      const ws = settings.weekStart || 'mon';
+      return Launch.weekStartKey(last, ws) !== Launch.weekStartKey(todayKey, ws);
+    }
     return false;
   };
 
@@ -71,13 +100,14 @@
   Launch.buildReminderSlots = function (habits, opts) {
     const todayKey = opts.todayKey;
     const days = Math.max(1, Number(opts.days || 21));
-    const now = opts.now instanceof Date ? opts.now : new Date();
+    const now = opts.now && typeof opts.now.getTime === 'function' ? opts.now : new Date();
     const needs = typeof opts.habitNeedsReminderOn === 'function' ? opts.habitNeedsReminderOn : () => false;
     const bodyFn = typeof opts.reminderBody === 'function' ? opts.reminderBody : (h) => h.name;
     const slots = [];
     if (!opts.remindersEnabled) return slots;
     (habits || []).forEach((h) => {
       if (!h || !h.reminder?.enabled || h.paused || h.archived) return;
+      if (Launch.isNotSpecificHabit(h)) return;
       const t = Launch.parseHm(h.reminder.time);
       for (let i = 0; i < days; i++) {
         const dateKey = Launch.addDaysKey(todayKey, i);
@@ -91,14 +121,14 @@
           dateKey,
           time: `${Launch.pad2(t.hour)}:${Launch.pad2(t.minute)}`,
           at: at.getTime(),
-          title: 'Momentum',
+          title: Launch.APP_TITLE,
           body: bodyFn(h),
           extra: { habitId: h.id, date: dateKey },
         });
       }
     });
     slots.sort((a, b) => a.at - b.at);
-    return slots.slice(0, 60);
+    return slots.slice(0, Launch.NATIVE_SLOT_LIMIT);
   };
 
   Launch.buildRepeatingNative = function (habits, opts) {
@@ -106,16 +136,18 @@
     const notes = [];
     (habits || []).forEach((h) => {
       if (!h || !h.reminder?.enabled || h.paused || h.archived) return;
-      const t = Launch.parseHm(h.reminder.time);
+      if (Launch.isNotSpecificHabit(h)) return;
       const f = h.frequency || {};
+      if (f.mode !== 'daily') return;
+      const t = Launch.parseHm(h.reminder.time);
       let days = [0, 1, 2, 3, 4, 5, 6];
-      if (f.mode === 'daily' && Array.isArray(f.days) && f.days.length && f.schedule?.type !== 'any') {
+      if (Array.isArray(f.days) && f.days.length && f.schedule?.type !== 'any') {
         days = f.days.map(Number).filter((d) => d >= 0 && d <= 6);
       }
       days.forEach((d) => {
         notes.push({
           id: Launch.notifId(h.id, 'w' + d),
-          title: 'Momentum',
+          title: Launch.APP_TITLE,
           body: bodyFn(h),
           weekday: d + 1,
           hour: t.hour,
@@ -125,6 +157,103 @@
       });
     });
     return notes;
+  };
+
+  Launch.adsRemoved = function (settings) {
+    return !!(settings && settings.adsRemoved);
+  };
+
+  Launch.shouldShowAds = function (settings) {
+    return !Launch.adsRemoved(settings);
+  };
+
+  Launch.markAdsRemoved = function (settings, at) {
+    const next = Object.assign({}, settings || {});
+    next.adsRemoved = true;
+    next.adsRemovedAt = at || new Date().toISOString();
+    return next;
+  };
+
+  Launch.readInstalledAt = function (storage, nowMs) {
+    const store = storage && typeof storage.getItem === 'function' ? storage : null;
+    let raw = '';
+    try { raw = store ? String(store.getItem(Launch.INSTALLED_AT_KEY) || '') : ''; } catch (e) { raw = ''; }
+    const parsed = Date.parse(raw);
+    if (Number.isFinite(parsed) && parsed > 0) return parsed;
+    const at = Number(nowMs) || Date.now();
+    try { if (store && typeof store.setItem === 'function') store.setItem(Launch.INSTALLED_AT_KEY, new Date(at).toISOString()); } catch (e) { /* ignore */ }
+    return at;
+  };
+
+  Launch.adsIntroOffer = function (nowMs, installedAt) {
+    const start = Number(installedAt) || 0;
+    const now = Number(nowMs) || Date.now();
+    const windowMs = Launch.ADS_OFFER_DAYS * 86400000;
+    const remainingMs = start > 0 ? Math.max(0, start + windowMs - now) : 0;
+    return {
+      active: start > 0 && remainingMs > 0,
+      remainingMs,
+      endsAt: start > 0 ? start + windowMs : 0,
+      listPrice: Launch.ADS_LIST_PRICE_LABEL,
+      offerPrice: Launch.ADS_PRICE_LABEL,
+    };
+  };
+
+  Launch.formatCountdown = function (ms) {
+    const total = Math.max(0, Math.floor(Number(ms) || 0));
+    const d = Math.floor(total / 86400000);
+    const h = Math.floor((total % 86400000) / 3600000);
+    const m = Math.floor((total % 3600000) / 60000);
+    const s = Math.floor((total % 60000) / 1000);
+    if (d > 0) return d + 'd ' + Launch.pad2(h) + 'h ' + Launch.pad2(m) + 'm ' + Launch.pad2(s) + 's';
+    if (h > 0) return h + 'h ' + Launch.pad2(m) + 'm ' + Launch.pad2(s) + 's';
+    return m + 'm ' + Launch.pad2(s) + 's';
+  };
+
+  Launch.adsOfferCopy = function (nowMs, installedAt) {
+    const offer = Launch.adsIntroOffer(nowMs, installedAt);
+    if (offer.active) {
+      return {
+        kicker: '',
+        listPrice: offer.listPrice,
+        offerPrice: offer.offerPrice,
+        countdown: Launch.formatCountdown(offer.remainingMs),
+        cta: 'Remove Ads',
+        limited: true,
+      };
+    }
+    return {
+      kicker: '',
+      listPrice: '',
+      offerPrice: Launch.ADS_PRICE_LABEL,
+      countdown: '',
+      cta: 'Remove Ads',
+      limited: false,
+    };
+  };
+
+  Launch.purchaseOwnsRemoveAds = function (purchases) {
+    return (purchases || []).some((p) => {
+      if (!p) return false;
+      const id = p.productIdentifier || p.productId || p.sku || p.product || '';
+      if (id !== Launch.ADS_PRODUCT_ID) return false;
+      const state = String(p.purchaseState || p.state || '').toLowerCase();
+      if (state && state !== 'purchased' && state !== '1' && state !== 'owned') return false;
+      return true;
+    });
+  };
+
+  Launch.toNativeNotifications = function (slots) {
+    return (slots || []).map((s) => ({
+      id: s.id,
+      title: s.title || Launch.APP_TITLE,
+      body: s.body || '',
+      channelId: Launch.NOTIF_CHANNEL_ID,
+      smallIcon: 'ic_stat_momentum',
+      iconColor: '#4F46E5',
+      schedule: { at: new Date(s.at), allowWhileIdle: true },
+      extra: s.extra || { habitId: s.habitId, date: s.dateKey },
+    }));
   };
 
   Launch.nextWebTimerDelay = function (slots, nowMs) {
@@ -142,11 +271,8 @@
       if (!action || !action.type) return;
       if (action.type === 'complete' && action.habitId) {
         const date = action.date || todayKey;
-        const exists = (state.records || []).some((r) => r.habitId === action.habitId && r.date === date && r.note === 'widget');
-        if (!exists) {
-          state.records = state.records || [];
-          state.records.push({ id: uid(), habitId: action.habitId, date, at: action.at || nowIso, note: 'widget' });
-        }
+        state.records = state.records || [];
+        state.records.push({ id: uid(), habitId: action.habitId, date, at: action.at || nowIso, note: 'widget' });
         applied.push(action);
       } else if (action.type === 'reset' && action.habitId) {
         const date = action.date || todayKey;
@@ -162,10 +288,11 @@
   Launch.normalizeWidgetConfig = function (raw) {
     const cfg = raw && typeof raw === 'object' ? raw : {};
     const mode = Launch.WIDGET_MODES.some((m) => m.id === cfg.mode) ? cfg.mode : 'today';
-    const habitIds = Array.isArray(cfg.habitIds) ? cfg.habitIds.filter(Boolean).slice(0, 6) : [];
+    const max = Launch.WIDGET_HABIT_MAX || 5;
+    const habitIds = Array.isArray(cfg.habitIds) ? cfg.habitIds.filter(Boolean).slice(0, max) : [];
     let layout = Number(cfg.layout || habitIds.length || 3);
     if (!Number.isFinite(layout) || layout < 1) layout = 1;
-    if (layout > 6) layout = 6;
+    if (layout > max) layout = max;
     return { mode, habitIds, layout };
   };
 
