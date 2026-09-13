@@ -1,4 +1,4 @@
-<receiver
+        <receiver
             android:name=".widgets.MomentumWidgetProvider"
             android:exported="true"
             android:label="@string/widget_name">
@@ -8,6 +8,28 @@
             <meta-data
                 android:name="android.appwidget.provider"
                 android:resource="@xml/momentum_widget_info" />
+        </receiver>
+        <receiver
+            android:name=".widgets.HabitOneWidgetProvider"
+            android:exported="true"
+            android:label="@string/widget_habit_one">
+            <intent-filter>
+                <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
+            </intent-filter>
+            <meta-data
+                android:name="android.appwidget.provider"
+                android:resource="@xml/widget_habit_one_info" />
+        </receiver>
+        <receiver
+            android:name=".widgets.HabitsWidgetProvider"
+            android:exported="true"
+            android:label="@string/widget_habits">
+            <intent-filter>
+                <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
+            </intent-filter>
+            <meta-data
+                android:name="android.appwidget.provider"
+                android:resource="@xml/widget_habits_info" />
         </receiver>
         <receiver
             android:name=".widgets.StreakWidgetProvider"
@@ -53,19 +75,16 @@
                 android:name="android.appwidget.provider"
                 android:resource="@xml/widget_journal_info" />
         </receiver>
-        <receiver
-            android:name=".widgets.HabitsWidgetProvider"
-            android:exported="true"
-            android:label="@string/widget_habits">
-            <intent-filter>
-                <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
-            </intent-filter>
-            <meta-data
-                android:name="android.appwidget.provider"
-                android:resource="@xml/widget_habits_info" />
-        </receiver>
         <activity
             android:name=".widgets.HabitsWidgetConfigureActivity"
+            android:exported="true"
+            android:theme="@style/AppTheme">
+            <intent-filter>
+                <action android:name="android.appwidget.action.APPWIDGET_CONFIGURE" />
+            </intent-filter>
+        </activity>
+        <activity
+            android:name=".widgets.HabitOneWidgetConfigureActivity"
             android:exported="true"
             android:theme="@style/AppTheme">
             <intent-filter>
@@ -78,5 +97,6 @@
             <intent-filter>
                 <action android:name="com.dincey.habitjournal.WIDGET_COMPLETE" />
                 <action android:name="com.dincey.habitjournal.WIDGET_RESET" />
+                <action android:name="com.dincey.habitjournal.WIDGET_JOURNAL" />
             </intent-filter>
         </receiver>

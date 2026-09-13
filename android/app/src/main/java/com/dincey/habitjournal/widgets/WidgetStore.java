@@ -61,7 +61,7 @@ public final class WidgetStore {
   public static void setHabitIds(Context ctx, int appWidgetId, String[] ids) {
     StringBuilder sb = new StringBuilder();
     if (ids != null) {
-      for (int i = 0; i < ids.length && i < 5; i++) {
+      for (int i = 0; i < ids.length && i < 8; i++) {
         if (ids[i] == null || ids[i].isEmpty()) continue;
         if (sb.length() > 0) sb.append(',');
         sb.append(ids[i]);
@@ -112,11 +112,12 @@ public final class WidgetStore {
   public static void refreshAll(Context ctx) {
     Class<?>[] types = {
       MomentumWidgetProvider.class,
+      HabitOneWidgetProvider.class,
+      HabitsWidgetProvider.class,
       StreakWidgetProvider.class,
       CreditsWidgetProvider.class,
       GiftWidgetProvider.class,
-      JournalWidgetProvider.class,
-      HabitsWidgetProvider.class
+      JournalWidgetProvider.class
     };
     AppWidgetManager manager = AppWidgetManager.getInstance(ctx);
     for (Class<?> type : types) {

@@ -1,15 +1,24 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <string name="widget_description">Today’s habits with complete and reset</string>
+    <string name="widget_description">Today’s habits with +1 and reset on the widget</string>
     <string name="widget_name">Today</string>
     <string name="widget_streak">Streak</string>
     <string name="widget_credits">Credits</string>
     <string name="widget_gift">Gift</string>
     <string name="widget_journal">Journal</string>
-    <string name="widget_streak_description">Current and best 100% streak</string>
+    <string name="widget_streak_description">Current 100% streak with a fire icon</string>
     <string name="widget_credits_description">Available credit balance</string>
-    <string name="widget_gift_description">Next gift progress</string>
-    <string name="widget_journal_description">Open today’s journal</string>
-    <string name="widget_habits">Habits</string>
-    <string name="widget_habits_description">Pick 1–5 habits. Resize to show more or fewer.</string>
+    <string name="widget_gift_description">Next gift with your configured icon</string>
+    <string name="widget_journal_description">Tap + journal to log today’s mood and note</string>
+    <string name="widget_habits">Habits 1–8</string>
+    <string name="widget_habits_description">Pick 1–8 habits, including Not specific. Resize to show more rows.</string>
+    <string name="widget_habit_one">Habit</string>
+    <string name="widget_habit_one_description">One habit with +1 and reset on the widget</string>
+    <string name="widget_habits_title">Habits</string>
+    <string name="widget_plus">+</string>
+    <string name="widget_reset">↺</string>
+    <string name="widget_empty">Open Habit &amp; Journal and add habits first</string>
+    <string name="widget_streak_label">day streak</string>
+    <string name="widget_credits_label">available</string>
+    <string name="widget_journal_plus">+ journal</string>
 </resources>

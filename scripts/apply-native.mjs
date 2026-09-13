@@ -29,6 +29,36 @@ if (existsSync('android/app/src/main')) {
     const snippet = readFileSync('native-src/android/AndroidManifest.snippet.xml', 'utf8');
     if (!xml.includes('MomentumWidgetProvider')) {
       xml = xml.replace('</application>', `${snippet}\n    </application>`);
+    } else if (!xml.includes('HabitOneWidgetProvider')) {
+      xml = xml.replace(
+        'android:name=".widgets.HabitsWidgetProvider"',
+        `android:name=".widgets.HabitOneWidgetProvider"
+            android:exported="true"
+            android:label="@string/widget_habit_one">
+            <intent-filter>
+                <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
+            </intent-filter>
+            <meta-data
+                android:name="android.appwidget.provider"
+                android:resource="@xml/widget_habit_one_info" />
+        </receiver>
+        <receiver
+            android:name=".widgets.HabitsWidgetProvider"`
+      );
+      if (!xml.includes('HabitOneWidgetConfigureActivity')) {
+        xml = xml.replace(
+          'android:name=".widgets.HabitsWidgetConfigureActivity"',
+          `android:name=".widgets.HabitOneWidgetConfigureActivity"
+            android:exported="true"
+            android:theme="@style/AppTheme">
+            <intent-filter>
+                <action android:name="android.appwidget.action.APPWIDGET_CONFIGURE" />
+            </intent-filter>
+        </activity>
+        <activity
+            android:name=".widgets.HabitsWidgetConfigureActivity"`
+        );
+      }
     }
     if (!xml.includes('android:host="widget"')) {
       xml = xml.replace('</activity>', `${activityFilter}\n        </activity>`);

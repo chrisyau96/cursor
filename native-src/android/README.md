@@ -2,7 +2,17 @@
 
 Copied into Capacitor projects by `npm run native:apply`. The `android/` project in this repo already has widgets applied.
 
-Home-screen widgets (Play app only): Today with complete/reset, 1–6 habits + due, streak, credits, gift, journal. The website Settings page is a preview only.
+Home-screen widgets (Play app only):
+
+- **Today** — today’s habits with on-widget **+** and **reset** (does not open the app)
+- **Habit** — one habit (setup can pick Not specific)
+- **Habits 1–8** — up to eight habits, including Not specific; resize to show more rows
+- **Streak** — fire icon + current / best
+- **Credits** — available balance
+- **Gift** — configured gift icon + progress
+- **Journal** — **+ journal**; opens today’s mood + note sheet
+
+The website Settings page is a preview only.
 
 ## Android
 

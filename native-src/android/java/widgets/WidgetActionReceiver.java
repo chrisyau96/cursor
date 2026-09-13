@@ -13,20 +13,25 @@ public class WidgetActionReceiver extends BroadcastReceiver {
     String habitId = intent.getStringExtra("habitId");
     String date = intent.getStringExtra("date");
     if (type == null) return;
+    if ("journal".equals(type)) {
+      try {
+        Intent open = new Intent(Intent.ACTION_VIEW, android.net.Uri.parse("momentum://widget/journal"));
+        open.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_SINGLE_TOP);
+        open.setPackage(context.getPackageName());
+        context.startActivity(open);
+      } catch (Exception ignored) {}
+      return;
+    }
     WidgetStore.enqueue(context, type, habitId, date);
     if ("complete".equals(type) || "reset".equals(type)) {
       JSONObject snap = WidgetStore.readSnapshot(context);
-      bump(snap.optJSONArray("outstanding"), habitId, "complete".equals(type));
-      bump(snap.optJSONArray("habits"), habitId, "complete".equals(type));
+      boolean complete = "complete".equals(type);
+      bump(snap.optJSONArray("outstanding"), habitId, complete);
+      bump(snap.optJSONArray("habits"), habitId, complete);
+      bump(snap.optJSONArray("allHabits"), habitId, complete);
       WidgetStore.writeSnapshot(context, snap);
     }
     WidgetStore.refreshAll(context);
-    try {
-      String path = "journal".equals(type) ? "momentum://widget/journal" : "momentum://widget/open";
-      Intent open = new Intent(Intent.ACTION_VIEW, android.net.Uri.parse(path));
-      open.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_SINGLE_TOP);
-      context.startActivity(open);
-    } catch (Exception ignored) {}
   }
 
   private void bump(JSONArray items, String habitId, boolean complete) {
