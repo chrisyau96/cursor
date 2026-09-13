@@ -1,6 +1,6 @@
 // Offline-first service worker for Habit & Journal.
 // Cross-origin requests always go to the network.
-const CACHE = "habit-journal-v60";
+const CACHE = "habit-journal-v61";
 
 const ASSETS = [
   ".",
@@ -14,6 +14,13 @@ const ASSETS = [
   "assets/icon-192.png",
   "assets/icon-512.png",
   "assets/icon-180.png",
+  "assets/widgets/today.svg",
+  "assets/widgets/habit.svg",
+  "assets/widgets/habits.svg",
+  "assets/widgets/streak.svg",
+  "assets/widgets/credits.svg",
+  "assets/widgets/gift.svg",
+  "assets/widgets/journal.svg",
 ];
 
 self.addEventListener("install", (event) => {

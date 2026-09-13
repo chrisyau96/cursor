@@ -20,14 +20,15 @@
   Launch.ADMOB_TEST_APP_ID = 'ca-app-pub-3940256099942544~3347511713';
   Launch.ADMOB_TEST_BANNER = 'ca-app-pub-3940256099942544/6300978111';
   Launch.NATIVE_SLOT_LIMIT = 200;
-  Launch.WIDGET_HABIT_MAX = 5;
+  Launch.WIDGET_HABIT_MAX = 8;
   Launch.WIDGET_MODES = [
-    { id: 'today', label: 'Today', hint: 'Outstanding habits with complete / reset' },
+    { id: 'today', label: 'Today', hint: 'Outstanding habits with +1 and reset on the widget' },
+    { id: 'habit', label: 'Habit', hint: 'One habit with +1 and reset' },
+    { id: 'habits', label: 'Habits 1–8', hint: 'Pick up to 8 habits, including Not specific' },
     { id: 'streak', label: 'Streak', hint: '100% completion streak' },
     { id: 'credits', label: 'Credits', hint: 'Available credit balance' },
     { id: 'gift', label: 'Next gift', hint: 'Gift streak progress' },
-    { id: 'journal', label: 'Journal', hint: 'Tap to log today’s journal' },
-    { id: 'habits', label: 'Habits 1–5', hint: 'Pick up to 5 habits; resizes with the widget' },
+    { id: 'journal', label: 'Journal', hint: 'Tap + journal to log today' },
   ];
 
   Launch.pad2 = (n) => String(n).padStart(2, '0');

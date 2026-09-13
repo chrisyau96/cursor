@@ -716,7 +716,9 @@ await test('Credit rules award credits only, not completion EXP', async () => {
   await page.click('.nav-item[data-view="rewardsView"]');
   await page.waitForTimeout(300);
   const ledgerPreview = await page.locator('#ledgerList .ledger-item').count();
-  assert(ledgerPreview === 1, 'reward ledger should show one row, got ' + ledgerPreview);
+  assert(ledgerPreview === 0, 'reward ledger should not preview recent rows, got ' + ledgerPreview);
+  const ledgerBtn = await page.locator('#ledgerList .view-all-btn').textContent();
+  assert(/View all reward history/.test(ledgerBtn || ''), 'ledger should only offer view-all history');
   await page.click('#ledgerList .view-all-btn');
   await page.waitForTimeout(300);
   const ledger = await page.locator('#lfList').textContent();
@@ -1055,39 +1057,22 @@ await test('Home week strip starts on Monday by default', async () => {
   assert(firstDow === 'M', 'this week should start on Monday, got ' + firstDow);
 });
 
-await test('Energy ticks sit above the bar and tilt toward the score', async () => {
+await test('Energy score uses clickable pills', async () => {
   await page.click('.nav-item[data-view="homeView"]');
   await page.waitForSelector('#homeEnergy');
-  const geom = await page.evaluate(() => {
-    const input = document.querySelector('#homeEnergy');
-    const tick = document.querySelector('.energy-scale [data-tick="0"]');
-    const last = document.querySelector('.energy-scale [data-tick="10"]');
-    const dot = document.querySelector('.energy-scale [data-tick="0"] .tick-dot');
-    const ib = input.getBoundingClientRect();
-    const tb = tick.getBoundingClientRect();
-    const lb = last.getBoundingClientRect();
-    const db = dot.getBoundingClientRect();
-    input.value = '2';
-    input.dispatchEvent(new Event('input', { bubbles: true }));
-    const tiltLow = getComputedStyle(tick).getPropertyValue('--tilt');
-    input.value = '8';
-    input.dispatchEvent(new Event('input', { bubbles: true }));
-    const tiltAfter = getComputedStyle(tick).getPropertyValue('--tilt');
-    return {
-      tickBottom: tb.bottom,
-      dotBottom: db.bottom,
-      inputTop: ib.top,
-      lastBottom: lb.bottom,
-      tiltLow,
-      tiltAfter,
-      current: document.querySelector('.energy-scale [data-tick="8"]')?.classList.contains('is-current')
-    };
-  });
-  assert(geom.tickBottom <= geom.inputTop + 1, `ticks must stay above the slider (tick ${geom.tickBottom} vs input ${geom.inputTop})`);
-  assert(geom.dotBottom <= geom.inputTop + 1, `dots must stay above the slider (dot ${geom.dotBottom} vs input ${geom.inputTop})`);
-  assert(geom.lastBottom <= geom.inputTop + 1, 'rightmost tick must stay above the slider');
-  assert(geom.current, 'current score tick should be marked');
-  assert(geom.tiltAfter !== geom.tiltLow, 'ticks should tilt toward the selected score');
+  const before = await page.locator('#homeEnergyValue').textContent();
+  await page.locator('.energy-pill[data-tick="7"]').click();
+  await page.waitForTimeout(150);
+  const after = await page.evaluate(() => ({
+    value: document.querySelector('#homeEnergy')?.value,
+    label: document.querySelector('#homeEnergyValue')?.textContent,
+    current: document.querySelector('.energy-pill[data-tick="7"]')?.classList.contains('is-current'),
+    pills: document.querySelectorAll('.energy-pill').length,
+    slider: document.querySelector('.energy-scale input[type=range]')
+  }));
+  assert(after.pills === 11, 'energy should offer 0–10 pills, got ' + after.pills);
+  assert(!after.slider, 'energy slider should be gone');
+  assert(after.value === '7' && after.label === '7' && after.current, `clicking 7 should apply, before ${before} after ${JSON.stringify(after)}`);
 });
 
 await test('Insights cap at 3 rows and color the numbers', async () => {
@@ -1154,16 +1139,23 @@ await test('Habit setup uses a left drag handle', async () => {
   const row = await page.locator('#allHabitList .habit-row').first().boundingBox();
   assert(box && row && box.x < row.x + 48, 'drag handle should sit on the left');
   assert(await page.locator('#allHabitList [data-up]').count() === 0, 'up/down buttons should be gone');
+  const dots = await handle.locator('i').count();
+  assert(dots === 6, 'drag handle should use a six-dot grip, got ' + dots);
+  const bg = await handle.evaluate((el) => getComputedStyle(el).backgroundColor);
+  assert(bg === 'rgba(0, 0, 0, 0)' || bg === 'transparent', 'drag handle should not sit in a colored badge, got ' + bg);
 });
 
-await test('Widgets include sample images and a 1–5 habit picker', async () => {
+await test('Widgets include sample images and a 1–8 habit picker', async () => {
   await page.click('#topSettingsBtn');
   await page.waitForTimeout(300);
   assert(await page.locator('#widgetModeTabs').count() === 0, 'old widget mode tabs should stay gone');
-  assert(await page.locator('#widgetPreviewGrid img').count() === 6, 'sample images for each widget');
+  assert(await page.locator('#widgetPreviewGrid img').count() === 7, 'sample images for each widget');
   const copy = await page.locator('#settingsView').innerText();
-  assert(/Today/.test(copy) && /Streak/.test(copy) && /Journal/.test(copy) && /Habits/.test(copy), 'OS widget names should be listed');
+  assert(/Today/.test(copy) && /Habit/.test(copy) && /Habits 1-8/.test(copy) && /Streak/.test(copy) && /Journal/.test(copy), 'OS widget names should be listed');
+  assert(/Not specific/.test(copy), 'picker should mention Not specific habits');
   assert(await page.locator('#widgetHabitPicker').count() === 1, 'habit picker missing');
+  const habitImg = await page.locator('#widgetPreviewGrid img[src*="habit.svg"]').count();
+  assert(habitImg === 1, 'single-habit sample missing');
 });
 
 await test('Widget complete query records a habit without opening a habit row', async () => {

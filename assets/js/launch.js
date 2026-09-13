@@ -572,12 +572,12 @@
     const a = app();
     const now = a.hkNow();
     return a.activeHabits().filter((h) => !h.paused).map((h) => {
-      const c = a.showsOnHomeToday(h, now) || a.isNotSpecific(h) ? a.todayViewCompletion?.(h, now) || a.completionOfHabit(h, now) : null;
+      const onHome = a.showsOnHomeToday(h, now);
+      const flex = a.isNotSpecific(h);
+      if (!onHome && !flex) return null;
+      const c = a.todayViewCompletion?.(h, now) || a.completionOfHabit(h, now);
       if (!c) return null;
-      if (a.showsOnHomeToday(h, now) || (a.isNotSpecific(h) && !c.done)) {
-        return { id: h.id, name: h.name, emoji: h.emoji || '✓', color: h.color, count: c.count, target: c.target, done: !!c.done, date: a.todayKey() };
-      }
-      return null;
+      return { id: h.id, name: h.name, emoji: h.emoji || '✓', color: h.color, count: c.count, target: c.target, done: !!c.done, date: a.todayKey(), flex };
     }).filter(Boolean);
   }
 
@@ -591,7 +591,7 @@
       if (!h) return null;
       const due = a.habitDueDate(h, now);
       const c = a.completionOfHabit(h, now);
-      return { id: h.id, name: h.name, emoji: h.emoji || '✓', color: h.color, due, dueLabel: Core.duePhrase(today, due), count: c.count, target: c.target, done: !!c.done, date: today };
+      return { id: h.id, name: h.name, emoji: h.emoji || '✓', color: h.color, due, dueLabel: Core.duePhrase(today, due), count: c.count, target: c.target, done: !!c.done, date: today, flex: a.isNotSpecific(h) };
     }).filter(Boolean);
   }
 
@@ -609,7 +609,19 @@
       layout: cfg.layout,
       outstanding: outstandingToday(),
       habits: selectedHabitsSnapshot(cfg),
-      allHabits: a.activeHabits().filter((h) => !h.paused).map((h) => ({ id: h.id, name: h.name, emoji: h.emoji || '✓' })),
+      allHabits: a.activeHabits().filter((h) => !h.paused).map((h) => {
+        const c = a.completionOfHabit(h, a.hkNow());
+        return {
+          id: h.id,
+          name: h.name,
+          emoji: h.emoji || '✓',
+          flex: a.isNotSpecific(h),
+          count: c.count,
+          target: c.target,
+          done: !!c.done,
+          date: a.todayKey(),
+        };
+      }),
       selectedIds: cfg.habitIds,
       streak: { current: a.streakAt(a.hkNow(), 100), best: a.longestPerfectStreak() },
       credits: a.creditTotal(),
@@ -647,12 +659,13 @@
     const max = Core.WIDGET_HABIT_MAX || 5;
     const habits = app().activeHabits().filter((h) => !h.paused);
     if (!habits.length) {
-      box.innerHTML = '<div class="empty">Add habits first, then pick 1–5 for the Habits widget.</div>';
+      box.innerHTML = '<div class="empty">Add habits first, then pick 1–8 for Habit and Habits 1–8. Not specific habits can be selected too.</div>';
       return;
     }
     box.innerHTML = habits.map((h) => {
       const on = cfg.habitIds.includes(h.id);
-      return `<label class="widget-habit-pick ${on ? 'is-on' : ''}"><input type="checkbox" data-widget-habit="${h.id}" ${on ? 'checked' : ''}> <span>${h.emoji || '✓'} ${app().escapeHtml(h.name)}</span></label>`;
+      const tag = app().isNotSpecific(h) ? ' · Not specific' : '';
+      return `<label class="widget-habit-pick ${on ? 'is-on' : ''}"><input type="checkbox" data-widget-habit="${h.id}" ${on ? 'checked' : ''}> <span>${h.emoji || '✓'} ${app().escapeHtml(h.name)}${tag}</span></label>`;
     }).join('');
     box.querySelectorAll('[data-widget-habit]').forEach((el) => {
       el.onchange = () => {
@@ -962,6 +975,10 @@
     renderAdsUi();
     await applyPendingFromNative();
     consumeLaunchQuery();
+    try {
+      const launched = await cap().App?.getLaunchUrl?.();
+      if (launched?.url) await ingestNativeWidgetPending(Core.parseAppUrl(launched.url));
+    } catch (e) { /* web */ }
     await writeWidgetSnapshot();
     if (settings().reminders) await requestNotifPermission();
     await scheduleReminders();

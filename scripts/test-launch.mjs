@@ -62,8 +62,8 @@ assert(applied.length === 2, 'two pending actions applied');
 assert(state.records.every((r) => r.habitId !== 'h1'), 'reset removes today records');
 assert(state.records.some((r) => r.habitId === 'h2' && r.note === 'widget'), 'widget complete added');
 
-const cfg = Launch.normalizeWidgetConfig({ mode: 'habits', habitIds: ['a', 'b', 'c', 'd', 'e', 'f', 'g'], layout: 9 });
-assert(cfg.habitIds.length === 5 && cfg.layout === 5, 'widget config capped at 5');
+const cfg = Launch.normalizeWidgetConfig({ mode: 'habits', habitIds: ['a', 'b', 'c', 'd', 'e', 'f', 'g', 'h', 'i'], layout: 9 });
+assert(cfg.habitIds.length === 8 && cfg.layout === 8, 'widget config capped at 8');
 assert(Launch.parseQueryActions('?widgetAction=complete&habitId=abc').habitId === 'abc', 'query action');
 assert(Launch.parseAppUrl('momentum://widget/reset?habitId=z').type === 'reset', 'app url action');
 
@@ -186,7 +186,10 @@ assert(resetAfter.length === 1 && multi.records.length === 0, 'widget reset clea
 const journal = Launch.applyPendingActions({ records: [] }, [{ type: 'journal' }], { uid: () => 'j', todayKey: '2026-08-31' });
 assert(journal[0].type === 'journal', 'journal pending is forwarded');
 
+assert(Launch.WIDGET_HABIT_MAX === 8, 'habits widget cap is 8');
 assert(Launch.normalizeWidgetConfig(null).mode === 'today', 'default widget mode');
+assert(Launch.normalizeWidgetConfig({ mode: 'habit' }).mode === 'habit', 'habit widget mode');
+assert(Launch.WIDGET_MODES.some((m) => m.id === 'habits' && /1–8/.test(m.label)), 'habits 1-8 label');
 assert(Launch.normalizeWidgetConfig({ mode: 'nope' }).mode === 'today', 'unknown widget mode falls back');
 assert(Launch.parseAppUrl('momentum://widget/journal').type === 'journal', 'journal widget url');
 assert(Launch.parseAppUrl('momentum://widget/open').type === 'open', 'open widget url');

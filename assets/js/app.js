@@ -83,8 +83,9 @@
   const PREVIEW=3;
   const LAZY_CHUNK=10;
   const REMINDER_MSG_LIMIT=80;
-  const APP_VERSION='v60';
-  const WIDGET_HABIT_MAX=5;
+  const APP_VERSION='v61';
+  const WIDGET_HABIT_MAX=8;
+  const DRAG_DOTS='<i></i><i></i><i></i><i></i><i></i><i></i>';
   const iconBtn=(cls,svg,title)=>{const b=document.createElement('button'); b.className='act-btn '+cls; b.innerHTML=svg; b.title=title; b.setAttribute('aria-label',title); return b;};
 
   const USER_NAME_MAX=12;
@@ -1058,7 +1059,17 @@
     $('#lfMore').onclick=()=>draw(false);
     draw(true);
   }
-  function openLedgerModal(title,items,itemFn){openLazyModal(title,items,itemFn);}
+  function renderLedgerLink(){
+    const box=$('#ledgerList'); if(!box)return;
+    const items=ledger();
+    box.innerHTML='';
+    const more=document.createElement('button');
+    more.className='view-all-btn';
+    more.type='button';
+    more.textContent='View all reward history';
+    more.onclick=()=>openLazyModal('Reward Ledger',items,ledgerNode);
+    box.appendChild(more);
+  }
   function ledgerNode(x){const div=document.createElement('div'); div.className='ledger-item';
     const amt=x.credit?((x.credit>0?'+':'')+'HK$'+x.credit):((x.type==='gift'||x.type==='redeemGift')?((x.giftIcon||'🎁')+' '+(x.gift||'')):(x.xp?((x.xp>0?'+':'')+fmtXp(x.xp)+' EXP'):''));
     div.innerHTML=`<span class="led-date">${x.date}</span><span class="led-note">${escapeHtml(x.desc||'')}</span><span class="led-amt">${amt}</span>`;
@@ -1077,23 +1088,17 @@
   function activityItem(r){const h=state.habits.find(x=>x.id===r.habitId)||{}; const div=document.createElement('div'); div.className='activity'; div.innerHTML=`<div class="activity-emoji" style="background:${(h.color||'#4f46e5')}22">${h.emoji||'✓'}</div><div class="a-main"><div class="activity-title"></div><div class="activity-sub">${r.date} · ${new Date(r.at).toLocaleTimeString([], {hour:'2-digit',minute:'2-digit',timeZone:'Asia/Hong_Kong'})}</div></div>`; div.querySelector('.activity-title').textContent=h.name||'Habit'; const acts=document.createElement('div'); acts.className='row-actions'; const d=iconBtn('del',ICON_DEL,'Remove'); d.onclick=()=>confirm('Remove this record?')&&removeRecord(r.id); acts.appendChild(d); div.appendChild(acts); return div;}
   function energyScaleHtml(inputId,valueId,value){
     const v=Math.max(0,Math.min(10,Number(value??5)));
-    const ticks=Array.from({length:11},(_,i)=>`<button type="button" class="energy-tick" data-tick="${i}" style="--i:${i}" aria-label="Energy ${i}"><span class="tick-n">${i}</span><span class="tick-dot"></span></button>`).join('');
-    return `<div class="energy-panel"><div class="range-value" id="${valueId}">${v}</div><div class="energy-scale" data-energy-scale style="--val:${v}"><div class="energy-rail">${ticks}</div><input type="range" min="0" max="10" step="1" value="${v}" id="${inputId}"></div></div>`;
+    const pills=Array.from({length:11},(_,i)=>`<button type="button" class="energy-pill${i===v?' is-current':''}" data-tick="${i}" aria-label="Energy ${i}">${i}</button>`).join('');
+    return `<div class="energy-panel"><div class="range-value" id="${valueId}">${v}</div><div class="energy-pills" data-energy-scale><input type="hidden" id="${inputId}" value="${v}">${pills}</div></div>`;
   }
   function bindEnergyScale(input,valueEl){
     if(!input) return;
-    const scale=input.closest('.energy-scale');
+    const scale=input.closest('[data-energy-scale]');
     const paint=()=>{
       const val=Number(input.value);
-      if(scale){
-        scale.style.setProperty('--val',val);
-        scale.querySelectorAll('[data-tick]').forEach(el=>{
-          const i=Number(el.dataset.tick);
-          const tilt=Math.max(-36,Math.min(36,(val-i)*6));
-          el.style.setProperty('--tilt',tilt+'deg');
-          el.classList.toggle('is-current',i===val);
-        });
-      }
+      scale?.querySelectorAll('[data-tick]').forEach(el=>{
+        el.classList.toggle('is-current',Number(el.dataset.tick)===val);
+      });
       if(valueEl) valueEl.textContent=String(val);
     };
     scale?.querySelectorAll('[data-tick]').forEach(el=>{
@@ -1236,7 +1241,7 @@
     box.innerHTML='';
     sortedGroups().forEach(g=>{
       const div=document.createElement('div'); div.className='group-manage-item'; div.dataset.groupId=g.id;
-      div.innerHTML=`<button type="button" class="drag-handle" aria-label="Drag to reorder" data-drag-group="${g.id}"><span></span><span></span><span></span></button><button type="button" class="group-icon-btn" data-gicon data-group-id="${g.id}" title="Change icon">${g.emoji||'📋'}</button><input value="${escapeAttr(g.name)}" data-gname data-group-id="${g.id}" aria-label="Group name"><button class="group-del-btn" type="button" data-gdel data-group-id="${g.id}" aria-label="Delete group">×</button>`;
+      div.innerHTML=`<button type="button" class="drag-handle" aria-label="Drag to reorder" data-drag-group="${g.id}">${DRAG_DOTS}</button><button type="button" class="group-icon-btn" data-gicon data-group-id="${g.id}" title="Change icon">${g.emoji||'📋'}</button><input value="${escapeAttr(g.name)}" data-gname data-group-id="${g.id}" aria-label="Group name"><button class="group-del-btn" type="button" data-gdel data-group-id="${g.id}" aria-label="Delete group">×</button>`;
       div.querySelector('[data-gname]').onchange=e=>{const grp=state.groups.find(x=>x.id===g.id); if(grp){grp.name=e.target.value.trim()||'Group'; invalidateHomeCaches(); renderHome(); void save(false,{render:'none'});}};
       box.appendChild(div);
     });
@@ -1255,7 +1260,7 @@
       const grp=state.groups.find(g=>g.id===h.groupId);
       const row=document.createElement('div'); row.className='habit-row'+(h.paused?' paused-habit':''); row.style.cursor='default';
       row.dataset.habitId=h.id;
-      row.innerHTML=`<button type="button" class="drag-handle" aria-label="Drag to reorder" data-drag-habit="${h.id}"><span></span><span></span><span></span></button><div class="habit-icon" style="background:${h.color}22;color:${h.color}">${h.emoji}</div><div class="habit-main"><div class="habit-name"></div><div class="habit-meta"><span>${frequencyLabel(h)}</span>${grp?`<span class="mini-dot"></span><span>${escapeHtml(grp.name)}</span>`:''}<span class="mini-dot"></span><span>${fmtXp(h.xpReward||5)} EXP</span>${h.paused?'<span class="chip gray">Paused</span>':''}</div></div>`;
+      row.innerHTML=`<button type="button" class="drag-handle" aria-label="Drag to reorder" data-drag-habit="${h.id}">${DRAG_DOTS}</button><div class="habit-icon" style="background:${h.color}22;color:${h.color}">${h.emoji}</div><div class="habit-main"><div class="habit-name"></div><div class="habit-meta"><span>${frequencyLabel(h)}</span>${grp?`<span class="mini-dot"></span><span>${escapeHtml(grp.name)}</span>`:''}<span class="mini-dot"></span><span>${fmtXp(h.xpReward||5)} EXP</span>${h.paused?'<span class="chip gray">Paused</span>':''}</div></div>`;
       row.querySelector('.habit-name').textContent=h.name;
       const actions=document.createElement('div'); actions.className='habit-actions';
       actions.innerHTML=`<button class="icon-btn" data-edit data-habit-id="${h.id}" aria-label="Edit">✎</button><button class="icon-btn" data-pause data-habit-id="${h.id}" aria-label="Pause">${h.paused?'▶':'⏸'}</button>`;
@@ -1733,7 +1738,7 @@
     $('#redeemGrid').innerHTML=`<div class="gift-card credit-spend" style="grid-column:1/-1"><div class="card-head"><h3>Credit Rewards</h3><span class="chip orange">HK$${bal} available</span></div><div class="redeem-form"><div class="field"><label>Redeemed For</label><input id="creditSpendText" placeholder="e.g. headphone, game, coffee"></div><div class="field"><label>Credit Amount</label><input id="creditSpendAmount" type="number" min="0" max="${bal}" step="1" value="${Math.min(10,bal)}"><input id="creditSpendSlider" type="range" min="0" max="${bal}" step="1" value="${Math.min(10,bal)}"><div class="inline-hint">Use the number box or slider, up to your balance.</div></div><button class="btn-primary ${canRedeemCredit?'':'btn-dim'}" id="spendCreditBtn" ${canRedeemCredit?'':'disabled'}>Redeem Credit</button></div></div>` + giftCardHtml;
 
     const slider=$('#creditSpendSlider'), amount=$('#creditSpendAmount'); if(slider&&amount){slider.oninput=()=>amount.value=slider.value; amount.oninput=()=>{let v=Math.max(0,Math.min(bal,Number(amount.value||0))); amount.value=v; slider.value=v;};}
-    renderPreview($('#ledgerList'),ledger(),ledgerNode,'Reward Ledger',1);
+    renderLedgerLink();
   }
   async function spendCreditReward(){
     const bal=creditTotal(); if(bal<=0) return;
