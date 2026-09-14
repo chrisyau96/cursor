@@ -2,6 +2,7 @@ package com.dincey.habitjournal.widgets;
 
 import android.appwidget.AppWidgetManager;
 import android.content.Context;
+import android.view.View;
 import android.widget.RemoteViews;
 import org.json.JSONArray;
 import org.json.JSONObject;
@@ -13,10 +14,14 @@ public class HabitsWidgetProvider extends android.appwidget.AppWidgetProvider {
     JSONObject snap = WidgetStore.readSnapshot(context);
     for (int id : appWidgetIds) {
       RemoteViews views = new RemoteViews(context.getPackageName(), R.layout.widget_habits);
-      int rows = WidgetViews.adaptiveRows(manager.getAppWidgetOptions(id), 8);
+      android.os.Bundle opts = manager.getAppWidgetOptions(id);
+      int[] grid = WidgetViews.grid(opts, 250, 110);
+      boolean showHeader = grid[1] >= 2;
+      views.setViewVisibility(R.id.habitsHeaderBar, showHeader ? View.VISIBLE : View.GONE);
+      int rows = WidgetViews.habitRowsForHeight(grid[1]);
       JSONArray items = WidgetViews.pickHabits(context, snap, id, rows);
       views.setTextViewText(R.id.habitsHeader, context.getString(R.string.widget_habits));
-      WidgetViews.bindHabitRows(context, views, items, snap, id, rows);
+      WidgetViews.bindHabitRows(context, views, items, snap, id, rows, grid[0] < 3);
       views.setOnClickPendingIntent(R.id.habitsHeaderBar, WidgetViews.open(context, "momentum://widget/open", id));
       manager.updateAppWidget(id, views);
     }

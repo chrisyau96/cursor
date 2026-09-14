@@ -4,13 +4,13 @@ Copied into Capacitor projects by `npm run native:apply`. The `android/` project
 
 Home-screen widgets (Play app only):
 
-- **Today** — today’s habits with on-widget **+** and **reset** (does not open the app)
-- **Habit** — one habit (setup can pick Not specific)
-- **Habits 1–8** — up to eight habits, including Not specific; resize to show more rows
-- **Streak** — fire icon + current / best
-- **Credits** — available balance
-- **Gift** — configured gift icon + progress
-- **Journal** — **+ journal**; opens today’s mood + note sheet
+- **Today** — today’s habits with on-widget **+** and **reset** (does not open the app). Default **4×2**; drag taller for more rows.
+- **Habit** — one habit (setup can pick Not specific). Default **2×1**.
+- **Habits 1–8** — up to eight habits, including Not specific. Default **4×2**; drag taller for more rows.
+- **Streak** — fire icon + current / best. Default **2×2**; 2×1 hides the subtitle.
+- **Credits** — available balance. Default **2×2**.
+- **Gift** — configured gift icon + progress. Default **2×2**.
+- **Journal** — **+ journal**; opens today’s mood + note sheet. Default **2×2**.
 
 The website Settings page is a preview only.
 

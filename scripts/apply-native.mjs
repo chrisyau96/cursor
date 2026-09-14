@@ -9,7 +9,10 @@ import { join } from 'path';
 function copyDir(src, dest) {
   if (!existsSync(src)) return false;
   mkdirSync(dest, { recursive: true });
-  cpSync(src, dest, { recursive: true });
+  cpSync(src, dest, {
+    recursive: true,
+    filter: (from) => !/ic_launcher_background/.test(from),
+  });
   return true;
 }
 

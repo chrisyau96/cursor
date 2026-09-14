@@ -1,19 +1,19 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <string name="widget_description">Today’s habits with +1 and reset on the widget</string>
+    <string name="widget_description">Today’s habits. Drops as 4×2; drag taller for more rows, narrower to hide counts.</string>
     <string name="widget_name">Today</string>
     <string name="widget_streak">Streak</string>
     <string name="widget_credits">Credits</string>
     <string name="widget_gift">Gift</string>
     <string name="widget_journal">Journal</string>
-    <string name="widget_streak_description">Current 100% streak with a fire icon</string>
-    <string name="widget_credits_description">Available credit balance</string>
-    <string name="widget_gift_description">Next gift with your configured icon</string>
-    <string name="widget_journal_description">Tap + journal to log today’s mood and note</string>
+    <string name="widget_streak_description">Current 100% streak. Drops as 2×2; shrink to 2×1 for just the number.</string>
+    <string name="widget_credits_description">Available credit balance. Drops as 2×2; shrink to 2×1 for just the amount.</string>
+    <string name="widget_gift_description">Next gift with your configured icon. Drops as 2×2; shrink to 2×1 for icon and progress.</string>
+    <string name="widget_journal_description">Tap to log today’s mood and note. Drops as 2×2.</string>
     <string name="widget_habits">Habits 1–8</string>
-    <string name="widget_habits_description">Pick 1–8 habits, including Not specific. Resize to show more rows.</string>
+    <string name="widget_habits_description">Pick 1–8 habits, including Not specific. Drops as 4×2; drag taller to show more of the habits you picked.</string>
     <string name="widget_habit_one">Habit</string>
-    <string name="widget_habit_one_description">One habit with +1 and reset on the widget</string>
+    <string name="widget_habit_one_description">One habit with +1 and reset. Drops as 2×1; drag wider to show the count.</string>
     <string name="widget_habits_title">Habits</string>
     <string name="widget_plus">+</string>
     <string name="widget_reset">↺</string>

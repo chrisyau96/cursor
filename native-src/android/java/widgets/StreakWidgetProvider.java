@@ -18,8 +18,14 @@ public class StreakWidgetProvider extends android.appwidget.AppWidgetProvider {
       views.setTextViewText(R.id.streakFire, "🔥");
       views.setTextViewText(R.id.streakDays, String.valueOf(cur));
       views.setTextViewText(R.id.streakLabel, "Best " + best);
+      WidgetViews.bindStatDensity(views, manager.getAppWidgetOptions(id), R.id.streakLabel);
       views.setOnClickPendingIntent(R.id.widgetRoot, WidgetViews.open(context, "momentum://widget/open", id));
       manager.updateAppWidget(id, views);
     }
+  }
+
+  @Override
+  public void onAppWidgetOptionsChanged(Context context, AppWidgetManager manager, int appWidgetId, android.os.Bundle newOptions) {
+    onUpdate(context, manager, new int[]{appWidgetId});
   }
 }

@@ -24,8 +24,14 @@ public class GiftWidgetProvider extends android.appwidget.AppWidgetProvider {
         views.setTextViewText(R.id.giftName, gift.optString("label", "Gift"));
         views.setTextViewText(R.id.giftProgress, gift.optInt("current") + "/" + gift.optInt("target"));
       }
+      WidgetViews.bindStatDensity(views, manager.getAppWidgetOptions(id), R.id.giftName);
       views.setOnClickPendingIntent(R.id.widgetRoot, WidgetViews.open(context, "momentum://widget/open", id));
       manager.updateAppWidget(id, views);
     }
+  }
+
+  @Override
+  public void onAppWidgetOptionsChanged(Context context, AppWidgetManager manager, int appWidgetId, android.os.Bundle newOptions) {
+    onUpdate(context, manager, new int[]{appWidgetId});
   }
 }

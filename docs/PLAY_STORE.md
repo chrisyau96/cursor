@@ -14,7 +14,7 @@ The app is free for users. You pay **US$25 once** for a Play developer account (
 - Privacy policy (live): https://chrisyau96.github.io/cursor/privacy.html
 - Store listing copy + graphics: `store/play/`
 - Capacitor Android app id: `com.dincey.habitjournal`
-- Home-screen widgets (Today complete/reset, 1–6 habits, streak, credits, gift, journal)
+- Home-screen widgets (Today / Habit / Habits 1–8, streak, credits, gift, journal — drag to resize)
 - Local reminders via OS alarms (not web push)
 - Drive backup: Google account picker **once**, then silent — needs an **Android OAuth client + SHA-1** (section 2)
 

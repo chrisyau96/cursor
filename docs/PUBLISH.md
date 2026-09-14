@@ -10,7 +10,7 @@ The web app at GitHub Pages remains a PWA. Store listing requires a **native she
 | Google Drive daily/weekly backup | Yes (after you add an OAuth client ID) | Yes |
 | Reminders while the app is **open** | Yes | Yes |
 | Reminders while the app is **closed** | No (browsers do not allow reliable local alarms) | Yes (`LocalNotifications`) |
-| Home screen widgets (today / habits / streak / credits / gift / journal, complete & reset) | Preview only in Settings | Yes (Android App Widget + iOS WidgetKit) |
+| Home screen widgets (today / habits / streak / credits / gift / journal, complete & reset, drag-resize) | Preview only in Settings | Yes (Android App Widget + iOS WidgetKit) |
 
 Widgets and closed-app reminders **cannot** be added to the current website alone. That is a platform limit, not a missing button.
 

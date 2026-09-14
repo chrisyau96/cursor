@@ -36,10 +36,24 @@ final class WidgetViews {
     R.id.habitReset5, R.id.habitReset6, R.id.habitReset7, R.id.habitReset8
   };
 
-  static int adaptiveRows(Bundle opts, int cap) {
-    int minH = opts != null ? opts.getInt(AppWidgetManager.OPTION_APPWIDGET_MIN_HEIGHT, 110) : 110;
-    int rows = Math.max(1, (minH - 28) / 36);
-    return Math.max(1, Math.min(cap, rows));
+  static int cellCount(int minDp) {
+    // Home-screen cells use 70n − 30 dp. Invert so drag-resize maps to columns/rows.
+    if (minDp <= 0) return 1;
+    return Math.max(1, (minDp + 30) / 70);
+  }
+
+  static int habitRowsForHeight(int hCells) {
+    if (hCells <= 1) return 1;
+    if (hCells == 2) return 2;
+    if (hCells == 3) return 4;
+    if (hCells == 4) return 6;
+    return 8;
+  }
+
+  static int[] grid(Bundle opts, int fallbackW, int fallbackH) {
+    int minW = opts != null ? opts.getInt(AppWidgetManager.OPTION_APPWIDGET_MIN_WIDTH, fallbackW) : fallbackW;
+    int minH = opts != null ? opts.getInt(AppWidgetManager.OPTION_APPWIDGET_MIN_HEIGHT, fallbackH) : fallbackH;
+    return new int[]{ cellCount(minW), cellCount(minH) };
   }
 
   static JSONArray pickHabits(Context ctx, JSONObject snap, int appWidgetId, int maxRows) {
@@ -100,7 +114,7 @@ final class WidgetViews {
     return snap != null ? snap.optString("today") : "";
   }
 
-  static void bindHabitRows(Context ctx, RemoteViews views, JSONArray items, JSONObject snap, int appWidgetId, int maxRows) {
+  static void bindHabitRows(Context ctx, RemoteViews views, JSONArray items, JSONObject snap, int appWidgetId, int maxRows, boolean compact) {
     int cap = Math.min(8, Math.max(1, maxRows));
     int n = items == null ? 0 : Math.min(items.length(), cap);
     views.setViewVisibility(R.id.widgetEmpty, n == 0 ? View.VISIBLE : View.GONE);
@@ -117,6 +131,7 @@ final class WidgetViews {
       views.setViewVisibility(ROWS[i], View.VISIBLE);
       views.setTextViewText(TITLES[i], habitLabel(h));
       views.setTextViewText(COUNTS[i], h.optInt("count") + "/" + Math.max(1, h.optInt("target")));
+      views.setViewVisibility(COUNTS[i], compact ? View.GONE : View.VISIBLE);
       views.setViewVisibility(PLUS[i], View.VISIBLE);
       views.setViewVisibility(RESET[i], View.VISIBLE);
       String hid = h.optString("id");
@@ -126,7 +141,7 @@ final class WidgetViews {
     }
   }
 
-  static void bindHabitOne(Context ctx, RemoteViews views, JSONArray items, JSONObject snap, int appWidgetId) {
+  static void bindHabitOne(Context ctx, RemoteViews views, JSONArray items, JSONObject snap, int appWidgetId, boolean compact) {
     JSONObject h = items != null && items.length() > 0 ? items.optJSONObject(0) : null;
     if (h == null) {
       views.setViewVisibility(R.id.widgetEmpty, View.VISIBLE);
@@ -138,10 +153,16 @@ final class WidgetViews {
     views.setViewVisibility(R.id.habitOneRow, View.VISIBLE);
     views.setTextViewText(R.id.habitOneTitle, habitLabel(h));
     views.setTextViewText(R.id.habitOneCount, h.optInt("count") + "/" + Math.max(1, h.optInt("target")));
+    views.setViewVisibility(R.id.habitOneCount, compact ? View.GONE : View.VISIBLE);
     String hid = h.optString("id");
     String date = habitDate(h, snap);
     views.setOnClickPendingIntent(R.id.habitOneComplete, action(ctx, "complete", hid, date, appWidgetId, 0));
     views.setOnClickPendingIntent(R.id.habitOneReset, action(ctx, "reset", hid, date, appWidgetId, 0));
+  }
+
+  static void bindStatDensity(RemoteViews views, android.os.Bundle opts, int labelId) {
+    int[] grid = grid(opts, 110, 110);
+    views.setViewVisibility(labelId, grid[1] >= 2 ? View.VISIBLE : View.GONE);
   }
 
   static PendingIntent action(Context ctx, String type, String habitId, String date, int appWidgetId, int row) {

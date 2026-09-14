@@ -9,6 +9,7 @@
     android:padding="12dp">
 
     <TextView
+        android:id="@+id/creditsMark"
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
         android:text="✦"
@@ -25,6 +26,7 @@
         android:textStyle="bold" />
 
     <TextView
+        android:id="@+id/creditsLabel"
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
         android:text="@string/widget_credits_label"

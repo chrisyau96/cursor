@@ -74,8 +74,17 @@ struct Provider: TimelineProvider {
 }
 
 struct MomentumWidgetView: View {
+  @Environment(\.widgetFamily) var family
   var entry: MomentumEntry
   var mode: String { (entry.snap["mode"] as? String) ?? "today" }
+  var compact: Bool { family == .systemSmall }
+  var rowCap: Int {
+    switch family {
+    case .systemSmall: return 2
+    case .systemMedium: return 4
+    default: return 8
+    }
+  }
 
   var body: some View {
     switch mode {
@@ -83,7 +92,9 @@ struct MomentumWidgetView: View {
       VStack(spacing: 4) {
         Text("🔥").font(.title)
         Text(String(((entry.snap["streak"] as? [String: Any])?["current"] as? Int) ?? 0)).font(.title.bold())
-        Text("Best \( ((entry.snap["streak"] as? [String: Any])?["best"] as? Int) ?? 0 )").font(.caption).foregroundStyle(.secondary)
+        if !compact {
+          Text("Best \( ((entry.snap["streak"] as? [String: Any])?["best"] as? Int) ?? 0 )").font(.caption).foregroundStyle(.secondary)
+        }
       }.frame(maxWidth: .infinity, maxHeight: .infinity)
     case "credits":
       stat(kicker: "✦", big: "HK$\((entry.snap["credits"] as? Int) ?? 0)", sub: "available")
@@ -91,7 +102,9 @@ struct MomentumWidgetView: View {
       if let gift = entry.snap["gift"] as? [String: Any] {
         VStack(spacing: 4) {
           Text((gift["icon"] as? String) ?? "🎁").font(.largeTitle)
-          Text((gift["label"] as? String) ?? "Gift").font(.caption.weight(.bold))
+          if !compact {
+            Text((gift["label"] as? String) ?? "Gift").font(.caption.weight(.bold))
+          }
           Text("\((gift["current"] as? Int) ?? 0)/\((gift["target"] as? Int) ?? 0)").font(.caption).foregroundStyle(.secondary)
         }.frame(maxWidth: .infinity, maxHeight: .infinity)
       } else { stat(kicker: "🎁", big: "—", sub: "No gift goal") }
@@ -99,15 +112,15 @@ struct MomentumWidgetView: View {
       Button(intent: JournalIntent()) {
         VStack(spacing: 8) {
           Text("+").font(.title.bold())
-          Text("+ journal").font(.caption.weight(.bold))
+          if !compact { Text("+ journal").font(.caption.weight(.bold)) }
         }
       }.buttonStyle(.plain)
     case "habit":
-      list(items: Array(((entry.snap["habits"] as? [[String: Any]]) ?? []).prefix(1)), due: false)
+      list(items: Array(((entry.snap["habits"] as? [[String: Any]]) ?? []).prefix(1)), title: "Habit")
     case "habits":
-      list(items: (entry.snap["habits"] as? [[String: Any]]) ?? [], due: false)
+      list(items: (entry.snap["habits"] as? [[String: Any]]) ?? [], title: "Habits 1–8")
     default:
-      list(items: (entry.snap["outstanding"] as? [[String: Any]]) ?? [], due: false)
+      list(items: (entry.snap["outstanding"] as? [[String: Any]]) ?? [], title: "Today")
     }
   }
 
@@ -115,19 +128,21 @@ struct MomentumWidgetView: View {
     VStack(spacing: 4) {
       Text(kicker).font(.caption.weight(.semibold)).foregroundStyle(.secondary)
       Text(big).font(.title.bold())
-      Text(sub).font(.caption).foregroundStyle(.secondary)
+      if !compact { Text(sub).font(.caption).foregroundStyle(.secondary) }
     }.frame(maxWidth: .infinity, maxHeight: .infinity)
   }
 
-  func list(items: [[String: Any]], due: Bool) -> some View {
+  func list(items: [[String: Any]], title: String) -> some View {
     VStack(alignment: .leading, spacing: 6) {
-      Text(due ? "Habits 1–8" : "Today").font(.caption.weight(.bold))
-      ForEach(Array(items.prefix(8).enumerated()), id: \.offset) { _, h in
+      if !compact { Text(title).font(.caption.weight(.bold)) }
+      ForEach(Array(items.prefix(rowCap).enumerated()), id: \.offset) { _, h in
         HStack {
           let flex = (h["flex"] as? Bool) ?? false
           Text("\((h["emoji"] as? String) ?? "") \((h["name"] as? String) ?? "")\(flex ? " · Any" : "")").font(.caption)
           Spacer()
-          Text("\((h["count"] as? Int) ?? 0)/\((h["target"] as? Int) ?? 1)").font(.caption2).foregroundStyle(.secondary)
+          if !compact {
+            Text("\((h["count"] as? Int) ?? 0)/\((h["target"] as? Int) ?? 1)").font(.caption2).foregroundStyle(.secondary)
+          }
           Button(intent: CompleteHabitIntent(habitId: (h["id"] as? String) ?? "", date: (h["date"] as? String) ?? "")) {
             Text("+").font(.caption.bold())
           }.buttonStyle(.plain)

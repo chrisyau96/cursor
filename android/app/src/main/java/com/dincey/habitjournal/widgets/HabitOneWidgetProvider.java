@@ -13,8 +13,10 @@ public class HabitOneWidgetProvider extends android.appwidget.AppWidgetProvider 
     JSONObject snap = WidgetStore.readSnapshot(context);
     for (int id : appWidgetIds) {
       RemoteViews views = new RemoteViews(context.getPackageName(), R.layout.widget_habit_one);
+      android.os.Bundle opts = manager.getAppWidgetOptions(id);
+      int[] grid = WidgetViews.grid(opts, 110, 40);
       JSONArray items = WidgetViews.pickHabits(context, snap, id, 1);
-      WidgetViews.bindHabitOne(context, views, items, snap, id);
+      WidgetViews.bindHabitOne(context, views, items, snap, id, grid[0] < 3);
       manager.updateAppWidget(id, views);
     }
   }

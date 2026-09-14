@@ -58,9 +58,14 @@ Connect** a JSON file for local auto-sync. Phones should use Drive.
 
 ## Home screen widgets (store app)
 
-Settings → **Home screen widgets** chooses the mode (today tasks, 1–6 habits with due dates,
-streak, credits, gift, journal). The Play / App Store build can complete or reset today’s
-tasks from the widget. The website shows a preview only.
+Long-press the home screen → Widgets → Habit & Journal. Each widget drops at a default cell size and then follows how you drag it:
+
+- **Today** — 4×2. Taller shows more of today’s habits (up to 8). Narrower hides counts.
+- **Habit** — 2×1. One habit; drag wider to show the count.
+- **Habits 1–8** — 4×2. Taller shows more of the habits you picked.
+- **Streak / Credits / Gift / Journal** — 2×2. Shrink to 2×1 for the number or icon only.
+
+Complete and reset stay on the widget. Journal opens today’s log sheet. The website Settings page is a preview only.
 
 ## Use it on your phone
 
