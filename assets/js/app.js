@@ -83,7 +83,7 @@
   const PREVIEW=3;
   const LAZY_CHUNK=10;
   const REMINDER_MSG_LIMIT=80;
-  const APP_VERSION='v61';
+  const APP_VERSION='v62';
   const WIDGET_HABIT_MAX=8;
   const DRAG_DOTS='<i></i><i></i><i></i><i></i><i></i><i></i>';
   const iconBtn=(cls,svg,title)=>{const b=document.createElement('button'); b.className='act-btn '+cls; b.innerHTML=svg; b.title=title; b.setAttribute('aria-label',title); return b;};
@@ -730,7 +730,7 @@
     const activeAvail=active?giftCount(active):0;
     const giftVal=$('#giftUnlockValue'); if(giftVal) giftVal.textContent=activeAvail;
     const giftSub=$('#giftUnlockSub'); if(giftSub) giftSub.textContent=active?('of '+(active.gift||'Gift')):'no gift goal';
-    const levelXp=$('#levelPageXp'); if(levelXp) levelXp.textContent=li.next.level===li.cur.level?`${fmtXp(li.xp)} EXP · Max tier reached`:`${fmtXp(li.xp)} / ${fmtXp(li.next.xp)} EXP · Next: ${li.next.icon} ${li.next.name}`;
+    const levelXp=$('#levelPageXp'); if(levelXp) paintLevelProgress(li);
     renderTopProfile();
     if($('#rewardsView')?.classList.contains('active')){
       const chip=$('#redeemGrid .chip.orange'); if(chip) chip.textContent='HK$'+bal+' available';
@@ -1043,7 +1043,7 @@
   }
   function openLazyModal(title,items,itemFn){
     const to=todayKey(); const from=trackerStart();
-    openModal(title,`<div class="log-filter-grid"><div class="field"><label>From</label><input type="date" id="lfFrom" value="${from}"></div><div class="field"><label>To</label><input type="date" id="lfTo" value="${to}"></div><button class="btn-inline pink" id="lfApply">Apply</button></div><div class="filtered-list" id="lfList" style="margin-top:12px"></div><button class="btn-secondary load-more-btn" id="lfMore" style="display:none">Load more</button>`);
+    openModal(title,`<div class="log-filter-grid"><div class="field"><label>From</label><input type="date" id="lfFrom" value="${from}"></div><div class="field"><label>To</label><input type="date" id="lfTo" value="${to}"></div></div><div class="filtered-list" id="lfList" style="margin-top:12px"></div><button class="btn-secondary load-more-btn" id="lfMore" style="display:none">Load more</button>`);
     let filtered=[], shown=0;
     const draw=(reset=true)=>{
       const f=$('#lfFrom').value||from,t=$('#lfTo').value||to; const box=$('#lfList');
@@ -1055,7 +1055,10 @@
       const moreBtn=$('#lfMore');
       if(moreBtn) moreBtn.style.display=shown<filtered.length?'block':'none';
     };
-    $('#lfApply').onclick=()=>draw(true);
+    $('#lfFrom').addEventListener('change',()=>draw(true));
+    $('#lfTo').addEventListener('change',()=>draw(true));
+    $('#lfFrom').addEventListener('input',()=>draw(true));
+    $('#lfTo').addEventListener('input',()=>draw(true));
     $('#lfMore').onclick=()=>draw(false);
     draw(true);
   }
@@ -1683,15 +1686,30 @@
     const current=earned>0 && remainder===0 ? target : remainder;
     return {current,target,pct:target?Math.min(100,Math.round(current/target*100)):0};
   }
+  function isMaxTier(li){return !li||!li.next||li.next.level===li.cur.level;}
+  function paintLevelProgress(li){
+    const max=isMaxTier(li);
+    const pct=max?100:(li.pct||0);
+    const pill=$('#profileQuick');
+    if(pill) pill.classList.toggle('is-max',max);
+    const topLevel=$('#topLevel'); if(topLevel) topLevel.textContent='Lv '+li.cur.level;
+    const fill=$('#topLevelFill'); if(fill) fill.style.width=pct+'%';
+    const xpEl=$('#topLevelXp'); if(xpEl) xpEl.textContent=pct+'%';
+    const barWrap=$('#topLevelBarWrap'); if(barWrap) barWrap.hidden=max;
+    const nailed=$('#topLevelNailed'); if(nailed) nailed.hidden=!max;
+    const pageBar=$('#levelPageBar'); if(pageBar) pageBar.hidden=max;
+    const pageFill=$('#levelPageFill'); if(pageFill) pageFill.style.width=pct+'%';
+    const pageXp=$('#levelPageXp');
+    if(pageXp){
+      pageXp.textContent=max?"You've nailed it!":(pct+'%');
+      pageXp.classList.toggle('is-max',max);
+    }
+  }
   function renderTopProfile(){
     const li=levelInfo();
     const avatarEls=['#topProfileAvatar','#levelProfileAvatar','#settingsProfileAvatar'];
     avatarEls.forEach(sel=>{const el=$(sel); if(!el)return; el.style.backgroundImage=''; el.textContent=li.cur.icon||'🌱';});
-    const topLevel=$('#topLevel'); if(topLevel) topLevel.textContent='Lv '+li.cur.level;
-    const topName=$('#topIdentityName'); if(topName) topName.textContent=li.cur.name||'';
-    const fill=$('#topLevelFill'); if(fill) fill.style.width=li.pct+'%';
-    const pctEl=$('#topLevelPct'); if(pctEl) pctEl.textContent=li.pct+'%';
-    const xpEl=$('#topLevelXp'); if(xpEl) xpEl.textContent=fmtXp(li.xp)+' EXP';
+    paintLevelProgress(li);
   }
   function renderAccentRow(){
     const row=$('#accentColorRow'); if(!row) return;
@@ -1710,8 +1728,8 @@
   }
   function renderLevel(){
     ensureRewardShape(); const li=levelInfo(); renderTopProfile();
-    $('#levelPageValue').textContent='Lv '+li.cur.level; $('#levelPageIdentity').textContent=(li.cur.icon||'🌱')+' '+li.cur.name; $('#levelPageFill').style.width=li.pct+'%';
-    $('#levelPageXp').textContent=li.next.level===li.cur.level?`${fmtXp(li.xp)} EXP · Max tier reached`:`${fmtXp(li.xp)} / ${fmtXp(li.next.xp)} EXP · Next: ${li.next.icon} ${li.next.name}`;
+    $('#levelPageValue').textContent='Lv '+li.cur.level; $('#levelPageIdentity').textContent=(li.cur.icon||'🌱')+' '+li.cur.name;
+    paintLevelProgress(li);
     $('#identityPath').innerHTML=identities.map(x=>{const unlocked=li.xp>=x.xp; return `<div class="tier-card ${x.level===li.cur.level?'current':''} ${unlocked?'':'locked'}"><div class="tier-icon">${x.icon}</div><div><div class="tier-name">Lv ${x.level} · ${x.name}</div><div class="tier-sub">${fmtXp(x.xp)} EXP · ${x.desc}</div></div><span class="chip ${unlocked?'green':'gray'}">${unlocked?'Unlocked':'Locked'}</span></div>`;}).join('');
     const xpItems=[]; const seen=new Set();
     state.records.filter(r=>afterStart(r.date)).forEach(r=>{const h=state.habits.find(x=>x.id===r.habitId)||{}; if(!h.id)return; const key=habitXpKey(h,parseDate(r.date)); if(seen.has(key))return; seen.add(key); xpItems.push({date:r.date,at:r.at,desc:`${h.emoji||'✓'} ${h.name||'Habit'} completed`,xp:habitPeriodXp(h,parseDate(r.date))});});

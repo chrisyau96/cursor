@@ -108,16 +108,19 @@ h1,h2,h3,h4{margin:0}
 .top-greeting{min-width:0;flex:1}
 .top-greeting h1{font-size:20px;font-weight:800;letter-spacing:-.02em;line-height:1.15;margin:0;max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .top-greeting-sub{font-size:11px;color:var(--muted);font-weight:600;margin-top:2px;display:block}
-.profile-pill{display:flex;align-items:center;gap:8px;min-width:0;flex:0 1 auto;max-width:min(210px,58vw);text-align:left;padding:6px 10px 6px 6px;border-radius:20px;background:var(--card);border:1px solid var(--line);box-shadow:var(--shadow-sm)}
+.profile-pill{display:flex;align-items:center;gap:8px;min-width:0;flex:0 1 auto;max-width:min(168px,46vw);text-align:left;padding:6px 10px 6px 6px;border-radius:20px;background:var(--card);border:1px solid var(--line);box-shadow:var(--shadow-sm)}
+.profile-pill.is-max{max-width:min(220px,58vw)}
 .profile-pill:active{transform:scale(.99)}
 .profile-avatar{width:36px;height:36px;border-radius:50%;display:grid;place-items:center;flex:0 0 auto;background:linear-gradient(135deg,var(--brand-soft),color-mix(in srgb,var(--brand) 18%,#fff));border:2px solid #fff;box-shadow:0 8px 18px color-mix(in srgb,var(--brand) 22%,transparent);font-size:22px;overflow:hidden;background-size:cover;background-position:center}
 .profile-meta{min-width:0;flex:1}
-.profile-title{font-size:12px;font-weight:800;line-height:1.15;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;display:flex;gap:5px;align-items:baseline}
-.profile-identity{font-size:10px;font-weight:700;color:var(--muted);overflow:hidden;text-overflow:ellipsis}
+.profile-title{font-size:12px;font-weight:800;line-height:1.15;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .profile-sub{font-size:11px;font-weight:700;color:var(--muted);margin-top:4px;display:flex;gap:6px;align-items:center;width:100%}
 .level-bar-wrap{display:flex;align-items:center;gap:6px;width:100%;min-width:0}
+.level-bar-wrap[hidden]{display:none}
 .level-bar{flex:1;min-width:0;height:7px;background:var(--line);border-radius:999px;overflow:hidden}
 .level-pct{flex:0 0 auto;font-size:10px;font-weight:800;color:var(--muted);letter-spacing:-.02em}
+.level-nailed{font-size:10px;font-weight:800;color:var(--brand-text);line-height:1.2}
+.level-nailed[hidden]{display:none}
 .level-fill{height:100%;width:0;background:linear-gradient(90deg,var(--brand),var(--brand2))}
 .top-actions{display:flex;align-items:center;gap:8px;flex:0 0 auto}
 .top-icon{width:42px;height:42px;border-radius:50%;background:var(--card);border:1px solid var(--line);box-shadow:var(--shadow-sm);display:grid;place-items:center;font-size:19px;position:relative}
@@ -425,7 +428,7 @@ button,.nav-item,.switch,.wcell,.check-btn,.icon-btn,.act-btn,.btn-primary,.btn-
 .sheet-text{font-size:13px;color:var(--ink);line-height:1.5}
 .sheet-text h4{margin:14px 0 6px}.sheet-text ol,.sheet-text ul{padding-left:20px;margin:8px 0}.sheet-text li{margin:6px 0}
 .sheet-text code{background:#f1f3f9;border-radius:8px;padding:2px 6px}
-.log-filter-grid{display:grid;grid-template-columns:1fr 1fr auto;gap:8px;align-items:end}
+.log-filter-grid{display:grid;grid-template-columns:1fr 1fr;gap:8px;align-items:end}
 
 /* Bottom nav + FAB — iOS-style */
 .ad-slot{flex:0 0 auto;display:flex;align-items:center;gap:10px;padding:10px 12px;background:color-mix(in srgb,var(--brand-soft) 70%,var(--card));border-top:.5px solid var(--line);min-height:64px}
@@ -522,9 +525,11 @@ body.has-ads{--ad-banner-h:72px}
 .level-value{font-size:26px;font-weight:900;letter-spacing:-.02em;position:relative;z-index:1}
 .level-identity{font-size:15px;font-weight:800;opacity:.95;position:relative;z-index:1}
 .lvl-bar{height:9px;border-radius:999px;background:rgba(255,255,255,.22);overflow:hidden;margin-top:10px;position:relative;z-index:1}
+.lvl-bar[hidden]{display:none}
 .lvl-fill{height:100%;background:#fff;border-radius:999px}
 .lvl-bar-exp{position:absolute;inset:0;display:none}
 .level-xp{font-size:12px;opacity:.9;margin-top:8px;position:relative;z-index:1;white-space:normal;word-break:break-word;line-height:1.4}
+.level-xp.is-max{font-weight:800;opacity:1}
 .tier-card{display:grid;grid-template-columns:38px 1fr auto;gap:10px;align-items:center;padding:12px;border:1px solid var(--line);border-radius:16px;background:var(--wash)}
 .tier-card.locked{opacity:.62}
 .tier-card.current{border-color:color-mix(in srgb,var(--brand) 40%,transparent);background:linear-gradient(90deg,#fff,var(--brand-soft))}
