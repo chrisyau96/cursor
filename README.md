@@ -1,11 +1,11 @@
-# Momentum · Habit Tracker
+# Habit & Journal
 
 A sophisticated, mobile-first **habit tracking web app**. Track habits with flexible
 schedules, journal your mood and energy, review trends across a canvas chart and a
 month/quarter calendar, and stay motivated with an XP **level/identity** ladder plus a
 **credit / gift / penalty** reward system. It runs fully in the browser (no account, no
 server) and installs as a PWA. Optional **Google Drive** backup uploads on the first open
-of the day or week. Desktop can still link a local JSON file.
+of the day or week.
 
 Live: https://chrisyau96.github.io/cursor/
 

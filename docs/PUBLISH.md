@@ -43,7 +43,7 @@ Full walkthrough (accounts, Android Studio, signing, closed testing, production)
 ```bash
 npm install @capacitor/core @capacitor/cli @capacitor/android @capacitor/app @capacitor/filesystem @capacitor/local-notifications
 npm run build:www
-npx cap init "Momentum" "app.momentum.habits" --web-dir www
+npx cap init "Momentum" "com.dincey.habitjournal" --web-dir www
 npx cap add android
 npm run native:apply
 npx cap sync android
@@ -66,7 +66,7 @@ npx cap sync ios
 npx cap open ios
 ```
 
-3. In Xcode: add a **Widget Extension** target, replace it with files from `ios/App/MomentumWidgets`, enable App Group `group.app.momentum.habits` on the app **and** the widget, set the URL scheme `momentum`.
+3. In Xcode: add a **Widget Extension** target, replace it with files from `ios/App/MomentumWidgets`, enable App Group `group.com.dincey.habitjournal` on the app **and** the widget, set the URL scheme `momentum`.
 4. Archive → Distribute to App Store Connect.
 
 ## 3. Store listings (both stores)
@@ -79,22 +79,22 @@ Prepare:
 - Privacy policy URL: `https://chrisyau96.github.io/cursor/privacy.html` (after this ships to GitHub Pages)
 - Icon: 512×512 (`assets/icon-512.png`) plus a 1024×1024 App Store icon
 - Screenshots: phone, 6.7" and 5.5" (iOS) / phone + 7" tablet (Play)
-- Content rating questionnaire (no user-generated public content; no ads)
+- Content rating questionnaire (no user-generated public content; **ads yes**; **IAP yes** — HK$38 lifetime remove-ads)
 - Support URL / email
 
 ## 4. Google Play Console
 
 1. Pay the developer fee and create the app (Free, Productivity).
-2. Complete Data safety: data is stored on device; Drive backup is optional user-initiated cloud backup; no selling of data.
+2. Complete Data safety: on-device data; optional Drive backup; Advertising ID for AdMob; Play Billing for remove-ads; no selling of data.
 3. Upload the `.aab` to Internal testing, then Production.
-4. Countries, ads declaration (no ads).
+4. Countries, ads declaration (**Yes, contains ads**), and one managed product `remove_ads_lifetime` priced **HK$38**.
 
 Review often takes a few days.
 
 ## 5. App Store Connect
 
 1. Enroll in the Apple Developer Program.
-2. Create the app record (bundle id `app.momentum.habits`).
+2. Create the app record (bundle id `com.dincey.habitjournal`).
 3. Fill Privacy Nutrition Labels to match `privacy.html`.
 4. Upload the archive via Xcode, submit for review with the TestFlight build.
 

@@ -3,7 +3,7 @@ import SwiftUI
 import AppIntents
 
 enum WidgetStore {
-  static let suite = "group.app.momentum.habits"
+  static let suite = "group.com.dincey.habitjournal"
 
   static func snapshot() -> [String: Any] {
     let defaults = UserDefaults(suiteName: suite)
@@ -80,22 +80,32 @@ struct MomentumWidgetView: View {
   var body: some View {
     switch mode {
     case "streak":
-      stat(kicker: "Streak", big: String(((entry.snap["streak"] as? [String: Any])?["current"] as? Int) ?? 0), sub: "100% days")
+      VStack(spacing: 4) {
+        Text("🔥").font(.title)
+        Text(String(((entry.snap["streak"] as? [String: Any])?["current"] as? Int) ?? 0)).font(.title.bold())
+        Text("Best \( ((entry.snap["streak"] as? [String: Any])?["best"] as? Int) ?? 0 )").font(.caption).foregroundStyle(.secondary)
+      }.frame(maxWidth: .infinity, maxHeight: .infinity)
     case "credits":
-      stat(kicker: "Credits", big: "HK$\((entry.snap["credits"] as? Int) ?? 0)", sub: "Available")
+      stat(kicker: "✦", big: "HK$\((entry.snap["credits"] as? Int) ?? 0)", sub: "available")
     case "gift":
       if let gift = entry.snap["gift"] as? [String: Any] {
-        stat(kicker: "\((gift["icon"] as? String) ?? "🎁") \((gift["label"] as? String) ?? "Gift")",
-             big: "\((gift["current"] as? Int) ?? 0)/\((gift["target"] as? Int) ?? 0)",
-             sub: "Next gift")
-      } else { stat(kicker: "Gift", big: "—", sub: "No gift goal") }
+        VStack(spacing: 4) {
+          Text((gift["icon"] as? String) ?? "🎁").font(.largeTitle)
+          Text((gift["label"] as? String) ?? "Gift").font(.caption.weight(.bold))
+          Text("\((gift["current"] as? Int) ?? 0)/\((gift["target"] as? Int) ?? 0)").font(.caption).foregroundStyle(.secondary)
+        }.frame(maxWidth: .infinity, maxHeight: .infinity)
+      } else { stat(kicker: "🎁", big: "—", sub: "No gift goal") }
     case "journal":
-      let done = ((entry.snap["journal"] as? [String: Any])?["done"] as? Bool) ?? false
       Button(intent: JournalIntent()) {
-        stat(kicker: "Journal", big: done ? "✓" : "✎", sub: done ? "Logged today" : "Tap to log")
+        VStack(spacing: 8) {
+          Text("+").font(.title.bold())
+          Text("+ journal").font(.caption.weight(.bold))
+        }
       }.buttonStyle(.plain)
+    case "habit":
+      list(items: Array(((entry.snap["habits"] as? [[String: Any]]) ?? []).prefix(1)), due: false)
     case "habits":
-      list(items: (entry.snap["habits"] as? [[String: Any]]) ?? [], due: true)
+      list(items: (entry.snap["habits"] as? [[String: Any]]) ?? [], due: false)
     default:
       list(items: (entry.snap["outstanding"] as? [[String: Any]]) ?? [], due: false)
     }
@@ -111,26 +121,19 @@ struct MomentumWidgetView: View {
 
   func list(items: [[String: Any]], due: Bool) -> some View {
     VStack(alignment: .leading, spacing: 6) {
-      Text(due ? "Habits due" : "Today").font(.caption.weight(.bold)).foregroundStyle(Color(red: 0.31, green: 0.27, blue: 0.9))
-      ForEach(Array(items.prefix(6).enumerated()), id: \.offset) { _, h in
+      Text(due ? "Habits 1–8" : "Today").font(.caption.weight(.bold))
+      ForEach(Array(items.prefix(8).enumerated()), id: \.offset) { _, h in
         HStack {
-          Text("\((h["emoji"] as? String) ?? "") \((h["name"] as? String) ?? "")").font(.caption)
+          let flex = (h["flex"] as? Bool) ?? false
+          Text("\((h["emoji"] as? String) ?? "") \((h["name"] as? String) ?? "")\(flex ? " · Any" : "")").font(.caption)
           Spacer()
-          if due {
-            Text((h["dueLabel"] as? String) ?? "").font(.caption2).foregroundStyle(.secondary)
-          } else {
-            Text("\((h["count"] as? Int) ?? 0)/\((h["target"] as? Int) ?? 1)").font(.caption2)
-            if !((h["done"] as? Bool) ?? false) {
-              Button(intent: CompleteHabitIntent(habitId: (h["id"] as? String) ?? "", date: (h["date"] as? String) ?? "")) {
-                Text("+1").font(.caption.bold())
-              }.buttonStyle(.plain)
-            }
-            if ((h["count"] as? Int) ?? 0) > 0 {
-              Button(intent: ResetHabitIntent(habitId: (h["id"] as? String) ?? "", date: (h["date"] as? String) ?? "")) {
-                Text("↺").font(.caption)
-              }.buttonStyle(.plain)
-            }
-          }
+          Text("\((h["count"] as? Int) ?? 0)/\((h["target"] as? Int) ?? 1)").font(.caption2).foregroundStyle(.secondary)
+          Button(intent: CompleteHabitIntent(habitId: (h["id"] as? String) ?? "", date: (h["date"] as? String) ?? "")) {
+            Text("+").font(.caption.bold())
+          }.buttonStyle(.plain)
+          Button(intent: ResetHabitIntent(habitId: (h["id"] as? String) ?? "", date: (h["date"] as? String) ?? "")) {
+            Text("↺").font(.caption)
+          }.buttonStyle(.plain)
         }
       }
       if items.isEmpty { Text("Nothing outstanding").font(.caption).foregroundStyle(.secondary) }
@@ -145,8 +148,8 @@ struct MomentumWidget: Widget {
       MomentumWidgetView(entry: entry)
         .containerBackground(.fill.tertiary, for: .widget)
     }
-    .configurationDisplayName("Momentum")
-    .description("Today tasks, selected habits, streak, credits, gift, or journal.")
+    .configurationDisplayName("Habit & Journal")
+    .description("Today, Habit, Habits 1–8, streak, credits, gift, or + journal.")
     .supportedFamilies([.systemSmall, .systemMedium, .systemLarge])
   }
 }

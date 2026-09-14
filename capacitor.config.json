@@ -1,13 +1,20 @@
 {
-  "appId": "app.momentum.habits",
-  "appName": "Momentum",
+  "appId": "com.dincey.habitjournal",
+  "appName": "Habit & Journal",
   "webDir": "www",
   "bundledWebRuntime": false,
   "plugins": {
     "LocalNotifications": {
       "smallIcon": "ic_stat_momentum",
-      "iconColor": "#4f46e5",
-      "sound": "beep.wav"
+      "iconColor": "#4f46e5"
+    },
+    "SocialLogin": {
+      "providers": {
+        "google": true,
+        "facebook": false,
+        "apple": false,
+        "twitter": false
+      }
     }
   },
   "android": {
