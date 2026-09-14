@@ -664,7 +664,13 @@ await test('Greeting uses device time of day', async () => {
   const h = new Date().getHours();
   const expect = h < 12 ? 'Good morning' : h < 18 ? 'Good afternoon' : 'Good evening';
   assert(greet === expect, `greeting should be ${expect}, got ${greet}`);
-  assert(await page.locator('#profileQuick').count() === 1, 'identity EXP chip should be on the home header');
+  assert(await page.locator('#profileQuick').count() === 1, 'level chip should be on the home header');
+  const chipText = await page.locator('#profileQuick').textContent();
+  assert(!/Seed Planter/.test(chipText || ''), 'header chip should not show the identity name');
+  assert(await page.locator('#topIdentityName').count() === 0, 'identity name should stay off the header chip');
+  const topPct = await page.locator('#topLevelXp').textContent();
+  assert(/%/.test(topPct || ''), `header chip should show % into the next tier, got ${topPct}`);
+  assert(!(await page.locator('#topLevelXp').textContent())?.includes('EXP'), 'header chip should not show EXP');
   await page.click('#profileQuick');
   await page.waitForTimeout(300);
   assert(await page.locator('#levelView').evaluate((el) => el.classList.contains('active')), 'identity chip should open the ladder');
@@ -721,11 +727,21 @@ await test('Credit rules award credits only, not completion EXP', async () => {
   assert(/View all reward history/.test(ledgerBtn || ''), 'ledger should only offer view-all history');
   await page.click('#ledgerList .view-all-btn');
   await page.waitForTimeout(300);
+  assert(await page.locator('#lfApply').count() === 0, 'date filters should apply without an Apply button');
   const ledger = await page.locator('#lfList').textContent();
   assert(ledger?.includes('50% daily completion'), '50% credit rule should appear in ledger');
   assert(ledger?.includes('100% daily completion'), '100% credit rule should appear in ledger');
   assert(!ledger?.includes('12 EXP'), '50% credit rule must not grant EXP');
   assert(!ledger?.includes('30 EXP'), '100% credit rule must not grant EXP');
+  await page.evaluate(() => {
+    const el = document.querySelector('#lfFrom');
+    el.value = '2099-01-01';
+    el.dispatchEvent(new Event('input', { bubbles: true }));
+    el.dispatchEvent(new Event('change', { bubbles: true }));
+  });
+  await page.waitForTimeout(200);
+  const filtered = await page.locator('#lfList').textContent();
+  assert(/No records in this period/.test(filtered || ''), `changing From should filter immediately, got ${filtered}`);
   await page.click('#modalClose');
   await page.waitForTimeout(200);
 });
@@ -802,7 +818,41 @@ await test('Daily habit EXP awarded after yesterday completion', async () => {
   await page.click('#openLevelBtn');
   await page.waitForTimeout(300);
   const xpText = await page.locator('#levelPageXp').textContent();
-  assert(xpText?.includes('10 /'), `two daily completions should total 10 EXP, got ${xpText}`);
+  assert(xpText?.trim() === '4%', `two daily completions should show 4% into the next tier, got ${xpText}`);
+  assert(!(xpText || '').includes('EXP'), 'level page progress should not show EXP');
+  const chipPct = await page.locator('#topLevelXp').textContent();
+  assert(chipPct?.trim() === '4%', `header chip should match level % , got ${chipPct}`);
+  assert(await page.locator('#topLevelNailed').isHidden(), 'nailed copy should stay hidden before the last tier');
+});
+
+await test('Max identity replaces the EXP bar with nailed copy', async () => {
+  const today = hkDateKey();
+  await page.evaluate((today) => {
+    const s = JSON.parse(localStorage.getItem('habitTrackerProductionV7') || '{}');
+    s.habits = s.habits || [];
+    s.records = s.records || [];
+    s.journals = s.journals || {};
+    s.redemptions = [{ id: 'max-xp', date: today, type: 'bonus', desc: 'max', credit: 0, xp: 14000 }];
+    s.settings = s.settings || {};
+    s.settings.onboardingComplete = true;
+    s.settings.startDate = s.settings.startDate || today;
+    s.settings.rewards = Object.assign({}, s.settings.rewards, { penaltyXp: 0, penaltyCredit: 0, penaltyZeroDays: 0 });
+    localStorage.setItem('habitTrackerProductionV7', JSON.stringify(s));
+  }, today);
+  await page.reload({ waitUntil: 'domcontentloaded' });
+  await page.waitForTimeout(600);
+  await page.click('.nav-item[data-view="homeView"]');
+  await page.waitForTimeout(200);
+  assert(await page.locator('#topLevelNailed').isVisible(), 'header should show You\'ve nailed it!');
+  assert(await page.locator('#topLevelBarWrap').isHidden(), 'header bar should hide at max tier');
+  const chip = await page.locator('#profileQuick').textContent();
+  assert(/You've nailed it!/.test(chip || ''), `header chip should replace the bar, got ${chip}`);
+  assert(!/Seed Planter/.test(chip || ''), 'max chip should still omit the identity name');
+  await page.click('#profileQuick');
+  await page.waitForTimeout(300);
+  const pageXp = await page.locator('#levelPageXp').textContent();
+  assert(pageXp?.includes("You've nailed it!"), `level page should replace EXP, got ${pageXp}`);
+  assert(await page.locator('#levelPageBar').isHidden(), 'level page bar should hide at max tier');
 });
 
 await test('Reward rule edits show save bar until saved', async () => {
@@ -1154,6 +1204,13 @@ await test('Widgets include sample images and a 1–8 habit picker', async () =>
   assert(/Today/.test(copy) && /Habit/.test(copy) && /Habits 1-8/.test(copy) && /Streak/.test(copy) && /Journal/.test(copy), 'OS widget names should be listed');
   assert(/Not specific/.test(copy), 'picker should mention Not specific habits');
   assert(await page.locator('#widgetHabitPicker').count() === 1, 'habit picker missing');
+  const captions = await page.locator('#widgetPreviewGrid figcaption').allTextContents();
+  const joined = captions.join(' | ');
+  assert(captions.some((c) => /Today · 4×2/.test(c)), `Today should list 4×2 cells, got ${joined}`);
+  assert(captions.some((c) => /Habit · 2×1/.test(c)), `Habit should list 2×1 cells, got ${joined}`);
+  assert(captions.some((c) => /Habits 1-8 · 4×2/.test(c)), `Habits 1-8 should list 4×2 cells, got ${joined}`);
+  assert(captions.some((c) => /Streak · 2×2/.test(c)), `Streak should list 2×2 cells, got ${joined}`);
+  assert(/drag a corner to resize/i.test(copy), 'widget copy should explain drag-resize');
   const habitImg = await page.locator('#widgetPreviewGrid img[src*="habit.svg"]').count();
   assert(habitImg === 1, 'single-habit sample missing');
 });

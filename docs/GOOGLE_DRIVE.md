@@ -2,6 +2,19 @@
 
 Habit & Journal stores a JSON backup as a **visible file** in your Google Drive (`Habit-Journal-backup.json`), using the Drive `drive.file` scope. Daily or weekly first-open uploads happen automatically after Connect.
 
+## What Connect Google Drive does
+
+Yes: **Connect Google Drive** is the Google sign-in / consent popup.
+
+1. You tap **Connect Google Drive** in Settings.
+2. Google shows an account picker, then asks you to allow **Habit & Journal**.
+3. The app only requests `drive.file` (plus basic profile/email). That lets it create and update **files it created** — not the rest of your Drive.
+4. After you allow it, the app creates `Habit-Journal-backup.json` in **your** My Drive if needed, then **Backup now** and Daily/Weekly auto-sync can update that same file.
+
+You do **not** need to switch the OAuth app to **Production** for this. **External + Testing** plus your Gmails as test users is enough for you and a few testers.
+
+---
+
 On the **Play app**, Connect opens the Google account picker. The app creates the backup file if it does not exist, then keeps updating that same file.
 
 On the **website**, Drive is optional. Use the Play app to connect if the website cannot open Google sign-in.
@@ -10,9 +23,13 @@ You already have a Google Cloud project named **Habit App**, signed in as **info
 
 ---
 
-## A. Branding (the screen you are on now)
+## A. Branding (required before test users / any “production” switch)
 
-You are in **Google Auth Platform → Overview / Create branding → Project configuration**.
+Google now blocks Audience changes until Branding has **all four**: app name, support email, homepage URL, and privacy policy URL.
+
+The error *Valid app name, support email, homepage URL and privacy policy URL are required for switching the app to external production mode* means those URL fields are still empty — **or** you tapped **Publish** / Production. Fill Branding, save, then **stay in Testing**.
+
+Open **Google Auth Platform → Branding** (sometimes labelled Overview → Project configuration).
 
 ### 1. App Information
 
@@ -20,32 +37,36 @@ You are in **Google Auth Platform → Overview / Create branding → Project con
 |---|---|
 | **App name** | `Habit & Journal` |
 | **User support email** | `info@dincey.com` (pick it from the dropdown) |
+| **App logo** | optional — skip, or upload `assets/icon-512.png` |
 
-The red *Application name must not be empty* error goes away after you type the app name.
+### 2. App domain / links (this is the missing piece)
 
-Tap **Next**.
+| Field | Enter |
+|---|---|
+| **Application home page** | `https://chrisyau96.github.io/cursor/` |
+| **Privacy policy URL** | `https://chrisyau96.github.io/cursor/privacy.html` |
+| **Terms of service URL** | leave blank |
 
-If Google later asks for an app logo, skip it for now. You can add `assets/icon-512.png` later.
+Save. If Google asks you to add an **Authorized domain**, it will try `github.io`.
 
-### 2. Audience
+`github.io` is a shared domain. Google often **rejects** it when you try to **Publish** the OAuth app to Production. That is expected. **Testing does not need a published OAuth app.**
 
-Choose **External**.
+If Branding refuses `github.io` even for save:
 
-This app is personal / small-audience. External + Testing is the correct type. Do **not** pick Internal (that is only for Google Workspace orgs).
+- Keep the privacy policy URL anyway if the field accepts it.
+- Do **not** Publish.
+- Stay on **Audience → External → Testing** and add test users.
+- Optional later: host the homepage + privacy page on a domain you own (for example `dincey.com`) and use those URLs if you ever want Google verification.
 
-Tap **Next**.
+### 3. Audience (while creating branding)
 
-### 3. Contact Information
+If you are still on the first-time wizard:
 
-Developer contact email: **info@dincey.com**
+- Choose **External**.
+- Developer contact: **info@dincey.com**
+- Finish with **Create** / **Save**.
 
-Tap **Next**.
-
-### 4. Finish
-
-Read the confirmation, then tap **Create** (not Cancel).
-
-If Google shows **Finish** instead of Create, tap that, then save.
+Do **not** click **Publish app** on the Audience page. Publishing is what triggers the production-mode error. Testing is the correct state for personal Drive backup.
 
 ---
 
@@ -63,22 +84,19 @@ If Google shows **Finish** instead of Create, tap that, then save.
 
 `drive.file` only lets the app see files **it created**. That is the Habit-Journal backup file. Do not add full Drive access.
 
-If there is a **Privacy policy** field anywhere in Branding / Settings, use:
-
-`https://chrisyau96.github.io/cursor/privacy.html`
-
 ---
 
 ## C. Test users (required while the app is in Testing)
 
 1. Left sidebar → **Audience**.
-2. Under **Test users**, add every Gmail that will tap Connect, including:
+2. Publishing status should stay **Testing**. Ignore **Publish app**.
+3. Under **Test users**, add every Gmail that will tap Connect, including:
    - `info@dincey.com`
    - `waifaat@gmail.com`
    - any other tester Gmail
-3. Save.
+4. Save.
 
-Until Google verification (not needed for Testing), only these accounts can Connect.
+Until Google verification (not needed for Testing), only these accounts can Connect. Other accounts see *Access blocked: this app’s request is invalid* or *The app is currently being tested*.
 
 ---
 
@@ -143,9 +161,25 @@ Settings → Google Drive backup:
 1. Paste the **Web** client ID into **Google Web client ID** if the field is shown.
 2. Choose **Daily**, **Weekly**, or **Off**.
 3. Tap **Connect Google Drive** and pick a Google account that is a test user.
-4. The app creates `Habit-Journal-backup.json` in My Drive if needed.
-5. **Backup now** / **Restore** stay available after connect.
+4. Google’s consent screen appears. Allow Habit & Journal to create files in Drive.
+5. The app creates `Habit-Journal-backup.json` in My Drive if needed.
+6. **Backup now** / **Restore** stay available after connect. Daily/Weekly runs on the next first-open of that period.
 
 Tokens stay on the device. Disconnect removes the local token. You can also revoke Habit & Journal in Google Account → Security → Third-party access.
+
+---
+
+## After Branding: the rest of the path
+
+Do these in order. Stop after step 6 unless you later want Google verification (not required for testers).
+
+1. **Branding** — app name, support email, homepage, privacy URL → Save.
+2. **Audience** — External, **Testing**, add test users → Save. Do not Publish.
+3. **Data access** — `openid`, `userinfo.email`, `userinfo.profile`, `drive.file`.
+4. **Drive API** enabled on project **Habit App**.
+5. **Clients** — Web application (paste this ID in the app) + Android (package + SHA-1 only).
+6. In the app: paste Web client ID → **Connect Google Drive** → pick a test-user Gmail → allow → **Backup now**.
+
+`drive.file` is a sensitive scope. Publishing to Production usually starts a Google verification review. Skip that until you have a domain you own and a reason for strangers (not test users) to Connect.
 
 See `docs/PLAY_STORE.md` for SHA-1 notes on Play App Signing.
