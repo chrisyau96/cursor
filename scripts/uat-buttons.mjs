@@ -926,7 +926,7 @@ await test('Settings expose Google Drive backup, reminders, and widgets', async 
   assert(await page.locator('#widgetModeTabs').count() === 0, 'in-app widget tabs should be gone');
   const widgetNote = await page.locator('#settingsView').locator('text=long-press the home screen').count();
   assert(widgetNote >= 1, 'OS widget instructions should be visible');
-  assert(await page.locator('#widgetPreviewGrid img').count() === 6, 'six widget sample images');
+  assert(await page.locator('#widgetPreviewGrid img').count() === 7, 'seven widget sample images');
   assert(await page.locator('#widgetHabitPicker').count() === 1, 'habit widget picker missing');
   assert(await page.locator('#testReminderBtn').count() === 1, 'test reminder button missing');
   const note = await page.locator('#reminderRuntimeNote').textContent();
@@ -1059,7 +1059,7 @@ await test('Home week strip starts on Monday by default', async () => {
 
 await test('Energy score uses clickable pills', async () => {
   await page.click('.nav-item[data-view="homeView"]');
-  await page.waitForSelector('#homeEnergy');
+  await page.waitForSelector('.energy-pill');
   const before = await page.locator('#homeEnergyValue').textContent();
   await page.locator('.energy-pill[data-tick="7"]').click();
   await page.waitForTimeout(150);
