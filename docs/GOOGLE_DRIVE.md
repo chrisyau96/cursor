@@ -167,7 +167,7 @@ you are on an older `.aab`. Pull the latest branch, rebuild the signed bundle, a
 
 If Connect shows **Google Sign-In failed [16] Account reauth failed**:
 
-1. You must be on **v62.3** / Play version **62.0.3** (that build avoids the broken Sign-in-with-Google button).
+1. You must be on **v62.4** / Play version **62.0.4** (that build requests Drive via AuthorizationClient and skips Credential Manager, which is what throws `[16]`).
 2. Play Console → Test and release → Setup → **App signing** → copy **App signing key certificate SHA-1**.
 3. Google Cloud → Clients → your **Android** client (`com.dincey.habitjournal`) → add that SHA-1 (and the upload-keystore SHA-1).
 4. Wait a few minutes, uninstall the app, install from the opt-in link, Connect again.

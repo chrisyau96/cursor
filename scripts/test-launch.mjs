@@ -196,6 +196,21 @@ assert(Launch.parseAppUrl('momentum://widget/open').type === 'open', 'open widge
 assert(Launch.parseAppUrl('https://example.com/?widgetAction=complete&habitId=h9&date=2026-08-31').date === '2026-08-31', 'web query keeps date');
 assert(Launch.parseAppUrl('ftp://nope') === null, 'bad protocol ignored');
 
+assert(Launch.googleErrorHint({ message: 'clientId is null or empty' }).includes('Web client ID'), 'missing client id hint');
+assert(Launch.googleErrorHint({ message: 'Google Sign-In failed: [16] Account reauth failed' }).includes('v62.4'), 'error 16 points at v62.4');
+assert(Launch.googleErrorHint({ message: 'DEVELOPER_ERROR: [10]' }).includes('SHA-1'), 'developer error points at SHA-1');
+assert(Launch.googleErrorHint({ message: 'Google sign-in cancelled' }).includes('cancelled'), 'cancel is not SHA-1');
+assert(Launch.googleErrorHint({ errorMessage: 'clientId is null or empty' }).includes('Web client ID'), 'errorMessage is read');
+
+const launchSrc = readFileSync(path.join(root, '../assets/js/launch.js'), 'utf8');
+assert(/DriveAuth\?\.authorize/.test(launchSrc), 'native Connect prefers DriveAuth');
+assert(launchSrc.indexOf('driveAuthPluginToken') < launchSrc.indexOf('const social = await ensureSocialGoogle'), 'DriveAuth runs before SocialLogin');
+const main = readFileSync(path.join(root, '../android/app/src/main/java/com/dincey/habitjournal/MainActivity.java'), 'utf8');
+assert(main.includes('registerPlugin(DriveAuthPlugin.class)'), 'MainActivity registers DriveAuth');
+assert(main.includes('DriveAuthPlugin.REQUEST_AUTHORIZE'), 'MainActivity forwards DriveAuth result');
+const gradle = readFileSync(path.join(root, '../android/app/build.gradle'), 'utf8');
+assert(/versionCode 11/.test(gradle) && /62\.0\.4/.test(gradle), 'Play versionCode 11 / 62.0.4');
+
 const delay = Launch.nextWebTimerDelay([{ at: Date.parse('2026-08-31T22:00:00') }], Date.parse('2026-08-31T10:00:00'));
 assert(delay && delay.delay > 0, 'web timer finds next slot');
 assert(Launch.nextWebTimerDelay([], Date.now()) === null, 'no slots means no timer');

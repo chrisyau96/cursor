@@ -6,6 +6,20 @@
   Launch.DRIVE_FILE_NAME = 'Habit-Journal-backup.json';
   Launch.DRIVE_SCOPE = 'https://www.googleapis.com/auth/drive.file';
   Launch.TOKEN_KEY = 'momentumDriveToken';
+  Launch.googleErrorHint = function (err) {
+    const msg = String(err?.message || err?.errorMessage || err || '');
+    if (/clientId is null or empty|webClientId|not configured/i.test(msg)) {
+      return 'Paste the Google Web client ID in Settings → Google Drive, then tap Connect.';
+    }
+    if (/cancel/i.test(msg)) return msg || 'Google sign-in cancelled';
+    if (/\[10\]|DEVELOPER_ERROR|not set up correctly|current app identifier/i.test(msg)) {
+      return 'Google Drive auth failed. Add Play Console → App signing → SHA-1 to the Android OAuth client (package com.dincey.habitjournal). Do not paste the Android client ID.';
+    }
+    if (/\[16\]|account reauth failed/i.test(msg)) {
+      return 'Google Sign-In failed. Install v62.4 from Internal testing, then Connect again. If it still fails, add Play Console App signing SHA-1 to the Android OAuth client. Do not paste the Android client ID.';
+    }
+    return msg || 'Google sign-in failed';
+  };
   Launch.PENDING_KEY = 'momentumWidgetPending';
   Launch.SNAPSHOT_KEY = 'momentumWidgetSnapshot';
   Launch.REMINDER_FIRED_KEY = 'momentumReminderFired';

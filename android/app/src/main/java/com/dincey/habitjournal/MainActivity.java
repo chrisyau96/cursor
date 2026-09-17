@@ -15,12 +15,27 @@ public class MainActivity extends BridgeActivity implements ModifiedMainActivity
   @Override
   public void onCreate(Bundle savedInstanceState) {
     registerPlugin(MomentumWidgetsPlugin.class);
+    registerPlugin(DriveAuthPlugin.class);
     super.onCreate(savedInstanceState);
   }
 
   @Override
   public void onActivityResult(int requestCode, int resultCode, Intent data) {
     super.onActivityResult(requestCode, resultCode, data);
+    if (requestCode == DriveAuthPlugin.REQUEST_AUTHORIZE) {
+      PluginHandle pluginHandle = getBridge().getPlugin("DriveAuth");
+      if (pluginHandle == null) {
+        Log.i("DriveAuth", "plugin handle is null");
+        return;
+      }
+      Plugin plugin = pluginHandle.getInstance();
+      if (!(plugin instanceof DriveAuthPlugin)) {
+        Log.i("DriveAuth", "plugin instance is not DriveAuthPlugin");
+        return;
+      }
+      ((DriveAuthPlugin) plugin).handleAuthorizationIntent(requestCode, resultCode, data);
+      return;
+    }
     if (requestCode >= GoogleProvider.REQUEST_AUTHORIZE_GOOGLE_MIN
         && requestCode < GoogleProvider.REQUEST_AUTHORIZE_GOOGLE_MAX) {
       PluginHandle pluginHandle = getBridge().getPlugin("SocialLogin");

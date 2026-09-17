@@ -126,20 +126,34 @@
   }
 
   function googleErrorHint(err) {
-    const msg = String(err?.message || err || '');
-    if (/clientId is null or empty|webClientId|not configured/i.test(msg)) {
-      return 'Paste the Google Web client ID in Settings → Google Drive, then tap Connect.';
-    }
-    if (/\[16\]|account reauth failed/i.test(msg)) {
-      return 'Google Sign-In failed. Add Play Console → App signing → SHA-1 to the Android OAuth client, then Connect again. Do not paste the Android client ID.';
-    }
-    return msg || 'Google sign-in failed';
+    return Core.googleErrorHint(err);
+  }
+
+  async function driveAuthPluginToken(interactive) {
+    const plugin = cap().DriveAuth;
+    if (!plugin?.authorize) return null;
+    const res = await plugin.authorize({
+      webClientId: clientId(),
+      interactive: !!interactive,
+    });
+    return saveNativeToken(res?.accessToken, res?.email || '', Date.now() + 50 * 60 * 1000);
   }
 
   async function nativeGoogleToken(interactive) {
     const cid = clientId();
     if (!cid) {
       throw new Error('Paste the Google Web client ID in Settings → Google Drive, then tap Connect.');
+    }
+    if (cap().DriveAuth?.authorize) {
+      try {
+        const tok = await driveAuthPluginToken(!!interactive);
+        if (tok) return tok;
+      } catch (e) {
+        if (!interactive) return null;
+        throw e;
+      }
+      if (!interactive) return null;
+      throw new Error('Google Drive authorization did not return a token');
     }
     const social = await ensureSocialGoogle();
     if (!social) return null;
@@ -187,16 +201,18 @@
 
   async function accessToken(interactive) {
     if (tokenValid()) return readToken().accessToken;
-    if (isNative() && cap().SocialLogin) {
+    if (isNative() && (cap().DriveAuth || cap().SocialLogin)) {
       try {
         const tok = await nativeGoogleToken(!!interactive);
         if (tok) return tok;
+        if (!interactive) throw new Error('Google Drive needs Connect once');
       } catch (e) {
         if (!interactive) throw new Error('Google Drive needs Connect once');
         const msg = String(e?.message || e || '');
-        if (/clientId is null or empty|webClientId|not configured/i.test(msg)) {
+        if (/clientId is null or empty|webClientId|not configured|Paste the Google Web/i.test(msg)) {
           throw new Error('Paste the Google Web client ID in Settings → Google Drive, then tap Connect.');
         }
+        if (/cancel/i.test(msg)) throw new Error(msg);
         try {
           return await requestToken('consent');
         } catch (webErr) {
