@@ -113,8 +113,9 @@ Until Google verification (not needed for Testing), only these accounts can Conn
 1. Google Auth Platform → **Clients** (or APIs & Services → Credentials).
 2. **Create client** → Application type **Web application**.
 3. Name: `Habit Journal Web`.
-4. **Authorized JavaScript origins** — add all three, no trailing slash:
+4. **Authorized JavaScript origins** — add all of these, no trailing slash:
    - `https://chrisyau96.github.io`
+   - `https://localhost`
    - `http://localhost`
    - `http://127.0.0.1`
 5. Leave **Authorized redirect URIs** empty unless Google marks it required. If it does, add:
@@ -163,6 +164,15 @@ Connect on the phone needs Capgo SocialLogin wired in `MainActivity`. That is al
 > You CANNOT use scopes without modifying the main activity
 
 you are on an older `.aab`. Pull the latest branch, rebuild the signed bundle, and upload Internal testing again. The Web client ID you pasted is fine — this is not a Google Cloud mistake.
+
+If Connect shows **Google Sign-In failed [16] Account reauth failed**:
+
+1. You must be on **v62.3** / Play version **62.0.3** (that build avoids the broken Sign-in-with-Google button).
+2. Play Console → Test and release → Setup → **App signing** → copy **App signing key certificate SHA-1**.
+3. Google Cloud → Clients → your **Android** client (`com.dincey.habitjournal`) → add that SHA-1 (and the upload-keystore SHA-1).
+4. Wait a few minutes, uninstall the app, install from the opt-in link, Connect again.
+
+Do **not** paste the Android client ID into Settings.
 
 ### Connect steps
 

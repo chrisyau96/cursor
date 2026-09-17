@@ -117,6 +117,25 @@
     return tok;
   }
 
+  function parseSocialResult(res) {
+    const result = res?.result || {};
+    const tok = result.accessToken?.token || result.accessToken;
+    const email = result.profile?.email || '';
+    const expires = result.accessToken?.expires ? Date.parse(result.accessToken.expires) : 0;
+    return saveNativeToken(tok, email, expires > Date.now() ? expires : Date.now() + 50 * 60 * 1000);
+  }
+
+  function googleErrorHint(err) {
+    const msg = String(err?.message || err || '');
+    if (/clientId is null or empty|webClientId|not configured/i.test(msg)) {
+      return 'Paste the Google Web client ID in Settings → Google Drive, then tap Connect.';
+    }
+    if (/\[16\]|account reauth failed/i.test(msg)) {
+      return 'Google Sign-In failed. Add Play Console → App signing → SHA-1 to the Android OAuth client, then Connect again. Do not paste the Android client ID.';
+    }
+    return msg || 'Google sign-in failed';
+  }
+
   async function nativeGoogleToken(interactive) {
     const cid = clientId();
     if (!cid) {
@@ -124,7 +143,17 @@
     }
     const social = await ensureSocialGoogle();
     if (!social) return null;
-    const scopes = ['email', 'profile', 'openid', Core.DRIVE_SCOPE, 'https://www.googleapis.com/auth/userinfo.email'];
+    const loginOpts = (style) => ({
+      provider: 'google',
+      options: {
+        scopes: [Core.DRIVE_SCOPE],
+        forceRefreshToken: false,
+        filterByAuthorizedAccounts: false,
+        autoSelectEnabled: !interactive,
+        style,
+        forcePrompt: !!interactive,
+      },
+    });
     if (!interactive) {
       try {
         const logged = await social.isLoggedIn({ provider: 'google' });
@@ -134,22 +163,26 @@
           if (tok) return tok;
         }
       } catch (e) { /* fall through to silent Credential Manager */ }
+      try {
+        return parseSocialResult(await social.login(loginOpts('bottom')));
+      } catch (e) {
+        return null;
+      }
     }
-    const res = await social.login({
-      provider: 'google',
-      options: {
-        scopes,
-        forceRefreshToken: !!interactive,
-        filterByAuthorizedAccounts: false,
-        autoSelectEnabled: !interactive,
-        style: interactive ? 'standard' : 'bottom',
-      },
-    });
-    const result = res?.result || {};
-    const tok = result.accessToken?.token || result.accessToken;
-    const email = result.profile?.email || '';
-    const expires = result.accessToken?.expires ? Date.parse(result.accessToken.expires) : 0;
-    return saveNativeToken(tok, email, expires > Date.now() ? expires : Date.now() + 50 * 60 * 1000);
+    try { await social.logout({ provider: 'google' }); } catch (e) { /* clear stale Google session */ }
+    socialReadyFor = '';
+    await ensureSocialGoogle();
+    let lastErr;
+    for (const style of ['bottom', 'standard']) {
+      try {
+        const tok = parseSocialResult(await social.login(loginOpts(style)));
+        if (tok) return tok;
+      } catch (e) {
+        lastErr = e;
+        try { await social.logout({ provider: 'google' }); } catch (x) { /* ignore */ }
+      }
+    }
+    throw (lastErr instanceof Error ? lastErr : new Error(googleErrorHint(lastErr)));
   }
 
   async function accessToken(interactive) {
@@ -159,15 +192,17 @@
         const tok = await nativeGoogleToken(!!interactive);
         if (tok) return tok;
       } catch (e) {
-        if (interactive) {
-          const msg = String(e?.message || e || '');
-          if (/clientId is null or empty|webClientId|not configured/i.test(msg)) {
-            throw new Error('Paste the Google Web client ID in Settings → Google Drive, then tap Connect.');
-          }
-          throw (e instanceof Error ? e : new Error(msg));
+        if (!interactive) throw new Error('Google Drive needs Connect once');
+        const msg = String(e?.message || e || '');
+        if (/clientId is null or empty|webClientId|not configured/i.test(msg)) {
+          throw new Error('Paste the Google Web client ID in Settings → Google Drive, then tap Connect.');
+        }
+        try {
+          return await requestToken('consent');
+        } catch (webErr) {
+          throw new Error(googleErrorHint(e));
         }
       }
-      if (!interactive) throw new Error('Google Drive needs Connect once');
     }
     if (!clientId()) throw new Error('Paste the Google Web client ID in Settings → Google Drive, then tap Connect.');
     return requestToken(interactive ? 'consent' : '');
