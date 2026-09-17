@@ -169,11 +169,11 @@ If Connect shows **Google Sign-In failed [16] Account reauth failed**:
 
 Play Console can show an old **62.0.x** while Settings flashes **v59** then **v62**. Those are different files. Play reads Android `versionName`. The footer is HTML that a service worker used to cache. **63.0.0** stamps the same version into Play and the footer, and the WebView loads `/?v=63.0.0` so old HTML cannot paint first.
 
-1. You must be on Play **63.0.0**. Settings footer must read **Habit & Journal 63.0.0** — not `v59` or `v62`.
+1. You must be on Play **63.0.1**. Settings footer must read **Habit & Journal 63.0.1**.
 2. Android Studio **Generate Signed Bundle** copies `index.html` + `assets/` and stamps `version.json`.
 3. Play Console → Test and release → Setup → **App signing** → copy **App signing key certificate SHA-1**.
 4. Google Cloud → Clients → your **Android** client (`com.dincey.habitjournal`) → add that SHA-1 (and the upload-keystore SHA-1).
-5. Uninstall the app, install **63.0.0** from the opt-in link, confirm the footer, Connect again.
+5. Uninstall the app, install **63.0.1** from the opt-in link, confirm the footer, Connect again.
 
 Do **not** paste the Android client ID into Settings.
 

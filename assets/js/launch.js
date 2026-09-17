@@ -212,7 +212,6 @@
         if (/clientId is null or empty|webClientId|not configured|Paste the Google Web/i.test(msg)) {
           throw new Error('Paste the Google Web client ID in Settings → Google Drive, then tap Connect.');
         }
-        if (/cancel/i.test(msg)) throw new Error(msg);
         try {
           return await requestToken('consent');
         } catch (webErr) {

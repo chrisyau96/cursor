@@ -1,5 +1,6 @@
 package com.dincey.habitjournal;
 
+import android.app.PendingIntent;
 import android.content.Intent;
 import android.content.SharedPreferences;
 import android.content.pm.PackageInfo;
@@ -7,6 +8,9 @@ import android.os.Bundle;
 import android.util.Log;
 import android.webkit.WebSettings;
 import android.webkit.WebView;
+import androidx.activity.result.ActivityResultLauncher;
+import androidx.activity.result.IntentSenderRequest;
+import androidx.activity.result.contract.ActivityResultContracts;
 import com.getcapacitor.BridgeActivity;
 import com.getcapacitor.Plugin;
 import com.getcapacitor.PluginHandle;
@@ -19,15 +23,28 @@ import java.io.File;
 public class MainActivity extends BridgeActivity implements ModifiedMainActivityForSocialLoginPlugin {
   private static final String WEB_PREFS = "momentum_web";
   private static final String PURGED_VERSION = "purgedVersionCode";
+  private ActivityResultLauncher<IntentSenderRequest> driveAuthLauncher;
 
   @Override
   public void onCreate(Bundle savedInstanceState) {
     registerPlugin(MomentumWidgetsPlugin.class);
     registerPlugin(DriveAuthPlugin.class);
-    // Old Play builds left a service worker that served v59 HTML, then JS
-    // later painted v62. Wipe SW + HTTP cache before the WebView starts.
+    // Must register before super.onCreate. singleTask drops startIntentSenderForResult.
+    driveAuthLauncher = registerForActivityResult(
+      new ActivityResultContracts.StartIntentSenderForResult(),
+      result -> {
+        if (getBridge() == null) return;
+        PluginHandle pluginHandle = getBridge().getPlugin("DriveAuth");
+        if (pluginHandle == null || !(pluginHandle.getInstance() instanceof DriveAuthPlugin)) return;
+        ((DriveAuthPlugin) pluginHandle.getInstance()).onAuthorizeActivityResult(result.getResultCode(), result.getData());
+      }
+    );
     purgeStaleWebViewCaches();
     super.onCreate(savedInstanceState);
+  }
+
+  public void launchDriveAuth(PendingIntent pendingIntent) {
+    driveAuthLauncher.launch(new IntentSenderRequest.Builder(pendingIntent).build());
   }
 
   @Override

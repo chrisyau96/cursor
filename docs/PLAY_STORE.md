@@ -206,7 +206,7 @@ Personal accounts created after 13 Nov 2023 often must run a closed test with **
 git pull
 ```
 
-Android Studio **Generate Signed Bundle** copies `index.html` and `assets/` into the AAB and stamps `version.json` (`63.0.0`). Settings footer must match Play (`Habit & Journal 63.0.0`). If Play shows 63.0.0 but the footer still says `v59` or `v62`, uninstall and reinstall from the opt-in link.
+Android Studio **Generate Signed Bundle** copies `index.html` and `assets/` into the AAB and stamps `version.json` (`63.0.1`). Settings footer must match Play (`Habit & Journal 63.0.1`). If Play shows 63.0.1 but the footer still says `v59` or `v62`, uninstall and reinstall from the opt-in link.
 
 Optional if you use Node:
 
@@ -229,7 +229,7 @@ GitHub Pages updates on every `main` merge. The Play app updates only when you s
 | “Privacy policy is invalid” | Use `https://chrisyau96.github.io/cursor/privacy.html` |
 | Notifications never appear | Android 13+: Allow. Settings → Apps → Momentum → Notifications |
 | Drive popup every time | Android OAuth client with **both** upload-key SHA-1 and Play App Signing SHA-1. Paste the **Web** client ID in Settings |
-| Play version updates, Settings still says v59/v62 | Uninstall, install **63.0.0**. Footer must read **Habit & Journal 63.0.0**. |
+| Play version updates, Settings still says v59/v62 | Uninstall, install **63.0.1**. Footer must read **Habit & Journal 63.0.1**. |
 | “Package name already used” | `com.dincey.habitjournal` must be unique; change `appId` in `capacitor.config.json` **before** the first upload |
 | Closed test not counting | Testers did not click the opt-in link, or you used Internal instead of Closed |
 | AAB rejected for target SDK | `targetSdk` is 36 in `android/variables.gradle` |
