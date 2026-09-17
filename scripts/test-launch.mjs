@@ -197,8 +197,9 @@ assert(Launch.parseAppUrl('momentum://widget/open').type === 'open', 'open widge
 assert(Launch.parseAppUrl('https://example.com/?widgetAction=complete&habitId=h9&date=2026-08-31').date === '2026-08-31', 'web query keeps date');
 assert(Launch.parseAppUrl('ftp://nope') === null, 'bad protocol ignored');
 
+assert(Launch.APP_VERSION === '63.0.0', 'app version is 63.0.0');
 assert(Launch.googleErrorHint({ message: 'clientId is null or empty' }).includes('Web client ID'), 'missing client id hint');
-assert(Launch.googleErrorHint({ message: 'Google Sign-In failed: [16] Account reauth failed' }).includes('v62.5'), 'error 16 points at v62.5');
+assert(Launch.googleErrorHint({ message: 'Google Sign-In failed: [16] Account reauth failed' }).includes('63.0.0'), 'error 16 points at 63.0.0');
 assert(Launch.googleErrorHint({ message: 'DEVELOPER_ERROR: [10]' }).includes('SHA-1'), 'developer error points at SHA-1');
 assert(Launch.googleErrorHint({ message: 'Google sign-in cancelled' }).includes('cancelled'), 'cancel is not SHA-1');
 assert(Launch.googleErrorHint({ errorMessage: 'clientId is null or empty' }).includes('Web client ID'), 'errorMessage is read');
@@ -209,24 +210,32 @@ assert(launchSrc.indexOf('driveAuthPluginToken') < launchSrc.indexOf('const soci
 const main = readFileSync(path.join(root, '../android/app/src/main/java/com/dincey/habitjournal/MainActivity.java'), 'utf8');
 assert(main.includes('registerPlugin(DriveAuthPlugin.class)'), 'MainActivity registers DriveAuth');
 assert(main.includes('DriveAuthPlugin.REQUEST_AUTHORIZE'), 'MainActivity forwards DriveAuth result');
-assert(main.includes('purgeStaleServiceWorkers'), 'MainActivity purges stale service workers on version change');
+assert(main.includes('purgeStaleWebViewCaches'), 'MainActivity purges stale WebView caches on version change');
+const versionJson = JSON.parse(readFileSync(path.join(root, '../version.json'), 'utf8'));
+assert(versionJson.versionName === '63.0.0' && versionJson.versionCode === 13, 'version.json is 63.0.0 / 13');
 const gradle = readFileSync(path.join(root, '../android/app/build.gradle'), 'utf8');
-assert(/versionCode 12/.test(gradle) && /62\.0\.5/.test(gradle), 'Play versionCode 12 / 62.0.5');
+assert(gradle.includes('version.json'), 'Gradle reads version.json');
 assert(gradle.includes('syncWebAssets'), 'Gradle copies web assets into the AAB');
+assert(gradle.includes('stampAppVersion'), 'Gradle stamps versionName into bundled HTML/JS');
+const capCfg = readFileSync(path.join(root, '../capacitor.config.json'), 'utf8');
+assert(capCfg.includes('/?v=63.0.0'), 'WebView start URL is cache-busted');
 const html = readFileSync(path.join(root, '../index.html'), 'utf8');
 assert(html.includes('isNativePlatform'), 'native app does not keep a website service worker');
 assert(html.includes('unregister'), 'native unregisters service workers');
-assert(html.includes('v62.5'), 'index footer is v62.5');
+assert(html.includes("MOMENTUM_APP_VERSION = '63.0.0'"), 'index stamps 63.0.0 in the head');
+assert(!/v59|v62\.5/.test(html), 'index footer does not hardcode an old version');
 const appSrc = readFileSync(path.join(root, '../assets/js/app.js'), 'utf8');
-assert(appSrc.includes("APP_VERSION='v62.5'"), 'in-app footer version is v62.5');
+assert(appSrc.includes("||'63.0.0'"), 'in-app footer version is 63.0.0');
 
 execSync('node scripts/sync-android-web.mjs', { cwd: path.join(root, '..'), stdio: 'pipe' });
 const bundledApp = readFileSync(path.join(root, '../android/app/src/main/assets/public/assets/js/app.js'), 'utf8');
-assert(bundledApp.includes("APP_VERSION='v62.5'"), 'Android public assets footer is v62.5');
+assert(bundledApp.includes("||'63.0.0'"), 'Android public assets footer is 63.0.0');
 const bundledLaunch = readFileSync(path.join(root, '../android/app/src/main/assets/public/assets/js/launch.js'), 'utf8');
 assert(/DriveAuth\?\.authorize/.test(bundledLaunch), 'Android public assets include DriveAuth Connect');
 const bundledHtml = readFileSync(path.join(root, '../android/app/src/main/assets/public/index.html'), 'utf8');
-assert(bundledHtml.includes('v62.5') && bundledHtml.includes('unregister'), 'bundled index is v62.5 and skips native SW');
+assert(bundledHtml.includes('63.0.0') && bundledHtml.includes('unregister'), 'bundled index is 63.0.0 and skips native SW');
+const bundledCap = readFileSync(path.join(root, '../android/app/src/main/assets/capacitor.config.json'), 'utf8');
+assert(bundledCap.includes('/?v=63.0.0'), 'bundled Capacitor config cache-busts the start URL');
 
 const plugin = readFileSync(path.join(root, '../android/app/src/main/java/com/dincey/habitjournal/DriveAuthPlugin.java'), 'utf8');
 assert(!/CredentialManager|GetSignInWithGoogleOption|GetGoogleIdOption/.test(plugin), 'DriveAuth skips Credential Manager');

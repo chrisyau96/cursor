@@ -1,6 +1,6 @@
-// Offline-first service worker for Habit & Journal.
-// Cross-origin requests always go to the network.
-const CACHE = "habit-journal-v62.5";
+// Offline-first service worker for the website only.
+// The Play app unregisters this so an old v59/v62 cache cannot hide 63.0.0.
+const CACHE = "habit-journal-63.0.0";
 
 const ASSETS = [
   ".",
@@ -41,18 +41,15 @@ self.addEventListener("fetch", (event) => {
   const req = event.request;
   if (req.method !== "GET" || new URL(req.url).origin !== self.location.origin) return;
   event.respondWith(
-    caches.match(req).then((cached) => {
-      const network = fetch(req)
-        .then((resp) => {
-          if (resp && resp.status === 200 && resp.type === "basic") {
-            const copy = resp.clone();
-            caches.open(CACHE).then((cache) => cache.put(req, copy));
-          }
-          return resp;
-        })
-        .catch(() => cached);
-      return cached || network;
-    }),
+    fetch(req)
+      .then((resp) => {
+        if (resp && resp.status === 200 && resp.type === "basic") {
+          const copy = resp.clone();
+          caches.open(CACHE).then((cache) => cache.put(req, copy));
+        }
+        return resp;
+      })
+      .catch(() => caches.match(req)),
   );
 });
 

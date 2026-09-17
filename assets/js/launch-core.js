@@ -6,6 +6,7 @@
   Launch.DRIVE_FILE_NAME = 'Habit-Journal-backup.json';
   Launch.DRIVE_SCOPE = 'https://www.googleapis.com/auth/drive.file';
   Launch.TOKEN_KEY = 'momentumDriveToken';
+  Launch.APP_VERSION = '63.0.0';
   Launch.googleErrorHint = function (err) {
     const msg = String(err?.message || err?.errorMessage || err || '');
     if (/clientId is null or empty|webClientId|not configured/i.test(msg)) {
@@ -16,7 +17,7 @@
       return 'Google Drive auth failed. Add Play Console → App signing → SHA-1 to the Android OAuth client (package com.dincey.habitjournal). Do not paste the Android client ID.';
     }
     if (/\[16\]|account reauth failed/i.test(msg)) {
-      return 'Google Sign-In failed. Install v62.5 from Internal testing (Settings footer must say v62.5, not v62), then Connect again. If it still fails, add Play Console App signing SHA-1 to the Android OAuth client. Do not paste the Android client ID.';
+      return 'Google Sign-In failed. Install 63.0.0 from Internal testing (Settings footer must say 63.0.0). If it still fails, add Play Console App signing SHA-1 to the Android OAuth client. Do not paste the Android client ID.';
     }
     return msg || 'Google sign-in failed';
   };

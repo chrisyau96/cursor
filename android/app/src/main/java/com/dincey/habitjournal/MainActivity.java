@@ -24,9 +24,9 @@ public class MainActivity extends BridgeActivity implements ModifiedMainActivity
   public void onCreate(Bundle savedInstanceState) {
     registerPlugin(MomentumWidgetsPlugin.class);
     registerPlugin(DriveAuthPlugin.class);
-    // Play can update versionName while a service worker still serves the old
-    // cached web app (footer stays "v62", Connect still throws [16]).
-    purgeStaleServiceWorkers();
+    // Old Play builds left a service worker that served v59 HTML, then JS
+    // later painted v62. Wipe SW + HTTP cache before the WebView starts.
+    purgeStaleWebViewCaches();
     super.onCreate(savedInstanceState);
   }
 
@@ -37,6 +37,7 @@ public class MainActivity extends BridgeActivity implements ModifiedMainActivity
     WebView webView = getBridge().getWebView();
     if (webView == null) return;
     webView.getSettings().setCacheMode(WebSettings.LOAD_NO_CACHE);
+    webView.clearCache(true);
   }
 
   @Override
@@ -76,38 +77,51 @@ public class MainActivity extends BridgeActivity implements ModifiedMainActivity
   @Override
   public void IHaveModifiedTheMainActivityForTheUseWithSocialLoginPlugin() {}
 
-  private void purgeStaleServiceWorkers() {
+  private void purgeStaleWebViewCaches() {
     try {
       PackageInfo info = getPackageManager().getPackageInfo(getPackageName(), 0);
       int code = info.versionCode;
       SharedPreferences prefs = getSharedPreferences(WEB_PREFS, MODE_PRIVATE);
       if (prefs.getInt(PURGED_VERSION, -1) == code) return;
       File dataDir = getApplicationContext().getDataDir();
-      wipeServiceWorkerDirs(new File(dataDir, "app_webview"));
-      wipeServiceWorkerDirs(new File(dataDir, "cache"));
+      wipeWebViewCaches(new File(dataDir, "app_webview"));
+      wipeWebViewCaches(new File(dataDir, "cache"));
       prefs.edit().putInt(PURGED_VERSION, code).apply();
-      Log.i("DriveAuth", "Purged WebView service workers for versionCode " + code);
+      Log.i("DriveAuth", "Purged WebView caches for versionCode " + code);
     } catch (Exception e) {
-      Log.w("DriveAuth", "Could not purge WebView workers", e);
+      Log.w("DriveAuth", "Could not purge WebView caches", e);
     }
   }
 
-  private void wipeServiceWorkerDirs(File dir) {
+  private void wipeWebViewCaches(File dir) {
     if (dir == null || !dir.exists()) return;
     File[] kids = dir.listFiles();
     if (kids == null) return;
     for (File f : kids) {
       String n = f.getName();
-      if (n.equalsIgnoreCase("Local Storage") || n.equalsIgnoreCase("IndexedDB")
-          || n.equals("databases") || n.equalsIgnoreCase("WebStorage")) {
-        continue;
-      }
-      if (n.toLowerCase().contains("service worker")) {
+      if (isAppDataDir(n)) continue;
+      if (shouldWipeWebCache(n)) {
         deleteRecursively(f);
       } else if (f.isDirectory()) {
-        wipeServiceWorkerDirs(f);
+        wipeWebViewCaches(f);
       }
     }
+  }
+
+  private boolean isAppDataDir(String n) {
+    return n.equalsIgnoreCase("Local Storage")
+        || n.equalsIgnoreCase("IndexedDB")
+        || n.equals("databases")
+        || n.equalsIgnoreCase("WebStorage");
+  }
+
+  private boolean shouldWipeWebCache(String n) {
+    String lower = n.toLowerCase();
+    return lower.contains("service worker")
+        || lower.contains("cachestorage")
+        || lower.equals("cache")
+        || lower.equals("code cache")
+        || lower.equals("gpucache");
   }
 
   private void deleteRecursively(File f) {

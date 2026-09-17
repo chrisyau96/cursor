@@ -6,6 +6,20 @@
   <meta name="theme-color" content="#4f46e5" />
   <meta name="description" content="Habit &amp; Journal — track habits, journal daily, and grow with rewards." />
   <title>Habit &amp; Journal</title>
+  <script>
+    window.MOMENTUM_APP_VERSION = '63.0.0';
+    (function () {
+      var native = !!(window.Capacitor && window.Capacitor.isNativePlatform && window.Capacitor.isNativePlatform());
+      if (native && navigator.serviceWorker) {
+        navigator.serviceWorker.getRegistrations().then(function (rs) { rs.forEach(function (r) { r.unregister(); }); });
+      }
+      if (native && window.caches) caches.keys().then(function (keys) { keys.forEach(function (k) { caches.delete(k); }); });
+    })();
+    document.addEventListener('DOMContentLoaded', function () {
+      var el = document.getElementById('settingsVersion');
+      if (el) el.textContent = 'Habit & Journal ' + window.MOMENTUM_APP_VERSION;
+    });
+  </script>
   <link rel="icon" id="appFavicon" href="assets/icon.svg" />
   <link rel="icon" type="image/png" sizes="192x192" id="appFavicon192" href="assets/icon-192.png" />
   <link rel="apple-touch-icon" id="appAppleIcon" href="assets/icon-180.png" />
@@ -13,7 +27,7 @@
   <meta name="mobile-web-app-capable" content="yes" />
   <meta name="apple-mobile-web-app-capable" content="yes" />
   <meta name="apple-mobile-web-app-title" content="Habit &amp; Journal" />
-  <link rel="stylesheet" href="assets/css/styles.css" />
+  <link rel="stylesheet" href="assets/css/styles.css?v=63.0.0" />
 </head>
 <body>
   <div class="app-shell">
@@ -267,7 +281,7 @@
           <div class="field"><input id="confirmDeleteInput" placeholder="Type Confirm"></div>
           <button class="btn-danger settings-action" id="resetAllBtn" type="button">Erase all data</button>
         </div>
-        <p class="settings-version" id="settingsVersion">Habit &amp; Journal v62.5</p>
+        <p class="settings-version" id="settingsVersion">Habit &amp; Journal</p>
       </section>
     </main>
 
@@ -334,9 +348,9 @@
       // If empty, Settings → Google Drive has a field to paste the Web client ID.
     };
   </script>
-  <script src="assets/js/launch-core.js"></script>
-  <script src="assets/js/app.js"></script>
-  <script src="assets/js/launch.js"></script>
+  <script src="assets/js/launch-core.js?v=63.0.0"></script>
+  <script src="assets/js/app.js?v=63.0.0"></script>
+  <script src="assets/js/launch.js?v=63.0.0"></script>
   <script>
     if ("serviceWorker" in navigator) {
       window.addEventListener("load", () => {

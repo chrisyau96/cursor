@@ -17,6 +17,10 @@
       }
     }
   },
+  "server": {
+    "androidScheme": "https",
+    "appStartPath": "/?v=63.0.0"
+  },
   "android": {
     "allowMixedContent": false
   },

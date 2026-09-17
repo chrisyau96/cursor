@@ -83,7 +83,7 @@
   const PREVIEW=3;
   const LAZY_CHUNK=10;
   const REMINDER_MSG_LIMIT=80;
-  const APP_VERSION='v62.5';
+  const APP_VERSION=window.MOMENTUM_APP_VERSION||'63.0.0';
   const WIDGET_HABIT_MAX=8;
   const DRAG_DOTS='<i></i><i></i><i></i><i></i><i></i><i></i>';
   const iconBtn=(cls,svg,title)=>{const b=document.createElement('button'); b.className='act-btn '+cls; b.innerHTML=svg; b.title=title; b.setAttribute('aria-label',title); return b;};
@@ -2190,7 +2190,8 @@
   }
   function renderSettingsVersion(){
     const el=$('#settingsVersion');
-    if(el) el.textContent=`Habit & Journal ${APP_VERSION}`;
+    const ver=window.MOMENTUM_APP_VERSION||APP_VERSION;
+    if(el) el.textContent=`Habit & Journal ${ver}`;
   }
   /* ---------- FILE SYNC ---------- */
   function openHandleDb(){

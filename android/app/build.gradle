@@ -1,5 +1,8 @@
 apply plugin: 'com.android.application'
 
+def repoRoot = rootProject.projectDir.parentFile
+def versionJson = new groovy.json.JsonSlurper().parse(new File(repoRoot, "version.json"))
+
 android {
     namespace "com.dincey.habitjournal"
     compileSdk rootProject.ext.compileSdkVersion
@@ -7,8 +10,8 @@ android {
         applicationId "com.dincey.habitjournal"
         minSdkVersion rootProject.ext.minSdkVersion
         targetSdkVersion rootProject.ext.targetSdkVersion
-        versionCode 12
-        versionName "62.0.5"
+        versionCode versionJson.versionCode as int
+        versionName versionJson.versionName
         testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
         aaptOptions {
              // Files and dirs to omit from the packaged assets dir, modified to accommodate modern web apps.
@@ -54,20 +57,31 @@ try {
     logger.info("google-services.json not found, google-services plugin not applied. Push Notifications won't work")
 }
 
-// Copy live web files into the AAB on every Android Studio / Gradle build.
-// Play versionName comes from this file; the Settings footer comes from
-// assets/js/app.js. Without this copy, Internal testing can show 62.0.x
-// while the in-app footer stays on an old "v62" bundle (and Drive Connect
-// still uses Credential Manager / error 16).
-def repoRoot = rootProject.projectDir.parentFile
+// Copy live web files into the AAB and stamp versionName so Play and the
+// Settings footer cannot drift. Also copy capacitor.config.json so
+// appStartPath cache-busts the WebView document URL.
 def publicDir = file("src/main/assets/public")
+def capAssetsDir = file("src/main/assets")
+
+def stampAppVersion = { File f, String ver ->
+    if (f == null || !f.exists() || f.isDirectory()) return
+    def t = f.getText('UTF-8')
+    t = t.replaceAll(/window\.MOMENTUM_APP_VERSION = '[^']+'/, "window.MOMENTUM_APP_VERSION = '${ver}'")
+    t = t.replaceAll(/Launch\.APP_VERSION = '[^']+'/, "Launch.APP_VERSION = '${ver}'")
+    t = t.replaceAll(/\?v=[0-9]+\.[0-9]+\.[0-9]+/, "?v=${ver}")
+    t = t.replaceAll(/habit-journal-[0-9]+\.[0-9]+\.[0-9]+/, "habit-journal-${ver}")
+    f.write(t, 'UTF-8')
+}
+
 tasks.register("syncWebAssets") {
     doLast {
         def index = new File(repoRoot, "index.html")
         if (!index.exists()) {
             throw new GradleException("index.html not found at ${repoRoot}. Open android/ from the Habit & Journal git repo, then Generate Signed Bundle.")
         }
+        def ver = versionJson.versionName
         publicDir.mkdirs()
+        capAssetsDir.mkdirs()
         copy {
             from(repoRoot) {
                 include "index.html"
@@ -83,7 +97,16 @@ tasks.register("syncWebAssets") {
             }
             into new File(publicDir, "assets")
         }
-        logger.lifecycle("Copied Habit & Journal web assets into ${publicDir}")
+        copy {
+            from(new File(repoRoot, "capacitor.config.json"))
+            into capAssetsDir
+        }
+        stampAppVersion(new File(publicDir, "index.html"), ver)
+        stampAppVersion(new File(publicDir, "sw.js"), ver)
+        stampAppVersion(new File(publicDir, "assets/js/app.js"), ver)
+        stampAppVersion(new File(publicDir, "assets/js/launch-core.js"), ver)
+        stampAppVersion(new File(capAssetsDir, "capacitor.config.json"), ver)
+        logger.lifecycle("Copied Habit & Journal ${ver} web assets into ${publicDir}")
     }
 }
 afterEvaluate {

@@ -167,13 +167,13 @@ you are on an older `.aab`. Pull the latest branch, rebuild the signed bundle, a
 
 If Connect shows **Google Sign-In failed [16] Account reauth failed**:
 
-Play Console can show **62.0.x** while Settings still says **Habit & Journal v62**. Those are different files. Play reads Android `versionName`. The footer reads the **web app inside the AAB**. If the footer is not **v62.5**, Connect is still the old Credential Manager path.
+Play Console can show an old **62.0.x** while Settings flashes **v59** then **v62**. Those are different files. Play reads Android `versionName`. The footer is HTML that a service worker used to cache. **63.0.0** stamps the same version into Play and the footer, and the WebView loads `/?v=63.0.0` so old HTML cannot paint first.
 
-1. You must be on **v62.5** / Play version **62.0.5**. Settings footer must read **Habit & Journal v62.5** — not `v62`.
-2. Android Studio **Generate Signed Bundle** now copies `index.html` + `assets/` into the AAB automatically. You do not need `npx cap sync` for the footer to update.
+1. You must be on Play **63.0.0**. Settings footer must read **Habit & Journal 63.0.0** — not `v59` or `v62`.
+2. Android Studio **Generate Signed Bundle** copies `index.html` + `assets/` and stamps `version.json`.
 3. Play Console → Test and release → Setup → **App signing** → copy **App signing key certificate SHA-1**.
 4. Google Cloud → Clients → your **Android** client (`com.dincey.habitjournal`) → add that SHA-1 (and the upload-keystore SHA-1).
-5. Wait a few minutes, uninstall the app, install from the opt-in link, confirm the footer, Connect again.
+5. Uninstall the app, install **63.0.0** from the opt-in link, confirm the footer, Connect again.
 
 Do **not** paste the Android client ID into Settings.
 
