@@ -211,6 +211,12 @@ assert(main.includes('DriveAuthPlugin.REQUEST_AUTHORIZE'), 'MainActivity forward
 const gradle = readFileSync(path.join(root, '../android/app/build.gradle'), 'utf8');
 assert(/versionCode 11/.test(gradle) && /62\.0\.4/.test(gradle), 'Play versionCode 11 / 62.0.4');
 
+const plugin = readFileSync(path.join(root, '../android/app/src/main/java/com/dincey/habitjournal/DriveAuthPlugin.java'), 'utf8');
+assert(!/CredentialManager|GetSignInWithGoogleOption|GetGoogleIdOption/.test(plugin), 'DriveAuth skips Credential Manager');
+assert(plugin.includes('Identity.getAuthorizationClient'), 'DriveAuth uses AuthorizationClient');
+assert(plugin.includes('REQUEST_AUTHORIZE = 42801'), 'DriveAuth uses a request code outside Capgo range');
+assert(plugin.includes('https://www.googleapis.com/auth/drive.file'), 'DriveAuth requests drive.file');
+
 const delay = Launch.nextWebTimerDelay([{ at: Date.parse('2026-08-31T22:00:00') }], Date.parse('2026-08-31T10:00:00'));
 assert(delay && delay.delay > 0, 'web timer finds next slot');
 assert(Launch.nextWebTimerDelay([], Date.now()) === null, 'no slots means no timer');
