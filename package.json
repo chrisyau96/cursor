@@ -1,13 +1,13 @@
 {
   "name": "momentum",
   "private": true,
-  "version": "62.0.4",
+  "version": "62.0.5",
   "description": "Habit & Journal — PWA and Capacitor store shell",
   "scripts": {
     "test:launch": "node scripts/test-launch.mjs",
     "uat": "node scripts/uat-buttons.mjs",
     "build:www": "node scripts/sync-www.mjs",
-    "cap:sync": "npm run build:www && npx cap sync",
+    "cap:sync": "npm run build:www && node scripts/sync-android-web.mjs && npx cap sync",
     "native:apply": "node scripts/apply-native.mjs",
     "screenshots": "node scripts/play-screenshots.mjs"
   },

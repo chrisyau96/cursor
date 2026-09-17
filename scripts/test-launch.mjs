@@ -2,6 +2,7 @@
 import { createRequire } from 'module';
 import { pathToFileURL } from 'url';
 import { readFileSync } from 'fs';
+import { execSync } from 'child_process';
 import vm from 'vm';
 import { fileURLToPath } from 'url';
 import path from 'path';
@@ -197,7 +198,7 @@ assert(Launch.parseAppUrl('https://example.com/?widgetAction=complete&habitId=h9
 assert(Launch.parseAppUrl('ftp://nope') === null, 'bad protocol ignored');
 
 assert(Launch.googleErrorHint({ message: 'clientId is null or empty' }).includes('Web client ID'), 'missing client id hint');
-assert(Launch.googleErrorHint({ message: 'Google Sign-In failed: [16] Account reauth failed' }).includes('v62.4'), 'error 16 points at v62.4');
+assert(Launch.googleErrorHint({ message: 'Google Sign-In failed: [16] Account reauth failed' }).includes('v62.5'), 'error 16 points at v62.5');
 assert(Launch.googleErrorHint({ message: 'DEVELOPER_ERROR: [10]' }).includes('SHA-1'), 'developer error points at SHA-1');
 assert(Launch.googleErrorHint({ message: 'Google sign-in cancelled' }).includes('cancelled'), 'cancel is not SHA-1');
 assert(Launch.googleErrorHint({ errorMessage: 'clientId is null or empty' }).includes('Web client ID'), 'errorMessage is read');
@@ -208,8 +209,24 @@ assert(launchSrc.indexOf('driveAuthPluginToken') < launchSrc.indexOf('const soci
 const main = readFileSync(path.join(root, '../android/app/src/main/java/com/dincey/habitjournal/MainActivity.java'), 'utf8');
 assert(main.includes('registerPlugin(DriveAuthPlugin.class)'), 'MainActivity registers DriveAuth');
 assert(main.includes('DriveAuthPlugin.REQUEST_AUTHORIZE'), 'MainActivity forwards DriveAuth result');
+assert(main.includes('purgeStaleServiceWorkers'), 'MainActivity purges stale service workers on version change');
 const gradle = readFileSync(path.join(root, '../android/app/build.gradle'), 'utf8');
-assert(/versionCode 11/.test(gradle) && /62\.0\.4/.test(gradle), 'Play versionCode 11 / 62.0.4');
+assert(/versionCode 12/.test(gradle) && /62\.0\.5/.test(gradle), 'Play versionCode 12 / 62.0.5');
+assert(gradle.includes('syncWebAssets'), 'Gradle copies web assets into the AAB');
+const html = readFileSync(path.join(root, '../index.html'), 'utf8');
+assert(html.includes('isNativePlatform'), 'native app does not keep a website service worker');
+assert(html.includes('unregister'), 'native unregisters service workers');
+assert(html.includes('v62.5'), 'index footer is v62.5');
+const appSrc = readFileSync(path.join(root, '../assets/js/app.js'), 'utf8');
+assert(appSrc.includes("APP_VERSION='v62.5'"), 'in-app footer version is v62.5');
+
+execSync('node scripts/sync-android-web.mjs', { cwd: path.join(root, '..'), stdio: 'pipe' });
+const bundledApp = readFileSync(path.join(root, '../android/app/src/main/assets/public/assets/js/app.js'), 'utf8');
+assert(bundledApp.includes("APP_VERSION='v62.5'"), 'Android public assets footer is v62.5');
+const bundledLaunch = readFileSync(path.join(root, '../android/app/src/main/assets/public/assets/js/launch.js'), 'utf8');
+assert(/DriveAuth\?\.authorize/.test(bundledLaunch), 'Android public assets include DriveAuth Connect');
+const bundledHtml = readFileSync(path.join(root, '../android/app/src/main/assets/public/index.html'), 'utf8');
+assert(bundledHtml.includes('v62.5') && bundledHtml.includes('unregister'), 'bundled index is v62.5 and skips native SW');
 
 const plugin = readFileSync(path.join(root, '../android/app/src/main/java/com/dincey/habitjournal/DriveAuthPlugin.java'), 'utf8');
 assert(!/CredentialManager|GetSignInWithGoogleOption|GetGoogleIdOption/.test(plugin), 'DriveAuth skips Credential Manager');

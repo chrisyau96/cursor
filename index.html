@@ -267,7 +267,7 @@
           <div class="field"><input id="confirmDeleteInput" placeholder="Type Confirm"></div>
           <button class="btn-danger settings-action" id="resetAllBtn" type="button">Erase all data</button>
         </div>
-        <p class="settings-version" id="settingsVersion">Habit &amp; Journal v62.4</p>
+        <p class="settings-version" id="settingsVersion">Habit &amp; Journal v62.5</p>
       </section>
     </main>
 
@@ -339,7 +339,15 @@
   <script src="assets/js/launch.js"></script>
   <script>
     if ("serviceWorker" in navigator) {
-      window.addEventListener("load", () => navigator.serviceWorker.register("sw.js").catch(()=>{}));
+      window.addEventListener("load", () => {
+        const native = !!(window.Capacitor && window.Capacitor.isNativePlatform && window.Capacitor.isNativePlatform());
+        if (native) {
+          navigator.serviceWorker.getRegistrations().then((rs) => rs.forEach((r) => r.unregister()));
+          if (window.caches) caches.keys().then((keys) => keys.forEach((k) => caches.delete(k)));
+          return;
+        }
+        navigator.serviceWorker.register("sw.js").catch(()=>{});
+      });
     }
   </script>
 </body>

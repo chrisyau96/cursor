@@ -204,6 +204,13 @@ Personal accounts created after 13 Nov 2023 often must run a closed test with **
 
 ```bash
 git pull
+```
+
+Android Studio **Generate Signed Bundle** copies `index.html` and `assets/` into the AAB. Settings footer must match this release (`v62.5` for `62.0.5`). If Play shows a new versionName but the footer still says `v62`, the web bundle was stale — pull this branch and rebuild.
+
+Optional if you use Node:
+
+```bash
 npm install
 npm run cap:sync
 npx cap open android
@@ -222,6 +229,7 @@ GitHub Pages updates on every `main` merge. The Play app updates only when you s
 | “Privacy policy is invalid” | Use `https://chrisyau96.github.io/cursor/privacy.html` |
 | Notifications never appear | Android 13+: Allow. Settings → Apps → Momentum → Notifications |
 | Drive popup every time | Android OAuth client with **both** upload-key SHA-1 and Play App Signing SHA-1. Paste the **Web** client ID in Settings |
+| Play version updates, Settings still says v62 | The AAB shipped an old web bundle. Pull latest, Generate Signed Bundle (Gradle copies web files), confirm footer **v62.5** |
 | “Package name already used” | `com.dincey.habitjournal` must be unique; change `appId` in `capacitor.config.json` **before** the first upload |
 | Closed test not counting | Testers did not click the opt-in link, or you used Internal instead of Closed |
 | AAB rejected for target SDK | `targetSdk` is 36 in `android/variables.gradle` |

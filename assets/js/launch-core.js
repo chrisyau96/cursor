@@ -16,7 +16,7 @@
       return 'Google Drive auth failed. Add Play Console → App signing → SHA-1 to the Android OAuth client (package com.dincey.habitjournal). Do not paste the Android client ID.';
     }
     if (/\[16\]|account reauth failed/i.test(msg)) {
-      return 'Google Sign-In failed. Install v62.4 from Internal testing, then Connect again. If it still fails, add Play Console App signing SHA-1 to the Android OAuth client. Do not paste the Android client ID.';
+      return 'Google Sign-In failed. Install v62.5 from Internal testing (Settings footer must say v62.5, not v62), then Connect again. If it still fails, add Play Console App signing SHA-1 to the Android OAuth client. Do not paste the Android client ID.';
     }
     return msg || 'Google sign-in failed';
   };

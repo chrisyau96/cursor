@@ -1,22 +1,42 @@
 package com.dincey.habitjournal;
 
 import android.content.Intent;
+import android.content.SharedPreferences;
+import android.content.pm.PackageInfo;
 import android.os.Bundle;
 import android.util.Log;
+import android.webkit.WebSettings;
+import android.webkit.WebView;
 import com.getcapacitor.BridgeActivity;
 import com.getcapacitor.Plugin;
 import com.getcapacitor.PluginHandle;
 import ee.forgr.capacitor.social.login.GoogleProvider;
 import ee.forgr.capacitor.social.login.ModifiedMainActivityForSocialLoginPlugin;
 import ee.forgr.capacitor.social.login.SocialLoginPlugin;
+import java.io.File;
 
 // Capgo SocialLogin requires this interface before Google Drive scopes can be requested.
 public class MainActivity extends BridgeActivity implements ModifiedMainActivityForSocialLoginPlugin {
+  private static final String WEB_PREFS = "momentum_web";
+  private static final String PURGED_VERSION = "purgedVersionCode";
+
   @Override
   public void onCreate(Bundle savedInstanceState) {
     registerPlugin(MomentumWidgetsPlugin.class);
     registerPlugin(DriveAuthPlugin.class);
+    // Play can update versionName while a service worker still serves the old
+    // cached web app (footer stays "v62", Connect still throws [16]).
+    purgeStaleServiceWorkers();
     super.onCreate(savedInstanceState);
+  }
+
+  @Override
+  public void onStart() {
+    super.onStart();
+    if (getBridge() == null) return;
+    WebView webView = getBridge().getWebView();
+    if (webView == null) return;
+    webView.getSettings().setCacheMode(WebSettings.LOAD_NO_CACHE);
   }
 
   @Override
@@ -55,4 +75,49 @@ public class MainActivity extends BridgeActivity implements ModifiedMainActivity
   // Capgo marker method — required, leave empty.
   @Override
   public void IHaveModifiedTheMainActivityForTheUseWithSocialLoginPlugin() {}
+
+  private void purgeStaleServiceWorkers() {
+    try {
+      PackageInfo info = getPackageManager().getPackageInfo(getPackageName(), 0);
+      int code = info.versionCode;
+      SharedPreferences prefs = getSharedPreferences(WEB_PREFS, MODE_PRIVATE);
+      if (prefs.getInt(PURGED_VERSION, -1) == code) return;
+      File dataDir = getApplicationContext().getDataDir();
+      wipeServiceWorkerDirs(new File(dataDir, "app_webview"));
+      wipeServiceWorkerDirs(new File(dataDir, "cache"));
+      prefs.edit().putInt(PURGED_VERSION, code).apply();
+      Log.i("DriveAuth", "Purged WebView service workers for versionCode " + code);
+    } catch (Exception e) {
+      Log.w("DriveAuth", "Could not purge WebView workers", e);
+    }
+  }
+
+  private void wipeServiceWorkerDirs(File dir) {
+    if (dir == null || !dir.exists()) return;
+    File[] kids = dir.listFiles();
+    if (kids == null) return;
+    for (File f : kids) {
+      String n = f.getName();
+      if (n.equalsIgnoreCase("Local Storage") || n.equalsIgnoreCase("IndexedDB")
+          || n.equals("databases") || n.equalsIgnoreCase("WebStorage")) {
+        continue;
+      }
+      if (n.toLowerCase().contains("service worker")) {
+        deleteRecursively(f);
+      } else if (f.isDirectory()) {
+        wipeServiceWorkerDirs(f);
+      }
+    }
+  }
+
+  private void deleteRecursively(File f) {
+    if (f == null || !f.exists()) return;
+    if (f.isDirectory()) {
+      File[] kids = f.listFiles();
+      if (kids != null) {
+        for (File k : kids) deleteRecursively(k);
+      }
+    }
+    if (!f.delete()) Log.w("DriveAuth", "Could not delete " + f.getAbsolutePath());
+  }
 }

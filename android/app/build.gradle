@@ -7,8 +7,8 @@ android {
         applicationId "com.dincey.habitjournal"
         minSdkVersion rootProject.ext.minSdkVersion
         targetSdkVersion rootProject.ext.targetSdkVersion
-        versionCode 11
-        versionName "62.0.4"
+        versionCode 12
+        versionName "62.0.5"
         testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
         aaptOptions {
              // Files and dirs to omit from the packaged assets dir, modified to accommodate modern web apps.
@@ -52,4 +52,40 @@ try {
     }
 } catch(Exception e) {
     logger.info("google-services.json not found, google-services plugin not applied. Push Notifications won't work")
+}
+
+// Copy live web files into the AAB on every Android Studio / Gradle build.
+// Play versionName comes from this file; the Settings footer comes from
+// assets/js/app.js. Without this copy, Internal testing can show 62.0.x
+// while the in-app footer stays on an old "v62" bundle (and Drive Connect
+// still uses Credential Manager / error 16).
+def repoRoot = rootProject.projectDir.parentFile
+def publicDir = file("src/main/assets/public")
+tasks.register("syncWebAssets") {
+    doLast {
+        def index = new File(repoRoot, "index.html")
+        if (!index.exists()) {
+            throw new GradleException("index.html not found at ${repoRoot}. Open android/ from the Habit & Journal git repo, then Generate Signed Bundle.")
+        }
+        publicDir.mkdirs()
+        copy {
+            from(repoRoot) {
+                include "index.html"
+                include "privacy.html"
+                include "sw.js"
+                include "manifest.webmanifest"
+            }
+            into publicDir
+        }
+        copy {
+            from(new File(repoRoot, "assets")) {
+                exclude "js/config.local.js"
+            }
+            into new File(publicDir, "assets")
+        }
+        logger.lifecycle("Copied Habit & Journal web assets into ${publicDir}")
+    }
+}
+afterEvaluate {
+    tasks.matching { it.name == "preBuild" }.configureEach { dependsOn("syncWebAssets") }
 }
