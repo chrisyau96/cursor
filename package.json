@@ -1,7 +1,7 @@
 {
   "name": "momentum",
   "private": true,
-  "version": "62.0.1",
+  "version": "62.0.2",
   "description": "Habit & Journal — PWA and Capacitor store shell",
   "scripts": {
     "test:launch": "node scripts/test-launch.mjs",
