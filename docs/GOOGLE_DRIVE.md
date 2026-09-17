@@ -156,6 +156,16 @@ Google matches the signed APK/AAB automatically. **Do not** paste the Android cl
 
 ## G. In Habit & Journal
 
+### Play app note (Android)
+
+Connect on the phone needs Capgo SocialLogin wired in `MainActivity`. That is already in this repo (`android/app/.../MainActivity.java`). If you see:
+
+> You CANNOT use scopes without modifying the main activity
+
+you are on an older `.aab`. Pull the latest branch, rebuild the signed bundle, and upload Internal testing again. The Web client ID you pasted is fine — this is not a Google Cloud mistake.
+
+### Connect steps
+
 Settings → Google Drive backup:
 
 1. Paste the **Web** client ID into **Google Web client ID** if the field is shown.

@@ -28,6 +28,8 @@ They fire with the app in the background, swiped away, or after reboot. Force-st
 **Google Drive = one Google popup, then silent.**  
 Connect once. Daily/weekly first-open backup does not ask again while that Google account stays on the phone. If Google revokes access, Connect once more. Paste the **Web** OAuth client ID in Settings → Google Drive (or bake it in `window.MOMENTUM_CONFIG.googleClientId`). Also create an **Android** OAuth client with package `com.dincey.habitjournal` + signing SHA-1 (you do **not** paste the Android client ID in the app).
 
+If Connect shows *You CANNOT use scopes without modifying the main activity*, rebuild from a branch that includes the Capgo `MainActivity` wiring (`ModifiedMainActivityForSocialLoginPlugin`). That is required for Drive scopes on Android.
+
 **Widgets = home-screen app widgets** (Play app only). The website Settings page is a preview. Long-press home screen → Widgets → Momentum.
 
 ---
