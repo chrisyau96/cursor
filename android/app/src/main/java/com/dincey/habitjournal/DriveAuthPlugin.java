@@ -1,188 +1,71 @@
 package com.dincey.habitjournal;
 
 import android.app.Activity;
-import android.app.PendingIntent;
 import android.content.Intent;
-import android.util.Log;
 import com.getcapacitor.JSObject;
 import com.getcapacitor.Plugin;
 import com.getcapacitor.PluginCall;
 import com.getcapacitor.PluginMethod;
 import com.getcapacitor.annotation.CapacitorPlugin;
-import com.google.android.gms.auth.GoogleAuthUtil;
-import com.google.android.gms.auth.api.identity.AuthorizationRequest;
-import com.google.android.gms.auth.api.identity.AuthorizationResult;
-import com.google.android.gms.auth.api.identity.Identity;
-import com.google.android.gms.auth.api.signin.GoogleSignInAccount;
-import com.google.android.gms.common.api.ApiException;
-import com.google.android.gms.common.api.CommonStatusCodes;
-import com.google.android.gms.common.api.Scope;
-import java.util.Collections;
-import java.util.concurrent.ExecutorService;
-import java.util.concurrent.Executors;
 
 /**
- * Drive backup auth via Google Identity AuthorizationClient.
- *
- * On-device Drive only needs drive.file. Do not call requestOfflineAccess —
- * that opens Google's web OAuth page (GeneralOAuthFlow). A pasted Android
- * client ID there is Error 401 invalid_client. Launch the account picker
- * once; after the result, retry silently for the token. A second UI launch
- * is the same picker again, not a new consent screen.
+ * JS bridge for Drive backup auth. The Google UI runs in DriveConsentActivity
+ * (standard launchMode) because MainActivity is singleTask and drops the
+ * AuthorizationClient result after the account picker.
  */
 @CapacitorPlugin(name = "DriveAuth")
 public class DriveAuthPlugin extends Plugin {
   public static final int REQUEST_AUTHORIZE = 42801;
-  private static final String TAG = "DriveAuth";
-  private static final String DRIVE_SCOPE = "https://www.googleapis.com/auth/drive.file";
-  private static final String SHA1_HINT =
-    "Google Drive auth failed. Add Play Console → App signing → SHA-1 to the Android OAuth client (package com.dincey.habitjournal). Do not paste a client ID.";
 
   private final Object lock = new Object();
   private PluginCall pendingCall;
-  private final ExecutorService io = Executors.newSingleThreadExecutor();
 
   @PluginMethod
   public void authorize(PluginCall call) {
     Activity activity = getActivity();
-    if (activity == null) {
+    if (!(activity instanceof MainActivity)) {
       call.reject("Google Drive auth needs the app in the foreground", "AUTH_FAILED");
       return;
     }
-    activity.runOnUiThread(() -> startAuthorize(call, activity, false));
+    boolean interactive = Boolean.TRUE.equals(call.getBoolean("interactive", true));
+    call.setKeepAlive(true);
+    if (getBridge() != null) getBridge().saveCall(call);
+    synchronized (lock) {
+      pendingCall = call;
+    }
+    activity.runOnUiThread(() -> ((MainActivity) activity).launchDriveConsent(interactive));
   }
 
   public void handleAuthorizationIntent(int requestCode, int resultCode, Intent data) {
     if (requestCode != REQUEST_AUTHORIZE) return;
-    onAuthorizeActivityResult(resultCode, data);
+    onConsentActivityResult(resultCode, data);
   }
 
-  public void onAuthorizeActivityResult(int resultCode, Intent data) {
+  public void onConsentActivityResult(int resultCode, Intent data) {
     PluginCall call = takePending();
     if (call == null) return;
-    Activity activity = getActivity();
-    if (activity == null) {
-      call.reject("Google Drive auth needs the app in the foreground", "AUTH_FAILED");
-      return;
-    }
     if (data != null) {
-      try {
-        AuthorizationResult parsed = Identity.getAuthorizationClient(activity).getAuthorizationResultFromIntent(data);
-        if (hasUsableToken(parsed) || parsed.toGoogleSignInAccount() != null) {
-          deliver(call, parsed);
-          return;
-        }
-      } catch (Exception e) {
-        Log.e(TAG, "getAuthorizationResultFromIntent resultCode=" + resultCode, e);
+      String token = data.getStringExtra(DriveConsentActivity.EXTRA_ACCESS_TOKEN);
+      if (token != null && token.length() >= 20) {
+        JSObject ret = new JSObject();
+        ret.put("accessToken", token);
+        String email = data.getStringExtra(DriveConsentActivity.EXTRA_EMAIL);
+        ret.put("email", email == null ? "" : email);
+        call.setKeepAlive(false);
+        call.resolve(ret);
+        return;
+      }
+      String err = data.getStringExtra(DriveConsentActivity.EXTRA_ERROR);
+      if (err != null && !err.isEmpty()) {
+        call.reject(err, resultCode == Activity.RESULT_CANCELED ? "USER_CANCELED" : "AUTH_FAILED");
+        return;
       }
     }
-    // singleTask often returns RESULT_CANCELED after a successful account pick.
-    // Ask Google again without UI; do not show the account picker a second time.
-    startAuthorize(call, activity, true);
-  }
-
-  private void startAuthorize(PluginCall call, Activity activity, boolean silentRetry) {
-    AuthorizationRequest request = AuthorizationRequest.builder()
-      .setRequestedScopes(Collections.singletonList(new Scope(DRIVE_SCOPE)))
-      .build();
-    boolean interactive = Boolean.TRUE.equals(call.getBoolean("interactive", true));
-    Identity.getAuthorizationClient(activity)
-      .authorize(request)
-      .addOnSuccessListener(activity, result -> {
-        if (!result.hasResolution()) {
-          deliver(call, result);
-          return;
-        }
-        if (silentRetry || !interactive) {
-          if (!interactive) {
-            call.reject("Google Drive needs Connect once", "AUTH_FAILED");
-            return;
-          }
-          call.reject("Google Drive sign-in did not finish. Tap Connect again and pick your Google account once.", "USER_CANCELED");
-          return;
-        }
-        PendingIntent pendingIntent = result.getPendingIntent();
-        if (pendingIntent == null) {
-          call.reject("Google authorization UI is unavailable", "AUTH_FAILED");
-          return;
-        }
-        call.setKeepAlive(true);
-        if (getBridge() != null) getBridge().saveCall(call);
-        synchronized (lock) {
-          pendingCall = call;
-        }
-        try {
-          if (activity instanceof MainActivity) {
-            ((MainActivity) activity).launchDriveAuth(pendingIntent);
-          } else {
-            activity.startIntentSenderForResult(
-              pendingIntent.getIntentSender(),
-              REQUEST_AUTHORIZE,
-              null,
-              0,
-              0,
-              0,
-              null
-            );
-          }
-        } catch (Exception e) {
-          takePending();
-          call.reject("Could not open Google authorization: " + e.getMessage(), "AUTH_FAILED");
-        }
-      })
-      .addOnFailureListener(activity, e -> {
-        Log.e(TAG, silentRetry ? "silent retry failed" : "authorize failed", e);
-        call.reject(hint(e), "AUTH_FAILED");
-      });
-  }
-
-  private boolean hasUsableToken(AuthorizationResult result) {
-    String token = result.getAccessToken();
-    return token != null && token.length() >= 20;
-  }
-
-  private void deliver(PluginCall call, AuthorizationResult result) {
-    String token = result.getAccessToken();
-    String email = "";
-    GoogleSignInAccount account = null;
-    try {
-      account = result.toGoogleSignInAccount();
-      if (account != null && account.getEmail() != null) email = account.getEmail();
-    } catch (Exception ignored) {}
-
-    if (hasUsableToken(result)) {
-      finishOk(call, token, email);
-      return;
-    }
-
-    if (account != null && account.getAccount() != null) {
-      final GoogleSignInAccount acct = account;
-      final String emailFinal = email;
-      io.execute(() -> {
-        try {
-          String scoped = "oauth2:" + DRIVE_SCOPE;
-          String recovered = GoogleAuthUtil.getToken(getContext(), acct.getAccount(), scoped);
-          if (recovered != null && recovered.length() >= 20) {
-            finishOk(call, recovered, emailFinal);
-            return;
-          }
-          call.reject("Google did not return an access token", "AUTH_FAILED");
-        } catch (Exception e) {
-          Log.e(TAG, "GoogleAuthUtil.getToken failed", e);
-          call.reject(hint(e), "AUTH_FAILED");
-        }
-      });
+    if (resultCode == Activity.RESULT_CANCELED) {
+      call.reject("Google Drive sign-in did not finish. Tap Connect again and pick your Google account once.", "USER_CANCELED");
       return;
     }
     call.reject("Google did not return an access token", "AUTH_FAILED");
-  }
-
-  private void finishOk(PluginCall call, String token, String email) {
-    JSObject ret = new JSObject();
-    ret.put("accessToken", token);
-    ret.put("email", email == null ? "" : email);
-    call.setKeepAlive(false);
-    call.resolve(ret);
   }
 
   private PluginCall takePending() {
@@ -191,23 +74,5 @@ public class DriveAuthPlugin extends Plugin {
       pendingCall = null;
       return call;
     }
-  }
-
-  private String hint(Exception e) {
-    Throwable t = e;
-    if (e.getCause() instanceof ApiException) t = e.getCause();
-    if (t instanceof ApiException) {
-      int code = ((ApiException) t).getStatusCode();
-      if (code == CommonStatusCodes.DEVELOPER_ERROR) return SHA1_HINT;
-    }
-    String msg = t.getMessage() == null ? (e.getMessage() == null ? "" : e.getMessage()) : t.getMessage();
-    String lower = msg.toLowerCase();
-    if (lower.contains("invalid_client") || lower.contains("generaloauthflow") || lower.contains("oauth client was not found")
-        || lower.contains("developer") || lower.contains("[10]") || lower.contains("not set up correctly")
-        || lower.contains("current app identifier")) {
-      return SHA1_HINT;
-    }
-    if (msg.isEmpty()) return "Google Drive authorization failed";
-    return msg;
   }
 }

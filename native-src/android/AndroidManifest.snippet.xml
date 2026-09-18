@@ -1,3 +1,9 @@
+        <activity
+            android:name=".DriveConsentActivity"
+            android:exported="false"
+            android:excludeFromRecents="true"
+            android:launchMode="standard"
+            android:theme="@style/AppTheme.NoActionBar" />
         <receiver
             android:name=".widgets.MomentumWidgetProvider"
             android:exported="true"
