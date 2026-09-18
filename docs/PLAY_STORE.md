@@ -40,7 +40,7 @@ Follow `docs/GOOGLE_DRIVE.md`. Short version:
 
 1. [Google Cloud Console](https://console.cloud.google.com/) → new project `momentum-habits`
 2. Enable **Google Drive API**
-3. OAuth consent screen: External, app name Momentum, privacy `https://chrisyau96.github.io/cursor/privacy.html`, scope `https://www.googleapis.com/auth/drive.appdata`, add yourself as a test user
+3. OAuth consent screen: External, app name Habit & Journal, privacy `https://chrisyau96.github.io/cursor/privacy.html`, scope `https://www.googleapis.com/auth/drive.file`, add yourself as a test user
 4. Credentials → **Web application** client. Authorized JavaScript origins: `https://chrisyau96.github.io` and `http://localhost`. Paste that ID into Settings → Google Drive, or bake it in `index.html` as `window.MOMENTUM_CONFIG.googleClientId`
 5. Credentials → **Android** client. Package: `com.dincey.habitjournal`. SHA-1 from Play Console → App signing → **App signing key certificate** (not **Upload key certificate**). One Android client = one SHA-1; make another Android client if you also need the upload-key fingerprint for local APKs.
 
