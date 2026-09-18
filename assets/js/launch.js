@@ -133,17 +133,15 @@
     const plugin = cap().DriveAuth;
     if (!plugin?.authorize) return null;
     const res = await plugin.authorize({
-      webClientId: clientId(),
       interactive: !!interactive,
     });
     return saveNativeToken(res?.accessToken, res?.email || '', Date.now() + 50 * 60 * 1000);
   }
 
   async function nativeGoogleToken(interactive) {
-    const cid = clientId();
-    if (!cid) {
-      throw new Error('Paste the Google Web client ID in Settings → Google Drive, then tap Connect.');
-    }
+    // Play app Connect uses the Android OAuth client (package + SHA-1).
+    // Do not require a pasted client ID; that ID was sent to Google's web
+    // OAuth page and produced Error 401 invalid_client plus a second picker.
     if (cap().DriveAuth?.authorize) {
       try {
         const tok = await driveAuthPluginToken(!!interactive);
@@ -209,13 +207,6 @@
         throw new Error('Google Drive authorization did not return a token');
       } catch (e) {
         if (!interactive) throw new Error('Google Drive needs Connect once');
-        const msg = String(e?.message || e || '');
-        if (/clientId is null or empty|webClientId|not configured|Paste the Google Web/i.test(msg)) {
-          throw new Error('Paste the Google Web client ID in Settings → Google Drive, then tap Connect.');
-        }
-        // Never open GIS in the Android WebView. That is Google's GeneralOAuthFlow
-        // page and Error 401 invalid_client when the client is Android-type or the
-        // WebView origin is https://localhost.
         throw new Error(googleErrorHint(e));
       }
     }
@@ -330,7 +321,7 @@
 
   async function connectDrive() {
     persistClientIdFromInput();
-    if (!clientId()) {
+    if (!isNative() && !clientId()) {
       throw new Error('Paste the Google Web client ID in Settings → Google Drive, then tap Connect.');
     }
     await app()?.save?.(true, { render: 'none' });
@@ -394,7 +385,7 @@
     const baked = !!(window.MOMENTUM_CONFIG?.googleClientId || '').trim();
     const field = document.getElementById('googleClientIdField');
     const input = document.getElementById('googleClientIdInput');
-    if (field) field.hidden = baked;
+    if (field) field.hidden = baked || isNative();
     if (input && document.activeElement !== input) input.value = s.googleClientId || '';
     const status = document.getElementById('driveStatus');
     const freq = document.getElementById('driveBackupFreq');
@@ -404,6 +395,8 @@
       if (s.driveConnected) {
         const file = s.driveFileName || Core.DRIVE_FILE_NAME;
         status.innerHTML = `<strong>Connected</strong>${s.driveEmail ? ' · ' + escape(s.driveEmail) : ''}<div class="small-note" style="margin-top:6px">${escape(file)} · last backup <strong>${formatStamp(s.lastDriveBackupAt)}</strong></div>`;
+      } else if (isNative()) {
+        status.innerHTML = `<strong>Not connected</strong><div class="small-note" style="margin-top:6px">Tap Connect and pick your Google account once. The Play app does not need a client ID pasted in Settings.</div>`;
       } else if (!clientId()) {
         status.innerHTML = `<strong>Not connected</strong><div class="small-note" style="margin-top:6px">Paste the Google <strong>Web</strong> client ID below (ends with .apps.googleusercontent.com), then tap Connect. Testers: this is a one-time developer field, not your Gmail password.</div>`;
       } else {

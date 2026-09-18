@@ -26,7 +26,7 @@ The app is free for users. You pay **US$25 once** for a Play developer account (
 They fire with the app in the background, swiped away, or after reboot. Force-stop in system Settings cancels alarms until the next open.
 
 **Google Drive = one Google popup, then silent.**  
-Connect once. Daily/weekly first-open backup does not ask again while that Google account stays on the phone. If Google revokes access, Connect once more. Paste the **Web** OAuth client ID in Settings → Google Drive (or bake it in `window.MOMENTUM_CONFIG.googleClientId`). Also create an **Android** OAuth client with package `com.dincey.habitjournal` + signing SHA-1 (you do **not** paste the Android client ID in the app).
+Connect once. Daily/weekly first-open backup does not ask again while that Google account stays on the phone. If Google revokes access, Connect once more. On the **Play app**, do not paste a client ID. Create an **Android** OAuth client with package `com.dincey.habitjournal` + Play App signing SHA-1. The **Web** OAuth client ID is only for the website.
 
 If Connect shows *You CANNOT use scopes without modifying the main activity*, rebuild from a branch that includes the Capgo `MainActivity` wiring (`ModifiedMainActivityForSocialLoginPlugin`). That is required for Drive scopes on Android.
 
@@ -206,7 +206,7 @@ Personal accounts created after 13 Nov 2023 often must run a closed test with **
 git pull
 ```
 
-Android Studio **Generate Signed Bundle** copies `index.html` and `assets/` into the AAB and stamps `version.json` (`63.0.2`). Settings footer must match Play (`Habit & Journal 63.0.2`). If Play shows 63.0.2 but the footer still says `v59` or `v62`, uninstall and reinstall from the opt-in link.
+Android Studio **Generate Signed Bundle** copies `index.html` and `assets/` into the AAB and stamps `version.json` (`63.0.3`). Settings footer must match Play (`Habit & Journal 63.0.3`). If Play shows 63.0.3 but the footer still says `v59` or `v62`, uninstall and reinstall from the opt-in link.
 
 Optional if you use Node:
 
@@ -229,8 +229,8 @@ GitHub Pages updates on every `main` merge. The Play app updates only when you s
 | “Privacy policy is invalid” | Use `https://chrisyau96.github.io/cursor/privacy.html` |
 | Notifications never appear | Android 13+: Allow. Settings → Apps → Momentum → Notifications |
 | Drive popup every time | Android OAuth client with **both** upload-key SHA-1 and Play App Signing SHA-1. Paste the **Web** client ID in Settings |
-| Play version updates, Settings still says v59/v62 | Uninstall, install **63.0.2**. Footer must read **Habit & Journal 63.0.2**. |
-| Drive **401 invalid_client** / GeneralOAuthFlow | Install **63.0.2**. Paste the **Web application** client ID, not Android. Add Play App signing SHA-1 to the Android OAuth client. |
+| Play version updates, Settings still says v59/v62 | Uninstall, install **63.0.3**. Footer must read **Habit & Journal 63.0.3**. |
+| Drive picker twice / **401 invalid_client** | Install **63.0.3**. Do not paste a client ID on the Play app. Add Play App signing SHA-1 to the Android OAuth client. |
 | “Package name already used” | `com.dincey.habitjournal` must be unique; change `appId` in `capacitor.config.json` **before** the first upload |
 | Closed test not counting | Testers did not click the opt-in link, or you used Internal instead of Closed |
 | AAB rejected for target SDK | `targetSdk` is 36 in `android/variables.gradle` |

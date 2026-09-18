@@ -6,21 +6,21 @@
   Launch.DRIVE_FILE_NAME = 'Habit-Journal-backup.json';
   Launch.DRIVE_SCOPE = 'https://www.googleapis.com/auth/drive.file';
   Launch.TOKEN_KEY = 'momentumDriveToken';
-  Launch.APP_VERSION = '63.0.2';
+  Launch.APP_VERSION = '63.0.3';
   Launch.googleErrorHint = function (err) {
     const msg = String(err?.message || err?.errorMessage || err || '');
     if (/clientId is null or empty|webClientId|not configured/i.test(msg)) {
       return 'Paste the Google Web client ID in Settings → Google Drive, then tap Connect.';
     }
     if (/invalid_client|generaloauthflow|oauth client was not found/i.test(msg)) {
-      return 'Google rejected the OAuth client (Error 401 invalid_client). Paste the Web application client ID in Settings → Google Drive, not the Android client ID. Install 63.0.2 from Internal testing.';
+      return 'Google Drive auth failed. Install 63.0.3 from Internal testing. Add Play Console App signing SHA-1 to the Android OAuth client (package com.dincey.habitjournal). Do not paste a client ID on the Play app.';
     }
     if (/cancel/i.test(msg)) return msg || 'Google sign-in cancelled';
     if (/\[10\]|DEVELOPER_ERROR|not set up correctly|current app identifier/i.test(msg)) {
-      return 'Google Drive auth failed. Add Play Console → App signing → SHA-1 to the Android OAuth client (package com.dincey.habitjournal). Do not paste the Android client ID.';
+      return 'Google Drive auth failed. Add Play Console → App signing → SHA-1 to the Android OAuth client (package com.dincey.habitjournal). Do not paste a client ID.';
     }
     if (/\[16\]|account reauth failed/i.test(msg)) {
-      return 'Google Sign-In failed. Install 63.0.2 from Internal testing (Settings footer must say 63.0.2). If it still fails, add Play Console App signing SHA-1 to the Android OAuth client. Do not paste the Android client ID.';
+      return 'Google Sign-In failed. Install 63.0.3 from Internal testing (Settings footer must say 63.0.3). If it still fails, add Play Console App signing SHA-1 to the Android OAuth client.';
     }
     return msg || 'Google sign-in failed';
   };

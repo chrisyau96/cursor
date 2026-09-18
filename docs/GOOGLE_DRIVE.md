@@ -159,44 +159,35 @@ Google matches the signed APK/AAB automatically. **Do not** paste the Android cl
 
 ### Play app note (Android)
 
-Connect on the phone needs Capgo SocialLogin wired in `MainActivity`. That is already in this repo (`android/app/.../MainActivity.java`). If you see:
+On the Play app, **do not paste any Google client ID**. Connect uses the **Android** OAuth client automatically (package `com.dincey.habitjournal` + Play App signing SHA-1). The client ID field is hidden. Tap **Connect Google Drive** and pick your account **once**.
 
-> You CANNOT use scopes without modifying the main activity
+If Connect shows the account picker twice, then **Google rejected the OAuth client (Error 401 invalid_client)**, you are on **63.0.2**. That build sent a pasted client ID into Google’s web OAuth page and launched the picker a second time. Install **63.0.3**.
 
-you are on an older `.aab`. Pull the latest branch, rebuild the signed bundle, and upload Internal testing again. The Web client ID you pasted is fine — this is not a Google Cloud mistake.
+1. You must be on Play **63.0.3**. Settings footer must read **Habit & Journal 63.0.3**.
+2. Android Studio **Generate Signed Bundle** copies `index.html` + `assets/` and stamps `version.json`.
+3. Play Console → Test and release → Setup → **App signing** → copy **App signing key certificate SHA-1**.
+4. Google Cloud → Clients → your **Android** client (`com.dincey.habitjournal`) → add that SHA-1 (and the upload-keystore SHA-1).
+5. Uninstall the app, install **63.0.3** from the opt-in link, confirm the footer, tap Connect. Do not type a client ID.
 
-If Connect shows **Access blocked / Error 401: invalid_client** with `flowName=GeneralOAuthFlow`:
-
-That is Google’s **web** OAuth page rejecting the client ID. On the Play app, Connect must stay on the native `AuthorizationClient` path and pass the **Web application** client ID as `serverClientId`. It must **not** open Google sign-in inside the Capacitor WebView.
-
-1. You must be on Play **63.0.2**. Settings footer must read **Habit & Journal 63.0.2**.
-2. Settings → Google Drive: paste the **Web application** client ID only (Clients → type **Web application**). The Android client ID looks similar but Google rejects it on that page.
-3. Android Studio **Generate Signed Bundle** copies `index.html` + `assets/` and stamps `version.json`.
-4. Play Console → Test and release → Setup → **App signing** → copy **App signing key certificate SHA-1**.
-5. Google Cloud → Clients → your **Android** client (`com.dincey.habitjournal`) → add that SHA-1 (and the upload-keystore SHA-1).
-6. Uninstall the app, install **63.0.2** from the opt-in link, confirm the footer, Connect again.
-
-Do **not** paste the Android client ID into Settings.
+The **Web application** client ID is only for the website, not the Play app.
 
 If Connect shows **Google Sign-In failed [16] Account reauth failed**:
 
 Play Console can show an old **62.0.x** while Settings flashes **v59** then **v62**. Those are different files. Play reads Android `versionName`. The footer is HTML that a service worker used to cache. **63.0.0** stamps the same version into Play and the footer, and the WebView loads `/?v=63.0.0` so old HTML cannot paint first.
 
-1. You must be on Play **63.0.2**. Settings footer must read **Habit & Journal 63.0.2**.
+1. You must be on Play **63.0.3**. Settings footer must read **Habit & Journal 63.0.3**.
 2. Android Studio **Generate Signed Bundle** copies `index.html` + `assets/` and stamps `version.json`.
 3. Play Console → Test and release → Setup → **App signing** → copy **App signing key certificate SHA-1**.
 4. Google Cloud → Clients → your **Android** client (`com.dincey.habitjournal`) → add that SHA-1 (and the upload-keystore SHA-1).
-5. Uninstall the app, install **63.0.2** from the opt-in link, confirm the footer, Connect again.
-
-Do **not** paste the Android client ID into Settings.
+5. Uninstall the app, install **63.0.3** from the opt-in link, confirm the footer, Connect again.
 
 ### Connect steps
 
 Settings → Google Drive backup:
 
-1. Paste the **Web** client ID into **Google Web client ID** if the field is shown.
+1. On the **Play app**: skip the client ID field (it is hidden). On the **website**: paste the **Web** client ID if the field is shown.
 2. Choose **Daily**, **Weekly**, or **Off**.
-3. Tap **Connect Google Drive** and pick a Google account that is a test user.
+3. Tap **Connect Google Drive** and pick a Google account that is a test user **once**.
 4. Google’s consent screen appears. Allow Habit & Journal to create files in Drive.
 5. The app creates `Habit-Journal-backup.json` in My Drive if needed.
 6. **Backup now** / **Restore** stay available after connect. Daily/Weekly runs on the next first-open of that period.
@@ -213,8 +204,8 @@ Do these in order. Stop after step 6 unless you later want Google verification (
 2. **Audience** — External, **Testing**, add test users → Save. Do not Publish.
 3. **Data access** — `openid`, `userinfo.email`, `userinfo.profile`, `drive.file`.
 4. **Drive API** enabled on project **Habit App**.
-5. **Clients** — Web application (paste this ID in the app) + Android (package + SHA-1 only).
-6. In the app: paste Web client ID → **Connect Google Drive** → pick a test-user Gmail → allow → **Backup now**.
+5. **Clients** — Android (package + SHA-1; Play app uses this automatically) + Web application (website only).
+6. Play app: **Connect Google Drive** → pick a test-user Gmail once → allow → **Backup now**. Website: paste Web client ID first.
 
 `drive.file` is a sensitive scope. Publishing to Production usually starts a Google verification review. Skip that until you have a domain you own and a reason for strangers (not test users) to Connect.
 
