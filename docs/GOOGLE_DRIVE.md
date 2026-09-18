@@ -165,15 +165,28 @@ Connect on the phone needs Capgo SocialLogin wired in `MainActivity`. That is al
 
 you are on an older `.aab`. Pull the latest branch, rebuild the signed bundle, and upload Internal testing again. The Web client ID you pasted is fine — this is not a Google Cloud mistake.
 
+If Connect shows **Access blocked / Error 401: invalid_client** with `flowName=GeneralOAuthFlow`:
+
+That is Google’s **web** OAuth page rejecting the client ID. On the Play app, Connect must stay on the native `AuthorizationClient` path and pass the **Web application** client ID as `serverClientId`. It must **not** open Google sign-in inside the Capacitor WebView.
+
+1. You must be on Play **63.0.2**. Settings footer must read **Habit & Journal 63.0.2**.
+2. Settings → Google Drive: paste the **Web application** client ID only (Clients → type **Web application**). The Android client ID looks similar but Google rejects it on that page.
+3. Android Studio **Generate Signed Bundle** copies `index.html` + `assets/` and stamps `version.json`.
+4. Play Console → Test and release → Setup → **App signing** → copy **App signing key certificate SHA-1**.
+5. Google Cloud → Clients → your **Android** client (`com.dincey.habitjournal`) → add that SHA-1 (and the upload-keystore SHA-1).
+6. Uninstall the app, install **63.0.2** from the opt-in link, confirm the footer, Connect again.
+
+Do **not** paste the Android client ID into Settings.
+
 If Connect shows **Google Sign-In failed [16] Account reauth failed**:
 
 Play Console can show an old **62.0.x** while Settings flashes **v59** then **v62**. Those are different files. Play reads Android `versionName`. The footer is HTML that a service worker used to cache. **63.0.0** stamps the same version into Play and the footer, and the WebView loads `/?v=63.0.0` so old HTML cannot paint first.
 
-1. You must be on Play **63.0.1**. Settings footer must read **Habit & Journal 63.0.1**.
+1. You must be on Play **63.0.2**. Settings footer must read **Habit & Journal 63.0.2**.
 2. Android Studio **Generate Signed Bundle** copies `index.html` + `assets/` and stamps `version.json`.
 3. Play Console → Test and release → Setup → **App signing** → copy **App signing key certificate SHA-1**.
 4. Google Cloud → Clients → your **Android** client (`com.dincey.habitjournal`) → add that SHA-1 (and the upload-keystore SHA-1).
-5. Uninstall the app, install **63.0.1** from the opt-in link, confirm the footer, Connect again.
+5. Uninstall the app, install **63.0.2** from the opt-in link, confirm the footer, Connect again.
 
 Do **not** paste the Android client ID into Settings.
 

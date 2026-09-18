@@ -3,7 +3,6 @@ package com.dincey.habitjournal;
 import android.app.Activity;
 import android.app.PendingIntent;
 import android.content.Intent;
-import android.content.IntentSender;
 import android.util.Log;
 import com.getcapacitor.JSObject;
 import com.getcapacitor.Plugin;
@@ -28,17 +27,26 @@ import java.util.concurrent.Executors;
  * MainActivity.singleTask also drops startIntentSenderForResult, which we used
  * to report as "Google sign-in cancelled" after the user picked an account.
  * Results now come through Activity Result API, then a silent authorize retry.
+ *
+ * The Web application client ID is passed to requestOfflineAccess so Google's
+ * consent Custom Tab has a valid web client_id. Using the Android client there
+ * is Error 401 invalid_client / GeneralOAuthFlow. JS must not fall back to GIS
+ * in the Capacitor WebView.
  */
 @CapacitorPlugin(name = "DriveAuth")
 public class DriveAuthPlugin extends Plugin {
   public static final int REQUEST_AUTHORIZE = 42801;
   private static final String TAG = "DriveAuth";
   private static final String DRIVE_SCOPE = "https://www.googleapis.com/auth/drive.file";
+  private static final int MAX_UI_LAUNCHES = 2;
   private static final String SHA1_HINT =
     "Google Drive auth failed. Add Play Console → App signing → SHA-1 to the Android OAuth client (package com.dincey.habitjournal). Do not paste the Android client ID.";
+  private static final String WEB_CLIENT_HINT =
+    "Google rejected the OAuth client (Error 401 invalid_client). Paste the Web application client ID in Settings → Google Drive, not the Android client ID.";
 
   private final Object lock = new Object();
   private PluginCall pendingCall;
+  private int uiLaunches;
   private final ExecutorService io = Executors.newSingleThreadExecutor();
 
   @PluginMethod
@@ -48,6 +56,7 @@ public class DriveAuthPlugin extends Plugin {
       call.reject("Google Drive auth needs the app in the foreground", "AUTH_FAILED");
       return;
     }
+    uiLaunches = 0;
     activity.runOnUiThread(() -> startAuthorize(call, activity, false));
   }
 
@@ -76,14 +85,24 @@ public class DriveAuthPlugin extends Plugin {
       }
     }
     // singleTask often returns RESULT_CANCELED after a successful account pick.
-    // Ask Google again without UI; the grant is often already stored.
+    // Ask Google again; if Drive consent is still pending, launch that UI once more.
     startAuthorize(call, activity, true);
   }
 
-  private void startAuthorize(PluginCall call, Activity activity, boolean silentRetry) {
-    AuthorizationRequest request = AuthorizationRequest.builder()
-      .setRequestedScopes(Collections.singletonList(new Scope(DRIVE_SCOPE)))
-      .build();
+  private AuthorizationRequest buildRequest(PluginCall call) {
+    AuthorizationRequest.Builder builder = AuthorizationRequest.builder()
+      .setRequestedScopes(Collections.singletonList(new Scope(DRIVE_SCOPE)));
+    String webClientId = call.getString("webClientId", "");
+    if (webClientId != null) webClientId = webClientId.trim();
+    if (webClientId != null && webClientId.contains(".apps.googleusercontent.com")) {
+      // serverClientId must be a Web application client, not Android.
+      builder.requestOfflineAccess(webClientId);
+    }
+    return builder.build();
+  }
+
+  private void startAuthorize(PluginCall call, Activity activity, boolean afterActivityResult) {
+    AuthorizationRequest request = buildRequest(call);
     boolean interactive = Boolean.TRUE.equals(call.getBoolean("interactive", true));
     Identity.getAuthorizationClient(activity)
       .authorize(request)
@@ -92,12 +111,12 @@ public class DriveAuthPlugin extends Plugin {
           deliver(call, result);
           return;
         }
-        if (silentRetry || !interactive) {
-          if (!interactive) {
-            call.reject("Google Drive needs Connect once", "AUTH_FAILED");
-            return;
-          }
-          call.reject("Google sign-in cancelled", "USER_CANCELED");
+        if (!interactive) {
+          call.reject("Google Drive needs Connect once", "AUTH_FAILED");
+          return;
+        }
+        if (afterActivityResult && uiLaunches >= MAX_UI_LAUNCHES) {
+          call.reject(WEB_CLIENT_HINT, "AUTH_FAILED");
           return;
         }
         PendingIntent pendingIntent = result.getPendingIntent();
@@ -111,6 +130,7 @@ public class DriveAuthPlugin extends Plugin {
           pendingCall = call;
         }
         try {
+          uiLaunches++;
           if (activity instanceof MainActivity) {
             ((MainActivity) activity).launchDriveAuth(pendingIntent);
           } else {
@@ -130,7 +150,7 @@ public class DriveAuthPlugin extends Plugin {
         }
       })
       .addOnFailureListener(activity, e -> {
-        Log.e(TAG, silentRetry ? "silent retry failed" : "authorize failed", e);
+        Log.e(TAG, afterActivityResult ? "authorize after result failed" : "authorize failed", e);
         call.reject(hint(e), "AUTH_FAILED");
       });
   }
@@ -201,6 +221,9 @@ public class DriveAuthPlugin extends Plugin {
     }
     String msg = t.getMessage() == null ? (e.getMessage() == null ? "" : e.getMessage()) : t.getMessage();
     String lower = msg.toLowerCase();
+    if (lower.contains("invalid_client") || lower.contains("generaloauthflow") || lower.contains("oauth client was not found")) {
+      return WEB_CLIENT_HINT;
+    }
     if (lower.contains("developer") || lower.contains("[10]") || lower.contains("not set up correctly")
         || lower.contains("current app identifier")) {
       return SHA1_HINT;

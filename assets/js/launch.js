@@ -206,17 +206,17 @@
         const tok = await nativeGoogleToken(!!interactive);
         if (tok) return tok;
         if (!interactive) throw new Error('Google Drive needs Connect once');
+        throw new Error('Google Drive authorization did not return a token');
       } catch (e) {
         if (!interactive) throw new Error('Google Drive needs Connect once');
         const msg = String(e?.message || e || '');
         if (/clientId is null or empty|webClientId|not configured|Paste the Google Web/i.test(msg)) {
           throw new Error('Paste the Google Web client ID in Settings → Google Drive, then tap Connect.');
         }
-        try {
-          return await requestToken('consent');
-        } catch (webErr) {
-          throw new Error(googleErrorHint(e));
-        }
+        // Never open GIS in the Android WebView. That is Google's GeneralOAuthFlow
+        // page and Error 401 invalid_client when the client is Android-type or the
+        // WebView origin is https://localhost.
+        throw new Error(googleErrorHint(e));
       }
     }
     if (!clientId()) throw new Error('Paste the Google Web client ID in Settings → Google Drive, then tap Connect.');
