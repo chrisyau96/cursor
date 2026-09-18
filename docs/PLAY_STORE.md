@@ -42,7 +42,7 @@ Follow `docs/GOOGLE_DRIVE.md`. Short version:
 2. Enable **Google Drive API**
 3. OAuth consent screen: External, app name Momentum, privacy `https://chrisyau96.github.io/cursor/privacy.html`, scope `https://www.googleapis.com/auth/drive.appdata`, add yourself as a test user
 4. Credentials → **Web application** client. Authorized JavaScript origins: `https://chrisyau96.github.io` and `http://localhost`. Paste that ID into Settings → Google Drive, or bake it in `index.html` as `window.MOMENTUM_CONFIG.googleClientId`
-5. Credentials → **Android** client. Package: `com.dincey.habitjournal`. SHA-1 from your upload keystore (section 5) **and later** Play App Signing SHA-1 (Play Console → Test and release → Setup → App signing). You can also add the debug keystore SHA-1 for USB installs
+5. Credentials → **Android** client. Package: `com.dincey.habitjournal`. SHA-1 from Play Console → App signing → **App signing key certificate** (not **Upload key certificate**). One Android client = one SHA-1; make another Android client if you also need the upload-key fingerprint for local APKs.
 
 ```bash
 keytool -list -v -alias androiddebugkey -keystore ~/.android/debug.keystore -storepass android -keypass android
@@ -228,9 +228,9 @@ GitHub Pages updates on every `main` merge. The Play app updates only when you s
 |---|---|
 | “Privacy policy is invalid” | Use `https://chrisyau96.github.io/cursor/privacy.html` |
 | Notifications never appear | Android 13+: Allow. Settings → Apps → Momentum → Notifications |
-| Drive popup every time | Android OAuth client with **both** upload-key SHA-1 and Play App Signing SHA-1. Paste the **Web** client ID in Settings |
+| Drive popup every time | Android OAuth client SHA-1 must be Play **App signing key certificate**, not Upload key. Do not paste a client ID on the Play app |
 | Play version updates, Settings still says v59/v62 | Uninstall, install **63.0.3**. Footer must read **Habit & Journal 63.0.3**. |
-| Drive picker twice / **401 invalid_client** | Install **63.0.3**. Do not paste a client ID on the Play app. Add Play App signing SHA-1 to the Android OAuth client. |
+| Drive picker twice / **401 invalid_client** | Install **63.0.3**. Do not paste a client ID. Create an Android OAuth client with the **App signing key** SHA-1 (Upload key SHA-1 is the wrong cert for Play installs). |
 | “Package name already used” | `com.dincey.habitjournal` must be unique; change `appId` in `capacitor.config.json` **before** the first upload |
 | Closed test not counting | Testers did not click the opt-in link, or you used Internal instead of Closed |
 | AAB rejected for target SDK | `targetSdk` is 36 in `android/variables.gradle` |

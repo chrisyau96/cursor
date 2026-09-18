@@ -131,27 +131,30 @@ That Web client ID is what Settings → Google Drive expects. You can also bake 
 
 ## F. Android client (do not paste this ID into the app)
 
+Play Console **App signing** has two certificates. They look similar. They are not the same.
+
+| Play Console heading | What it is | Use for OAuth? |
+|---|---|---|
+| **App signing key certificate** | The cert on the APK testers actually install from Play | **Yes — required** |
+| **Upload key certificate** | The cert you use in Android Studio to upload the `.aab` | Only for a USB/local APK you signed yourself |
+
+One Android OAuth client has **one** SHA-1 field. You cannot put both fingerprints on the same client.
+
 1. **Create client** → Application type **Android**.
-2. Name: `Habit Journal Android`.
+2. Name: `Habit Journal Android Play`.
 3. Package name: `com.dincey.habitjournal`
-4. SHA-1: add **each** signing cert you use.
+4. SHA-1: Play Console → Test and release → Setup → **App signing** → section titled **App signing key certificate** (not Upload key) → SHA-1.
+5. Create. **Do not** paste that client ID into the app.
 
-From your upload keystore on Windows:
+Keep the existing `Habit Journal Android` client if its SHA-1 is the upload key (`A5:57:4B:…`). That one is for locally signed builds only. Play Internal testing will not match it. Google then shows *This client is not available to verify ownership because it is not a Google Play Store app*.
 
-```bat
-keytool -list -v -keystore C:\Users\User\momentum-upload.jks -alias upload
-```
-
-Also add:
-
-- Play Console → Test and release → Setup → App signing → **App signing key certificate** SHA-1
-- Debug SHA-1 if you install from Android Studio / USB:
+Debug SHA-1 only if you install from Android Studio / USB (third Android client, same package):
 
 ```bat
 keytool -list -v -alias androiddebugkey -keystore %USERPROFILE%\.android\debug.keystore -storepass android -keypass android
 ```
 
-Google matches the signed APK/AAB automatically. **Do not** paste the Android client ID into Settings.
+Google matches the installed APK automatically. **Do not** paste the Android client ID into Settings.
 
 ---
 
@@ -165,8 +168,8 @@ If Connect shows the account picker twice, then **Google rejected the OAuth clie
 
 1. You must be on Play **63.0.3**. Settings footer must read **Habit & Journal 63.0.3**.
 2. Android Studio **Generate Signed Bundle** copies `index.html` + `assets/` and stamps `version.json`.
-3. Play Console → Test and release → Setup → **App signing** → copy **App signing key certificate SHA-1**.
-4. Google Cloud → Clients → your **Android** client (`com.dincey.habitjournal`) → add that SHA-1 (and the upload-keystore SHA-1).
+3. Play Console → Test and release → Setup → **App signing** → copy SHA-1 from **App signing key certificate** (not **Upload key certificate**).
+4. Google Cloud → **Create** another Android client: package `com.dincey.habitjournal`, that App signing SHA-1. Do not paste the client ID. One OAuth client cannot hold two SHA-1s.
 5. Uninstall the app, install **63.0.3** from the opt-in link, confirm the footer, tap Connect. Do not type a client ID.
 
 The **Web application** client ID is only for the website, not the Play app.
@@ -177,8 +180,8 @@ Play Console can show an old **62.0.x** while Settings flashes **v59** then **v6
 
 1. You must be on Play **63.0.3**. Settings footer must read **Habit & Journal 63.0.3**.
 2. Android Studio **Generate Signed Bundle** copies `index.html` + `assets/` and stamps `version.json`.
-3. Play Console → Test and release → Setup → **App signing** → copy **App signing key certificate SHA-1**.
-4. Google Cloud → Clients → your **Android** client (`com.dincey.habitjournal`) → add that SHA-1 (and the upload-keystore SHA-1).
+3. Play Console → Test and release → Setup → **App signing** → copy SHA-1 from **App signing key certificate** (not **Upload key certificate**).
+4. Google Cloud → **Create** another Android client: package `com.dincey.habitjournal`, that App signing SHA-1. Do not paste the client ID. One OAuth client cannot hold two SHA-1s.
 5. Uninstall the app, install **63.0.3** from the opt-in link, confirm the footer, Connect again.
 
 ### Connect steps
