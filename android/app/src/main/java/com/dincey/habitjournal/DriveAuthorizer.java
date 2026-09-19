@@ -1,237 +1,189 @@
 package com.dincey.habitjournal;
 
-import android.app.PendingIntent;
+import android.app.Activity;
+import android.content.Intent;
 import android.content.pm.PackageInfo;
 import android.content.pm.PackageManager;
 import android.content.pm.Signature;
 import android.content.pm.SigningInfo;
 import android.os.Build;
-import android.os.Handler;
-import android.os.Looper;
 import android.util.Log;
 import androidx.activity.ComponentActivity;
 import androidx.activity.result.ActivityResult;
 import androidx.activity.result.ActivityResultLauncher;
-import androidx.activity.result.IntentSenderRequest;
 import androidx.activity.result.contract.ActivityResultContracts;
 import com.google.android.gms.auth.GoogleAuthUtil;
-import com.google.android.gms.auth.api.identity.AuthorizationRequest;
-import com.google.android.gms.auth.api.identity.AuthorizationResult;
-import com.google.android.gms.auth.api.identity.Identity;
+import com.google.android.gms.auth.UserRecoverableAuthException;
+import com.google.android.gms.auth.api.signin.GoogleSignIn;
 import com.google.android.gms.auth.api.signin.GoogleSignInAccount;
+import com.google.android.gms.auth.api.signin.GoogleSignInClient;
+import com.google.android.gms.auth.api.signin.GoogleSignInOptions;
+import com.google.android.gms.auth.api.signin.GoogleSignInStatusCodes;
 import com.google.android.gms.common.api.ApiException;
 import com.google.android.gms.common.api.CommonStatusCodes;
 import com.google.android.gms.common.api.Scope;
 import java.security.MessageDigest;
-import java.util.Collections;
 import java.util.LinkedHashSet;
 import java.util.Set;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 
 /**
- * Runs AuthorizationClient on MainActivity. A helper activity cannot receive
- * Google's result: MainActivity is singleTask, so Android resumes it and
- * reports RESULT_CANCELED to any other task/activity (the 63.0.7 toast).
- * After a cancelled result, authorize() is called again without UI so a
- * completed grant still yields an access token.
+ * Drive Connect uses one GoogleSignIn.getSignInIntent() plus GoogleAuthUtil.getToken.
+ * AuthorizationClient's PendingIntent was cancelled by singleTask task reordering;
+ * 63.0.8 then re-opened that picker three times from resume retries.
  */
+@SuppressWarnings("deprecation")
 public final class DriveAuthorizer {
   private static final String TAG = "DriveAuth";
   private static final String DRIVE_SCOPE = "https://www.googleapis.com/auth/drive.file";
-  private static final int MAX_UI_LAUNCHES = 3;
+  private static final Scope DRIVE = new Scope(DRIVE_SCOPE);
 
   private final ComponentActivity activity;
-  private final ActivityResultLauncher<IntentSenderRequest> launcher;
-  private final Handler main = new Handler(Looper.getMainLooper());
+  private final ActivityResultLauncher<Intent> launcher;
   private final ExecutorService io = Executors.newSingleThreadExecutor();
 
+  private GoogleSignInClient client;
   private boolean interactive = true;
-  private boolean sessionOpen;
   private boolean finished;
-  private boolean authorizeInFlight;
-  private boolean awaitingGoogleUi;
-  private int uiLaunches;
+  private boolean launchedUi;
+  private boolean recovering;
+  private GoogleSignInAccount pendingAccount;
 
   public DriveAuthorizer(ComponentActivity activity) {
     this.activity = activity;
     this.launcher = activity.registerForActivityResult(
-      new ActivityResultContracts.StartIntentSenderForResult(),
-      this::onGoogleResult
+      new ActivityResultContracts.StartActivityForResult(),
+      this::onActivityResult
     );
   }
 
   public void start(boolean interactive) {
     this.interactive = interactive;
-    sessionOpen = true;
-    finished = false;
-    authorizeInFlight = false;
-    awaitingGoogleUi = false;
-    uiLaunches = 0;
+    this.finished = false;
+    this.launchedUi = false;
+    this.recovering = false;
+    this.pendingAccount = null;
+    this.client = GoogleSignIn.getClient(activity, new GoogleSignInOptions.Builder(GoogleSignInOptions.DEFAULT_SIGN_IN)
+      .requestEmail()
+      .requestScopes(DRIVE)
+      .build());
     Log.i(TAG, "install SHA-1 " + installSha1s());
-    startAuthorize(true);
-  }
 
-  public void onHostResume() {
-    if (!sessionOpen || finished || authorizeInFlight) return;
-    if (!awaitingGoogleUi) return;
-    awaitingGoogleUi = false;
-    main.postDelayed(() -> {
-      if (!sessionOpen || finished) return;
-      startAuthorize(false);
-    }, 400);
+    if (!interactive) {
+      GoogleSignInAccount last = GoogleSignIn.getLastSignedInAccount(activity);
+      if (last != null && last.getGrantedScopes().contains(DRIVE)) {
+        fetchToken(last);
+        return;
+      }
+      client.silentSignIn()
+        .addOnSuccessListener(activity, this::fetchToken)
+        .addOnFailureListener(activity, e -> fail("Google Drive needs Connect once"));
+      return;
+    }
+
+    // Interactive Connect: one account picker. Do not silent-retry or re-open
+    // Google UI from onResume — that is what showed the picker three times.
+    client.signOut().addOnCompleteListener(activity, t -> launchSignInOnce());
   }
 
   public void shutdown() {
     io.shutdownNow();
   }
 
-  private AuthorizationRequest buildRequest() {
-    return AuthorizationRequest.builder()
-      .setRequestedScopes(Collections.singletonList(new Scope(DRIVE_SCOPE)))
-      .build();
-  }
-
-  private void startAuthorize(boolean allowUi) {
-    if (finished || authorizeInFlight) return;
-    authorizeInFlight = true;
-    Identity.getAuthorizationClient(activity)
-      .authorize(buildRequest())
-      .addOnCompleteListener(activity, task -> authorizeInFlight = false)
-      .addOnSuccessListener(activity, result -> {
-        if (finished) return;
-        if (!result.hasResolution()) {
-          deliverOrFail(result);
-          return;
-        }
-        if (allowUi && interactive) {
-          launchResolution(result.getPendingIntent());
-          return;
-        }
-        // Picker result was dropped (RESULT_CANCELED) but the grant may still
-        // need the Drive consent UI, or the user really cancelled.
-        if (interactive && uiLaunches < MAX_UI_LAUNCHES) {
-          launchResolution(result.getPendingIntent());
-          return;
-        }
-        fail(uiLaunches > 0
-          ? "Google Drive sign-in was cancelled"
-          : "Google Drive needs Connect once");
-      })
-      .addOnFailureListener(activity, e -> {
-        Log.e(TAG, "authorize failed", e);
-        fail(hint(e));
-      });
-  }
-
-  private void launchResolution(PendingIntent pendingIntent) {
-    if (finished) return;
-    if (pendingIntent == null) {
-      fail("Google authorization UI is unavailable");
-      return;
-    }
-    if (uiLaunches >= MAX_UI_LAUNCHES) {
-      fail("Google Drive sign-in did not finish");
-      return;
-    }
-    uiLaunches++;
-    awaitingGoogleUi = true;
+  private void launchSignInOnce() {
+    if (finished || launchedUi) return;
+    launchedUi = true;
+    recovering = false;
     try {
-      launcher.launch(new IntentSenderRequest.Builder(pendingIntent).build());
+      launcher.launch(client.getSignInIntent());
     } catch (Exception e) {
-      awaitingGoogleUi = false;
-      fail("Could not open Google authorization: " + e.getMessage());
+      fail("Could not open Google sign-in: " + e.getMessage());
     }
   }
 
-  private void onGoogleResult(ActivityResult activityResult) {
+  private void onActivityResult(ActivityResult result) {
     if (finished) return;
-    awaitingGoogleUi = false;
-    android.content.Intent data = activityResult.getData();
-    int resultCode = activityResult.getResultCode();
-    if (data != null) {
-      try {
-        AuthorizationResult parsed = Identity.getAuthorizationClient(activity).getAuthorizationResultFromIntent(data);
-        if (hasUsableToken(parsed) || parsed.toGoogleSignInAccount() != null) {
-          deliverOrFail(parsed);
-          return;
-        }
-        if (parsed.hasResolution() && parsed.getPendingIntent() != null) {
-          launchResolution(parsed.getPendingIntent());
-          return;
-        }
-      } catch (Exception e) {
-        Log.e(TAG, "getAuthorizationResultFromIntent resultCode=" + resultCode, e);
-        if (isDeveloperError(e)) {
-          fail(hint(e));
-          return;
-        }
+    if (recovering) {
+      recovering = false;
+      if (result.getResultCode() == Activity.RESULT_OK && pendingAccount != null) {
+        fetchToken(pendingAccount);
+        return;
       }
+      fail("Google Drive sign-in was cancelled");
+      return;
     }
-    // singleTask MainActivity often reports CANCELED after a successful pick.
-    // Ask Google again without UI; a completed grant returns the token.
-    main.postDelayed(() -> {
-      if (finished) return;
-      startAuthorize(false);
-    }, 400);
-  }
-
-  private boolean hasUsableToken(AuthorizationResult result) {
-    String token = result.getAccessToken();
-    return token != null && token.length() >= 20;
-  }
-
-  private void deliverOrFail(AuthorizationResult result) {
-    String email = "";
-    GoogleSignInAccount account = null;
+    if (result.getResultCode() != Activity.RESULT_OK || result.getData() == null) {
+      fail("Google Drive sign-in was cancelled");
+      return;
+    }
     try {
-      account = result.toGoogleSignInAccount();
-      if (account != null && account.getEmail() != null) email = account.getEmail();
-    } catch (Exception ignored) {}
+      GoogleSignInAccount account = GoogleSignIn.getSignedInAccountFromIntent(result.getData())
+        .getResult(ApiException.class);
+      fetchToken(account);
+    } catch (ApiException e) {
+      Log.e(TAG, "GoogleSignIn failed status=" + e.getStatusCode(), e);
+      if (e.getStatusCode() == GoogleSignInStatusCodes.SIGN_IN_CANCELLED) {
+        fail("Google Drive sign-in was cancelled");
+        return;
+      }
+      if (e.getStatusCode() == GoogleSignInStatusCodes.SIGN_IN_CURRENTLY_IN_PROGRESS) {
+        fail("Google Drive sign-in is already open");
+        return;
+      }
+      fail(hint(e));
+    }
+  }
 
-    if (hasUsableToken(result)) {
-      ok(result.getAccessToken(), email);
+  private void fetchToken(GoogleSignInAccount account) {
+    if (finished) return;
+    if (account == null || account.getAccount() == null) {
+      fail("Google did not return an account");
       return;
     }
-    if (account != null && account.getAccount() != null) {
-      final GoogleSignInAccount acct = account;
-      final String emailFinal = email;
-      io.execute(() -> {
-        try {
-          String recovered = GoogleAuthUtil.getToken(activity, acct.getAccount(), "oauth2:" + DRIVE_SCOPE);
-          activity.runOnUiThread(() -> {
-            if (recovered != null && recovered.length() >= 20) ok(recovered, emailFinal);
-            else fail("Google did not return an access token");
-          });
-        } catch (Exception e) {
-          Log.e(TAG, "GoogleAuthUtil.getToken failed", e);
-          activity.runOnUiThread(() -> fail(hint(e)));
-        }
-      });
-      return;
-    }
-    fail("Google did not return an access token");
+    pendingAccount = account;
+    final String email = account.getEmail() == null ? "" : account.getEmail();
+    io.execute(() -> {
+      try {
+        String token = GoogleAuthUtil.getToken(activity, account.getAccount(), "oauth2:" + DRIVE_SCOPE);
+        activity.runOnUiThread(() -> {
+          if (token != null && token.length() >= 20) ok(token, email);
+          else fail("Google did not return an access token");
+        });
+      } catch (UserRecoverableAuthException e) {
+        Log.i(TAG, "Drive scope needs a one-time consent UI");
+        Intent recover = e.getIntent();
+        activity.runOnUiThread(() -> {
+          if (finished) return;
+          if (!interactive || recover == null) {
+            fail("Google Drive needs Connect once");
+            return;
+          }
+          if (recovering) return;
+          recovering = true;
+          try {
+            launcher.launch(recover);
+          } catch (Exception launchErr) {
+            fail("Could not open Google Drive consent: " + launchErr.getMessage());
+          }
+        });
+      } catch (Exception e) {
+        Log.e(TAG, "GoogleAuthUtil.getToken failed", e);
+        activity.runOnUiThread(() -> fail(hint(e)));
+      }
+    });
   }
 
   private void ok(String token, String email) {
     if (finished) return;
     finished = true;
-    sessionOpen = false;
     DriveAuthPlugin.completeOk(token, email);
   }
 
   private void fail(String message) {
     if (finished) return;
     finished = true;
-    sessionOpen = false;
     DriveAuthPlugin.completeError(message == null ? "Google Drive authorization failed" : message);
-  }
-
-  private boolean isDeveloperError(Exception e) {
-    Throwable t = e;
-    if (e.getCause() instanceof ApiException) t = e.getCause();
-    return t instanceof ApiException
-      && ((ApiException) t).getStatusCode() == CommonStatusCodes.DEVELOPER_ERROR;
   }
 
   private String hint(Exception e) {
@@ -239,7 +191,7 @@ public final class DriveAuthorizer {
     if (e.getCause() instanceof ApiException) t = e.getCause();
     if (t instanceof ApiException) {
       int code = ((ApiException) t).getStatusCode();
-      if (code == CommonStatusCodes.DEVELOPER_ERROR) {
+      if (code == CommonStatusCodes.DEVELOPER_ERROR || code == GoogleSignInStatusCodes.DEVELOPER_ERROR) {
         return "Google rejected this install (error 10). This phone's SHA-1: "
           + installSha1s()
           + ". Create an Android OAuth client with package com.dincey.habitjournal and that exact value. Quantum-ready Play signing needs a separate client for Classical SHA-1 and Post-quantum SHA-1. Do not paste a client ID.";

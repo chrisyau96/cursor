@@ -35,12 +35,6 @@ public class MainActivity extends BridgeActivity implements ModifiedMainActivity
   }
 
   @Override
-  public void onResume() {
-    super.onResume();
-    if (driveAuthorizer != null) driveAuthorizer.onHostResume();
-  }
-
-  @Override
   public void onDestroy() {
     if (driveAuthorizer != null) driveAuthorizer.shutdown();
     super.onDestroy();

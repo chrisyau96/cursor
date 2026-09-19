@@ -206,7 +206,7 @@ Personal accounts created after 13 Nov 2023 often must run a closed test with **
 git pull
 ```
 
-Android Studio **Generate Signed Bundle** copies `index.html` and `assets/` into the AAB and stamps `version.json` (`63.0.8`). Settings footer must match Play (`Habit & Journal 63.0.8`). If Play shows 63.0.8 but the footer still says `v59` or `v62`, uninstall and reinstall from the opt-in link.
+Android Studio **Generate Signed Bundle** copies `index.html` and `assets/` into the AAB and stamps `version.json` (`63.0.9`). Settings footer must match Play (`Habit & Journal 63.0.9`). If Play shows 63.0.9 but the footer still says `v59` or `v62`, uninstall and reinstall from the opt-in link.
 
 Optional if you use Node:
 
@@ -229,9 +229,10 @@ GitHub Pages updates on every `main` merge. The Play app updates only when you s
 | “Privacy policy is invalid” | Use `https://chrisyau96.github.io/cursor/privacy.html` |
 | Notifications never appear | Android 13+: Allow. Settings → Apps → Momentum → Notifications |
 | Drive popup every time | Android OAuth: Classical **and** Post-quantum App signing SHA-1 as two clients (same package). Not Upload key. Do not paste a client ID |
-| Play version updates, Settings still says v59/v62 | Uninstall, install **63.0.8**. Footer must read **Habit & Journal 63.0.8**. |
-| Drive picker twice / **401 invalid_client** | Install **63.0.8**. Do not paste a client ID. |
-| Drive **sign-in was cancelled** / did not finish | Install **63.0.8**. 63.0.7 treated a dropped Google result as Cancel. Connect now runs on MainActivity and retries for the token. |
+| Play version updates, Settings still says v59/v62 | Uninstall, install **63.0.9**. Footer must read **Habit & Journal 63.0.9**. |
+| Drive picker twice / **401 invalid_client** | Install **63.0.9**. Do not paste a client ID. |
+| Drive picker **three times** then **sign-in was cancelled** | Install **63.0.9**. 63.0.8 retried a cancelled Google UI twice more. Connect now opens the picker once. |
+| Drive **sign-in was cancelled** / did not finish | Install **63.0.9**. MainActivity is `singleTop` so Google can return the account. |
 | “Package name already used” | `com.dincey.habitjournal` must be unique; change `appId` in `capacitor.config.json` **before** the first upload |
 | Closed test not counting | Testers did not click the opt-in link, or you used Internal instead of Closed |
 | AAB rejected for target SDK | `targetSdk` is 36 in `android/variables.gradle` |

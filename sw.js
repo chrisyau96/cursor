@@ -1,6 +1,6 @@
 // Offline-first service worker for the website only.
-// The Play app unregisters this so an old v59/v62 cache cannot hide 63.0.8.
-const CACHE = "habit-journal-63.0.8";
+// The Play app unregisters this so an old v59/v62 cache cannot hide 63.0.9.
+const CACHE = "habit-journal-63.0.9";
 
 const ASSETS = [
   ".",

@@ -11,8 +11,8 @@ import com.getcapacitor.annotation.CapacitorPlugin;
 
 /**
  * JS bridge for Drive backup auth. Google UI runs on MainActivity via
- * DriveAuthorizer. A separate helper activity cannot receive the picker
- * result because MainActivity is singleTask (63.0.7 "sign-in was cancelled").
+ * DriveAuthorizer (one GoogleSignIn intent). MainActivity is singleTop so
+ * the picker result is not dropped the way singleTask dropped it.
  */
 @CapacitorPlugin(name = "DriveAuth")
 public class DriveAuthPlugin extends Plugin {
