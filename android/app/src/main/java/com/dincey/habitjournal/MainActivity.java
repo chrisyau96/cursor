@@ -19,13 +19,31 @@ import java.io.File;
 public class MainActivity extends BridgeActivity implements ModifiedMainActivityForSocialLoginPlugin {
   private static final String WEB_PREFS = "momentum_web";
   private static final String PURGED_VERSION = "purgedVersionCode";
+  private DriveAuthorizer driveAuthorizer;
 
   @Override
   public void onCreate(Bundle savedInstanceState) {
+    driveAuthorizer = new DriveAuthorizer(this);
     registerPlugin(MomentumWidgetsPlugin.class);
     registerPlugin(DriveAuthPlugin.class);
     purgeStaleWebViewCaches();
     super.onCreate(savedInstanceState);
+  }
+
+  public void startDriveAuthorize(boolean interactive) {
+    if (driveAuthorizer != null) driveAuthorizer.start(interactive);
+  }
+
+  @Override
+  public void onResume() {
+    super.onResume();
+    if (driveAuthorizer != null) driveAuthorizer.onHostResume();
+  }
+
+  @Override
+  public void onDestroy() {
+    if (driveAuthorizer != null) driveAuthorizer.shutdown();
+    super.onDestroy();
   }
 
   @Override

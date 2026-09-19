@@ -6,7 +6,7 @@
   Launch.DRIVE_FILE_NAME = 'Habit-Journal-backup.json';
   Launch.DRIVE_SCOPE = 'https://www.googleapis.com/auth/drive.file';
   Launch.TOKEN_KEY = 'momentumDriveToken';
-  Launch.APP_VERSION = '63.0.7';
+  Launch.APP_VERSION = '63.0.8';
   Launch.googleErrorHint = function (err) {
     const msg = String(err?.message || err?.errorMessage || err || '');
     if (/this phone's sha-1/i.test(msg)) return msg;
@@ -14,14 +14,14 @@
       return 'Paste the Google Web client ID in Settings → Google Drive, then tap Connect.';
     }
     if (/invalid_client|generaloauthflow|oauth client was not found/i.test(msg)) {
-      return 'Google opened a web OAuth page (invalid_client). Install 63.0.7 from Internal testing and do not paste a client ID on the Play app.';
+      return 'Google opened a web OAuth page (invalid_client). Install 63.0.8 from Internal testing and do not paste a client ID on the Play app.';
     }
     if (/cancel/i.test(msg)) return msg || 'Google sign-in cancelled';
     if (/\[10\]|DEVELOPER_ERROR|not set up correctly|current app identifier/i.test(msg)) {
       return msg.includes('SHA-1') ? msg : (msg || 'Google rejected this install (error 10).');
     }
     if (/\[16\]|account reauth failed/i.test(msg)) {
-      return 'Google Sign-In failed (account reauth). Install 63.0.7. Settings footer must say 63.0.7.';
+      return 'Google Sign-In failed (account reauth). Install 63.0.8. Settings footer must say 63.0.8.';
     }
     return msg || 'Google sign-in failed';
   };

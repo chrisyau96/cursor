@@ -1,13 +1,11 @@
 package com.dincey.habitjournal;
 
 import android.app.PendingIntent;
-import android.content.Intent;
 import android.content.pm.PackageInfo;
 import android.content.pm.PackageManager;
 import android.content.pm.Signature;
 import android.content.pm.SigningInfo;
 import android.os.Build;
-import android.os.Bundle;
 import android.os.Handler;
 import android.os.Looper;
 import android.util.Log;
@@ -32,48 +30,60 @@ import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 
 /**
- * Hosts Google AuthorizationClient on its own task (taskAffinity).
- * MainActivity is singleTask, so this helper must NOT be singleTask and must
- * not be started for-result from MainActivity. Google's picker result is
- * posted back through DriveAuthPlugin.completeOk/completeError.
+ * Runs AuthorizationClient on MainActivity. A helper activity cannot receive
+ * Google's result: MainActivity is singleTask, so Android resumes it and
+ * reports RESULT_CANCELED to any other task/activity (the 63.0.7 toast).
+ * After a cancelled result, authorize() is called again without UI so a
+ * completed grant still yields an access token.
  */
-public class DriveConsentActivity extends ComponentActivity {
-  public static final String EXTRA_INTERACTIVE = "interactive";
-
+public final class DriveAuthorizer {
   private static final String TAG = "DriveAuth";
   private static final String DRIVE_SCOPE = "https://www.googleapis.com/auth/drive.file";
   private static final int MAX_UI_LAUNCHES = 3;
 
-  private ActivityResultLauncher<IntentSenderRequest> googleLauncher;
+  private final ComponentActivity activity;
+  private final ActivityResultLauncher<IntentSenderRequest> launcher;
   private final Handler main = new Handler(Looper.getMainLooper());
   private final ExecutorService io = Executors.newSingleThreadExecutor();
-  private boolean interactive = true;
-  private int uiLaunches;
-  private boolean finished;
 
-  @Override
-  protected void onCreate(Bundle savedInstanceState) {
-    super.onCreate(savedInstanceState);
-    interactive = getIntent() == null || getIntent().getBooleanExtra(EXTRA_INTERACTIVE, true);
-    googleLauncher = registerForActivityResult(
+  private boolean interactive = true;
+  private boolean sessionOpen;
+  private boolean finished;
+  private boolean authorizeInFlight;
+  private boolean awaitingGoogleUi;
+  private int uiLaunches;
+
+  public DriveAuthorizer(ComponentActivity activity) {
+    this.activity = activity;
+    this.launcher = activity.registerForActivityResult(
       new ActivityResultContracts.StartIntentSenderForResult(),
       this::onGoogleResult
     );
+  }
+
+  public void start(boolean interactive) {
+    this.interactive = interactive;
+    sessionOpen = true;
+    finished = false;
+    authorizeInFlight = false;
+    awaitingGoogleUi = false;
+    uiLaunches = 0;
     Log.i(TAG, "install SHA-1 " + installSha1s());
     startAuthorize(true);
   }
 
-  @Override
-  protected void onNewIntent(Intent intent) {
-    super.onNewIntent(intent);
-    setIntent(intent);
-    if (intent != null) tryDeliver(intent, RESULT_OK);
+  public void onHostResume() {
+    if (!sessionOpen || finished || authorizeInFlight) return;
+    if (!awaitingGoogleUi) return;
+    awaitingGoogleUi = false;
+    main.postDelayed(() -> {
+      if (!sessionOpen || finished) return;
+      startAuthorize(false);
+    }, 400);
   }
 
-  @Override
-  protected void onDestroy() {
+  public void shutdown() {
     io.shutdownNow();
-    super.onDestroy();
   }
 
   private AuthorizationRequest buildRequest() {
@@ -83,23 +93,32 @@ public class DriveConsentActivity extends ComponentActivity {
   }
 
   private void startAuthorize(boolean allowUi) {
-    Identity.getAuthorizationClient(this)
+    if (finished || authorizeInFlight) return;
+    authorizeInFlight = true;
+    Identity.getAuthorizationClient(activity)
       .authorize(buildRequest())
-      .addOnSuccessListener(this, result -> {
+      .addOnCompleteListener(activity, task -> authorizeInFlight = false)
+      .addOnSuccessListener(activity, result -> {
         if (finished) return;
         if (!result.hasResolution()) {
           deliverOrFail(result);
           return;
         }
-        if (!allowUi || !interactive) {
-          fail(uiLaunches > 0
-            ? "Google Drive sign-in did not finish"
-            : "Google Drive needs Connect once");
+        if (allowUi && interactive) {
+          launchResolution(result.getPendingIntent());
           return;
         }
-        launchResolution(result.getPendingIntent());
+        // Picker result was dropped (RESULT_CANCELED) but the grant may still
+        // need the Drive consent UI, or the user really cancelled.
+        if (interactive && uiLaunches < MAX_UI_LAUNCHES) {
+          launchResolution(result.getPendingIntent());
+          return;
+        }
+        fail(uiLaunches > 0
+          ? "Google Drive sign-in was cancelled"
+          : "Google Drive needs Connect once");
       })
-      .addOnFailureListener(this, e -> {
+      .addOnFailureListener(activity, e -> {
         Log.e(TAG, "authorize failed", e);
         fail(hint(e));
       });
@@ -116,23 +135,23 @@ public class DriveConsentActivity extends ComponentActivity {
       return;
     }
     uiLaunches++;
+    awaitingGoogleUi = true;
     try {
-      googleLauncher.launch(new IntentSenderRequest.Builder(pendingIntent).build());
+      launcher.launch(new IntentSenderRequest.Builder(pendingIntent).build());
     } catch (Exception e) {
+      awaitingGoogleUi = false;
       fail("Could not open Google authorization: " + e.getMessage());
     }
   }
 
   private void onGoogleResult(ActivityResult activityResult) {
     if (finished) return;
-    tryDeliver(activityResult.getData(), activityResult.getResultCode());
-  }
-
-  private void tryDeliver(Intent data, int resultCode) {
-    if (finished) return;
+    awaitingGoogleUi = false;
+    android.content.Intent data = activityResult.getData();
+    int resultCode = activityResult.getResultCode();
     if (data != null) {
       try {
-        AuthorizationResult parsed = Identity.getAuthorizationClient(this).getAuthorizationResultFromIntent(data);
+        AuthorizationResult parsed = Identity.getAuthorizationClient(activity).getAuthorizationResultFromIntent(data);
         if (hasUsableToken(parsed) || parsed.toGoogleSignInAccount() != null) {
           deliverOrFail(parsed);
           return;
@@ -149,13 +168,11 @@ public class DriveConsentActivity extends ComponentActivity {
         }
       }
     }
-    if (resultCode == RESULT_CANCELED) {
-      fail("Google Drive sign-in was cancelled");
-      return;
-    }
+    // singleTask MainActivity often reports CANCELED after a successful pick.
+    // Ask Google again without UI; a completed grant returns the token.
     main.postDelayed(() -> {
-      if (finished || isFinishing() || isDestroyed()) return;
-      startAuthorize(interactive);
+      if (finished) return;
+      startAuthorize(false);
     }, 400);
   }
 
@@ -181,14 +198,14 @@ public class DriveConsentActivity extends ComponentActivity {
       final String emailFinal = email;
       io.execute(() -> {
         try {
-          String recovered = GoogleAuthUtil.getToken(this, acct.getAccount(), "oauth2:" + DRIVE_SCOPE);
-          runOnUiThread(() -> {
+          String recovered = GoogleAuthUtil.getToken(activity, acct.getAccount(), "oauth2:" + DRIVE_SCOPE);
+          activity.runOnUiThread(() -> {
             if (recovered != null && recovered.length() >= 20) ok(recovered, emailFinal);
             else fail("Google did not return an access token");
           });
         } catch (Exception e) {
           Log.e(TAG, "GoogleAuthUtil.getToken failed", e);
-          runOnUiThread(() -> fail(hint(e)));
+          activity.runOnUiThread(() -> fail(hint(e)));
         }
       });
       return;
@@ -199,27 +216,15 @@ public class DriveConsentActivity extends ComponentActivity {
   private void ok(String token, String email) {
     if (finished) return;
     finished = true;
+    sessionOpen = false;
     DriveAuthPlugin.completeOk(token, email);
-    bringAppBack();
   }
 
   private void fail(String message) {
     if (finished) return;
     finished = true;
+    sessionOpen = false;
     DriveAuthPlugin.completeError(message == null ? "Google Drive authorization failed" : message);
-    bringAppBack();
-  }
-
-  private void bringAppBack() {
-    Intent home = new Intent(this, MainActivity.class);
-    home.addFlags(
-      Intent.FLAG_ACTIVITY_NEW_TASK
-        | Intent.FLAG_ACTIVITY_REORDER_TO_FRONT
-        | Intent.FLAG_ACTIVITY_SINGLE_TOP
-        | Intent.FLAG_ACTIVITY_CLEAR_TOP
-    );
-    startActivity(home);
-    finish();
   }
 
   private boolean isDeveloperError(Exception e) {
@@ -252,8 +257,8 @@ public class DriveConsentActivity extends ComponentActivity {
     Set<String> out = new LinkedHashSet<>();
     try {
       if (Build.VERSION.SDK_INT >= 28) {
-        PackageInfo pi = getPackageManager().getPackageInfo(
-          getPackageName(),
+        PackageInfo pi = activity.getPackageManager().getPackageInfo(
+          activity.getPackageName(),
           PackageManager.GET_SIGNING_CERTIFICATES
         );
         SigningInfo info = pi.signingInfo;
@@ -263,8 +268,8 @@ public class DriveConsentActivity extends ComponentActivity {
         }
       } else {
         @SuppressWarnings("deprecation")
-        PackageInfo pi = getPackageManager().getPackageInfo(
-          getPackageName(),
+        PackageInfo pi = activity.getPackageManager().getPackageInfo(
+          activity.getPackageName(),
           PackageManager.GET_SIGNATURES
         );
         @SuppressWarnings("deprecation")

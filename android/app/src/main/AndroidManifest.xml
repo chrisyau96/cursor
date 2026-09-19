@@ -30,14 +30,6 @@
             </intent-filter>
         </activity>
 
-        <activity
-            android:name=".DriveConsentActivity"
-            android:exported="false"
-            android:excludeFromRecents="true"
-            android:launchMode="standard"
-            android:taskAffinity="com.dincey.habitjournal.driveconsent"
-            android:theme="@style/AppTheme.NoActionBar" />
-
         <provider
             android:name="androidx.core.content.FileProvider"
             android:authorities="${applicationId}.fileprovider"
