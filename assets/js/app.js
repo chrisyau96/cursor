@@ -83,7 +83,7 @@
   const PREVIEW=3;
   const LAZY_CHUNK=10;
   const REMINDER_MSG_LIMIT=80;
-  const APP_VERSION=window.MOMENTUM_APP_VERSION||'63.0.4';
+  const APP_VERSION=window.MOMENTUM_APP_VERSION||'63.0.5';
   const WIDGET_HABIT_MAX=8;
   const DRAG_DOTS='<i></i><i></i><i></i><i></i><i></i><i></i>';
   const iconBtn=(cls,svg,title)=>{const b=document.createElement('button'); b.className='act-btn '+cls; b.innerHTML=svg; b.title=title; b.setAttribute('aria-label',title); return b;};

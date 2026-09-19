@@ -19,26 +19,24 @@ import com.google.android.gms.auth.api.signin.GoogleSignInAccount;
 import com.google.android.gms.common.api.ApiException;
 import com.google.android.gms.common.api.CommonStatusCodes;
 import com.google.android.gms.common.api.Scope;
-import java.util.Collections;
+import java.util.Arrays;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 
 /**
- * Hosts Google AuthorizationClient on a standard launchMode activity.
- * MainActivity is singleTask, so launching Google's pending intent from it
- * often returns RESULT_CANCELED with no token (Connect "did not finish").
+ * Hosts Google AuthorizationClient on its own task (taskAffinity + singleTask).
+ * MainActivity is singleTask; a child activity's startActivityForResult is
+ * cancelled when Google's picker finishes and the task root is resumed.
+ * Results are posted back through DriveAuthPlugin.completeOk/completeError.
  */
 public class DriveConsentActivity extends ComponentActivity {
-  public static final String EXTRA_ACCESS_TOKEN = "accessToken";
-  public static final String EXTRA_EMAIL = "email";
-  public static final String EXTRA_ERROR = "error";
   public static final String EXTRA_INTERACTIVE = "interactive";
 
   private static final String TAG = "DriveAuth";
   private static final String DRIVE_SCOPE = "https://www.googleapis.com/auth/drive.file";
   private static final int MAX_UI_LAUNCHES = 2;
   private static final String SHA1_HINT =
-    "Google Drive auth failed. Add Play Console → App signing → SHA-1 to the Android OAuth client (package com.dincey.habitjournal). Do not paste a client ID.";
+    "Google Drive auth failed. Add Play Console → App signing key certificate SHA-1 to the Android OAuth client (package com.dincey.habitjournal). Do not paste a client ID.";
 
   private ActivityResultLauncher<IntentSenderRequest> googleLauncher;
   private final Handler main = new Handler(Looper.getMainLooper());
@@ -58,12 +56,27 @@ public class DriveConsentActivity extends ComponentActivity {
     startAuthorize(false);
   }
 
-  private void startAuthorize(boolean silentRetry) {
-    AuthorizationRequest request = AuthorizationRequest.builder()
-      .setRequestedScopes(Collections.singletonList(new Scope(DRIVE_SCOPE)))
+  @Override
+  protected void onNewIntent(Intent intent) {
+    super.onNewIntent(intent);
+    setIntent(intent);
+    if (intent != null) tryDeliver(intent, RESULT_OK);
+  }
+
+  private AuthorizationRequest buildRequest() {
+    return AuthorizationRequest.builder()
+      .setRequestedScopes(Arrays.asList(
+        new Scope(DRIVE_SCOPE),
+        new Scope("email"),
+        new Scope("profile"),
+        new Scope("openid")
+      ))
       .build();
+  }
+
+  private void startAuthorize(boolean silentRetry) {
     Identity.getAuthorizationClient(this)
-      .authorize(request)
+      .authorize(buildRequest())
       .addOnSuccessListener(this, result -> {
         if (finished) return;
         if (!result.hasResolution()) {
@@ -71,9 +84,7 @@ public class DriveConsentActivity extends ComponentActivity {
           return;
         }
         if (silentRetry || !interactive) {
-          fail(interactive
-            ? "Google Drive sign-in did not finish. Tap Connect again and pick your Google account once."
-            : "Google Drive needs Connect once");
+          fail(uiLaunches > 0 ? SHA1_HINT : "Google Drive needs Connect once");
           return;
         }
         launchResolution(result.getPendingIntent());
@@ -91,7 +102,7 @@ public class DriveConsentActivity extends ComponentActivity {
       return;
     }
     if (uiLaunches >= MAX_UI_LAUNCHES) {
-      fail("Google Drive sign-in did not finish. Tap Connect again and pick your Google account once.");
+      fail(SHA1_HINT);
       return;
     }
     uiLaunches++;
@@ -104,7 +115,11 @@ public class DriveConsentActivity extends ComponentActivity {
 
   private void onGoogleResult(ActivityResult activityResult) {
     if (finished) return;
-    Intent data = activityResult.getData();
+    tryDeliver(activityResult.getData(), activityResult.getResultCode());
+  }
+
+  private void tryDeliver(Intent data, int resultCode) {
+    if (finished) return;
     if (data != null) {
       try {
         AuthorizationResult parsed = Identity.getAuthorizationClient(this).getAuthorizationResultFromIntent(data);
@@ -112,20 +127,18 @@ public class DriveConsentActivity extends ComponentActivity {
           deliverOrFail(parsed);
           return;
         }
-        // Account pick can return another pending intent for Drive consent.
-        // Launch that continuation — do not call authorize() again (that reopens the picker).
         if (parsed.hasResolution() && parsed.getPendingIntent() != null) {
           launchResolution(parsed.getPendingIntent());
           return;
         }
       } catch (Exception e) {
-        Log.e(TAG, "getAuthorizationResultFromIntent resultCode=" + activityResult.getResultCode(), e);
+        Log.e(TAG, "getAuthorizationResultFromIntent resultCode=" + resultCode, e);
       }
     }
     main.postDelayed(() -> {
       if (finished || isFinishing() || isDestroyed()) return;
       startAuthorize(true);
-    }, 400);
+    }, 600);
   }
 
   private boolean hasUsableToken(AuthorizationResult result) {
@@ -168,19 +181,26 @@ public class DriveConsentActivity extends ComponentActivity {
   private void ok(String token, String email) {
     if (finished) return;
     finished = true;
-    Intent data = new Intent();
-    data.putExtra(EXTRA_ACCESS_TOKEN, token);
-    data.putExtra(EXTRA_EMAIL, email == null ? "" : email);
-    setResult(RESULT_OK, data);
-    finish();
+    DriveAuthPlugin.completeOk(token, email);
+    bringAppBack();
   }
 
   private void fail(String message) {
     if (finished) return;
     finished = true;
-    Intent data = new Intent();
-    data.putExtra(EXTRA_ERROR, message == null ? "Google Drive authorization failed" : message);
-    setResult(RESULT_CANCELED, data);
+    DriveAuthPlugin.completeError(message == null ? "Google Drive authorization failed" : message);
+    bringAppBack();
+  }
+
+  private void bringAppBack() {
+    Intent home = new Intent(this, MainActivity.class);
+    home.addFlags(
+      Intent.FLAG_ACTIVITY_NEW_TASK
+        | Intent.FLAG_ACTIVITY_REORDER_TO_FRONT
+        | Intent.FLAG_ACTIVITY_SINGLE_TOP
+        | Intent.FLAG_ACTIVITY_CLEAR_TOP
+    );
+    startActivity(home);
     finish();
   }
 

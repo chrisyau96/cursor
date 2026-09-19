@@ -17,7 +17,7 @@ You do **not** need a separate UAT Play listing to test safely. Internal testing
 ## How we work together
 
 1. New work on a branch → PR → merge `main` when it is ready (website updates).
-2. I keep `android/` in the repo. Android Studio → **Generate Signed Bundle** copies the current web app into the AAB (Settings shows `63.0.4`, matching Play). `npm install && npm run cap:sync` is optional.
+2. I keep `android/` in the repo. Android Studio → **Generate Signed Bundle** copies the current web app into the AAB (Settings shows `63.0.5`, matching Play). `npm install && npm run cap:sync` is optional.
 3. Upload that `.aab` to **Internal testing**. Production stays on the last Production AAB until you promote.
 4. When a build is good, promote the same artifact (or a newer `versionCode`) to Production.
 

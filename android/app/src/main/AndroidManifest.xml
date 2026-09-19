@@ -34,7 +34,8 @@
             android:name=".DriveConsentActivity"
             android:exported="false"
             android:excludeFromRecents="true"
-            android:launchMode="standard"
+            android:launchMode="singleTask"
+            android:taskAffinity="com.dincey.habitjournal.driveconsent"
             android:theme="@style/AppTheme.NoActionBar" />
 
         <provider

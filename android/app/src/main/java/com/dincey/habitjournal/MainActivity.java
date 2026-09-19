@@ -7,8 +7,6 @@ import android.os.Bundle;
 import android.util.Log;
 import android.webkit.WebSettings;
 import android.webkit.WebView;
-import androidx.activity.result.ActivityResultLauncher;
-import androidx.activity.result.contract.ActivityResultContracts;
 import com.getcapacitor.BridgeActivity;
 import com.getcapacitor.Plugin;
 import com.getcapacitor.PluginHandle;
@@ -21,31 +19,13 @@ import java.io.File;
 public class MainActivity extends BridgeActivity implements ModifiedMainActivityForSocialLoginPlugin {
   private static final String WEB_PREFS = "momentum_web";
   private static final String PURGED_VERSION = "purgedVersionCode";
-  private ActivityResultLauncher<Intent> driveConsentLauncher;
 
   @Override
   public void onCreate(Bundle savedInstanceState) {
     registerPlugin(MomentumWidgetsPlugin.class);
     registerPlugin(DriveAuthPlugin.class);
-    // Must register before super.onCreate. Google's pending intent cannot
-    // return a token to singleTask MainActivity; DriveConsentActivity can.
-    driveConsentLauncher = registerForActivityResult(
-      new ActivityResultContracts.StartActivityForResult(),
-      result -> {
-        if (getBridge() == null) return;
-        PluginHandle pluginHandle = getBridge().getPlugin("DriveAuth");
-        if (pluginHandle == null || !(pluginHandle.getInstance() instanceof DriveAuthPlugin)) return;
-        ((DriveAuthPlugin) pluginHandle.getInstance()).onConsentActivityResult(result.getResultCode(), result.getData());
-      }
-    );
     purgeStaleWebViewCaches();
     super.onCreate(savedInstanceState);
-  }
-
-  public void launchDriveConsent(boolean interactive) {
-    Intent intent = new Intent(this, DriveConsentActivity.class);
-    intent.putExtra(DriveConsentActivity.EXTRA_INTERACTIVE, interactive);
-    driveConsentLauncher.launch(intent);
   }
 
   @Override
