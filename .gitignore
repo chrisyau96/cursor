@@ -5,7 +5,6 @@ __pycache__/
 .DS_Store
 node_modules/
 /www/
-/android/
 /ios/
 .idea/
 .vscode/

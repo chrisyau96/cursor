@@ -1,6 +1,6 @@
-// Offline-first service worker for the Momentum habit-tracker PWA.
-// Cross-origin requests always go to the network.
-const CACHE = "momentum-v56";
+// Offline-first service worker for the website only.
+// The Play app unregisters this so an old v59/v62 cache cannot hide 63.0.10.
+const CACHE = "habit-journal-63.0.10";
 
 const ASSETS = [
   ".",
@@ -14,6 +14,13 @@ const ASSETS = [
   "assets/icon-192.png",
   "assets/icon-512.png",
   "assets/icon-180.png",
+  "assets/widgets/today.svg",
+  "assets/widgets/habit.svg",
+  "assets/widgets/habits.svg",
+  "assets/widgets/streak.svg",
+  "assets/widgets/credits.svg",
+  "assets/widgets/gift.svg",
+  "assets/widgets/journal.svg",
 ];
 
 self.addEventListener("install", (event) => {
@@ -34,18 +41,15 @@ self.addEventListener("fetch", (event) => {
   const req = event.request;
   if (req.method !== "GET" || new URL(req.url).origin !== self.location.origin) return;
   event.respondWith(
-    caches.match(req).then((cached) => {
-      const network = fetch(req)
-        .then((resp) => {
-          if (resp && resp.status === 200 && resp.type === "basic") {
-            const copy = resp.clone();
-            caches.open(CACHE).then((cache) => cache.put(req, copy));
-          }
-          return resp;
-        })
-        .catch(() => cached);
-      return cached || network;
-    }),
+    fetch(req)
+      .then((resp) => {
+        if (resp && resp.status === 200 && resp.type === "basic") {
+          const copy = resp.clone();
+          caches.open(CACHE).then((cache) => cache.put(req, copy));
+        }
+        return resp;
+      })
+      .catch(() => caches.match(req)),
   );
 });
 

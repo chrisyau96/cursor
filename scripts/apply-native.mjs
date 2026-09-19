@@ -9,22 +9,78 @@ import { join } from 'path';
 function copyDir(src, dest) {
   if (!existsSync(src)) return false;
   mkdirSync(dest, { recursive: true });
-  cpSync(src, dest, { recursive: true });
+  cpSync(src, dest, {
+    recursive: true,
+    filter: (from) => !/ic_launcher_background/.test(from),
+  });
   return true;
 }
 
 let copied = 0;
 if (existsSync('android/app/src/main')) {
-  copyDir('native-src/android/java', 'android/app/src/main/java/app/momentum/habits');
+  copyDir('native-src/android/java', 'android/app/src/main/java/com/dincey/habitjournal');
   copyDir('native-src/android/res', 'android/app/src/main/res');
   const manifestPath = 'android/app/src/main/AndroidManifest.xml';
+  const activityFilter = `            <intent-filter>
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
+                <data android:scheme="momentum" android:host="widget" />
+            </intent-filter>`;
   if (existsSync(manifestPath)) {
     let xml = readFileSync(manifestPath, 'utf8');
     const snippet = readFileSync('native-src/android/AndroidManifest.snippet.xml', 'utf8');
     if (!xml.includes('MomentumWidgetProvider')) {
       xml = xml.replace('</application>', `${snippet}\n    </application>`);
-      writeFileSync(manifestPath, xml);
+    } else if (!xml.includes('HabitOneWidgetProvider')) {
+      xml = xml.replace(
+        'android:name=".widgets.HabitsWidgetProvider"',
+        `android:name=".widgets.HabitOneWidgetProvider"
+            android:exported="true"
+            android:label="@string/widget_habit_one">
+            <intent-filter>
+                <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
+            </intent-filter>
+            <meta-data
+                android:name="android.appwidget.provider"
+                android:resource="@xml/widget_habit_one_info" />
+        </receiver>
+        <receiver
+            android:name=".widgets.HabitsWidgetProvider"`
+      );
+      if (!xml.includes('HabitOneWidgetConfigureActivity')) {
+        xml = xml.replace(
+          'android:name=".widgets.HabitsWidgetConfigureActivity"',
+          `android:name=".widgets.HabitOneWidgetConfigureActivity"
+            android:exported="true"
+            android:theme="@style/AppTheme">
+            <intent-filter>
+                <action android:name="android.appwidget.action.APPWIDGET_CONFIGURE" />
+            </intent-filter>
+        </activity>
+        <activity
+            android:name=".widgets.HabitsWidgetConfigureActivity"`
+        );
+      }
     }
+    if (!xml.includes('android:host="widget"')) {
+      xml = xml.replace('</activity>', `${activityFilter}\n        </activity>`);
+    }
+    if (!xml.includes('com.google.android.gms.ads.APPLICATION_ID')) {
+      xml = xml.replace('</application>', `        <meta-data
+            android:name="com.google.android.gms.ads.APPLICATION_ID"
+            android:value="@string/admob_app_id" />
+    </application>`);
+    }
+    if (!xml.includes('com.android.vending.BILLING')) {
+      xml = xml.replace('</manifest>', `    <uses-permission android:name="com.android.vending.BILLING" />
+</manifest>`);
+    }
+    if (!xml.includes('SCHEDULE_EXACT_ALARM')) {
+      xml = xml.replace('</manifest>', `    <uses-permission android:name="android.permission.SCHEDULE_EXACT_ALARM" />
+</manifest>`);
+    }
+    writeFileSync(manifestPath, xml);
   }
   copied++;
   console.log('Applied Android widget sources');
@@ -36,7 +92,7 @@ if (existsSync('ios/App/App')) {
   copyDir('native-src/ios', 'ios/App/MomentumWidgets');
   copied++;
   console.log('Copied iOS widget sources to ios/App/MomentumWidgets');
-  console.log('Still required in Xcode: File → New → Target → Widget Extension, then add these Swift files and App Group group.app.momentum.habits');
+  console.log('Still required in Xcode: File → New → Target → Widget Extension, then add these Swift files and App Group group.com.dincey.habitjournal');
 } else {
   console.log('Skip iOS (run npx cap add ios on a Mac)');
 }
