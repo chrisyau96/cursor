@@ -2,6 +2,11 @@ package com.dincey.habitjournal;
 
 import android.app.PendingIntent;
 import android.content.Intent;
+import android.content.pm.PackageInfo;
+import android.content.pm.PackageManager;
+import android.content.pm.Signature;
+import android.content.pm.SigningInfo;
+import android.os.Build;
 import android.os.Bundle;
 import android.os.Handler;
 import android.os.Looper;
@@ -19,24 +24,25 @@ import com.google.android.gms.auth.api.signin.GoogleSignInAccount;
 import com.google.android.gms.common.api.ApiException;
 import com.google.android.gms.common.api.CommonStatusCodes;
 import com.google.android.gms.common.api.Scope;
-import java.util.Arrays;
+import java.security.MessageDigest;
+import java.util.Collections;
+import java.util.LinkedHashSet;
+import java.util.Set;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 
 /**
- * Hosts Google AuthorizationClient on its own task (taskAffinity + singleTask).
- * MainActivity is singleTask; a child activity's startActivityForResult is
- * cancelled when Google's picker finishes and the task root is resumed.
- * Results are posted back through DriveAuthPlugin.completeOk/completeError.
+ * Hosts Google AuthorizationClient on its own task (taskAffinity).
+ * MainActivity is singleTask, so this helper must NOT be singleTask and must
+ * not be started for-result from MainActivity. Google's picker result is
+ * posted back through DriveAuthPlugin.completeOk/completeError.
  */
 public class DriveConsentActivity extends ComponentActivity {
   public static final String EXTRA_INTERACTIVE = "interactive";
 
   private static final String TAG = "DriveAuth";
   private static final String DRIVE_SCOPE = "https://www.googleapis.com/auth/drive.file";
-  private static final int MAX_UI_LAUNCHES = 2;
-  private static final String SHA1_HINT =
-    "Google Drive auth failed. Add Play Console → App signing key certificate SHA-1 to the Android OAuth client (package com.dincey.habitjournal). Do not paste a client ID.";
+  private static final int MAX_UI_LAUNCHES = 3;
 
   private ActivityResultLauncher<IntentSenderRequest> googleLauncher;
   private final Handler main = new Handler(Looper.getMainLooper());
@@ -53,7 +59,8 @@ public class DriveConsentActivity extends ComponentActivity {
       new ActivityResultContracts.StartIntentSenderForResult(),
       this::onGoogleResult
     );
-    startAuthorize(false);
+    Log.i(TAG, "install SHA-1 " + installSha1s());
+    startAuthorize(true);
   }
 
   @Override
@@ -63,18 +70,19 @@ public class DriveConsentActivity extends ComponentActivity {
     if (intent != null) tryDeliver(intent, RESULT_OK);
   }
 
+  @Override
+  protected void onDestroy() {
+    io.shutdownNow();
+    super.onDestroy();
+  }
+
   private AuthorizationRequest buildRequest() {
     return AuthorizationRequest.builder()
-      .setRequestedScopes(Arrays.asList(
-        new Scope(DRIVE_SCOPE),
-        new Scope("email"),
-        new Scope("profile"),
-        new Scope("openid")
-      ))
+      .setRequestedScopes(Collections.singletonList(new Scope(DRIVE_SCOPE)))
       .build();
   }
 
-  private void startAuthorize(boolean silentRetry) {
+  private void startAuthorize(boolean allowUi) {
     Identity.getAuthorizationClient(this)
       .authorize(buildRequest())
       .addOnSuccessListener(this, result -> {
@@ -83,14 +91,16 @@ public class DriveConsentActivity extends ComponentActivity {
           deliverOrFail(result);
           return;
         }
-        if (silentRetry || !interactive) {
-          fail(uiLaunches > 0 ? SHA1_HINT : "Google Drive needs Connect once");
+        if (!allowUi || !interactive) {
+          fail(uiLaunches > 0
+            ? "Google Drive sign-in did not finish"
+            : "Google Drive needs Connect once");
           return;
         }
         launchResolution(result.getPendingIntent());
       })
       .addOnFailureListener(this, e -> {
-        Log.e(TAG, silentRetry ? "silent retry failed" : "authorize failed", e);
+        Log.e(TAG, "authorize failed", e);
         fail(hint(e));
       });
   }
@@ -102,7 +112,7 @@ public class DriveConsentActivity extends ComponentActivity {
       return;
     }
     if (uiLaunches >= MAX_UI_LAUNCHES) {
-      fail(SHA1_HINT);
+      fail("Google Drive sign-in did not finish");
       return;
     }
     uiLaunches++;
@@ -133,12 +143,20 @@ public class DriveConsentActivity extends ComponentActivity {
         }
       } catch (Exception e) {
         Log.e(TAG, "getAuthorizationResultFromIntent resultCode=" + resultCode, e);
+        if (isDeveloperError(e)) {
+          fail(hint(e));
+          return;
+        }
       }
+    }
+    if (resultCode == RESULT_CANCELED) {
+      fail("Google Drive sign-in was cancelled");
+      return;
     }
     main.postDelayed(() -> {
       if (finished || isFinishing() || isDestroyed()) return;
-      startAuthorize(true);
-    }, 600);
+      startAuthorize(interactive);
+    }, 400);
   }
 
   private boolean hasUsableToken(AuthorizationResult result) {
@@ -204,21 +222,76 @@ public class DriveConsentActivity extends ComponentActivity {
     finish();
   }
 
+  private boolean isDeveloperError(Exception e) {
+    Throwable t = e;
+    if (e.getCause() instanceof ApiException) t = e.getCause();
+    return t instanceof ApiException
+      && ((ApiException) t).getStatusCode() == CommonStatusCodes.DEVELOPER_ERROR;
+  }
+
   private String hint(Exception e) {
     Throwable t = e;
     if (e.getCause() instanceof ApiException) t = e.getCause();
     if (t instanceof ApiException) {
       int code = ((ApiException) t).getStatusCode();
-      if (code == CommonStatusCodes.DEVELOPER_ERROR) return SHA1_HINT;
+      if (code == CommonStatusCodes.DEVELOPER_ERROR) {
+        return "Google rejected this install (error 10). This phone's SHA-1: "
+          + installSha1s()
+          + ". Create an Android OAuth client with package com.dincey.habitjournal and that exact value. Quantum-ready Play signing needs a separate client for Classical SHA-1 and Post-quantum SHA-1. Do not paste a client ID.";
+      }
+      String status = t.getMessage() == null ? "" : t.getMessage();
+      if (!status.isEmpty()) return status;
+      return "Google Drive authorization failed (status " + code + ")";
     }
     String msg = t.getMessage() == null ? (e.getMessage() == null ? "" : e.getMessage()) : t.getMessage();
-    String lower = msg.toLowerCase();
-    if (lower.contains("invalid_client") || lower.contains("generaloauthflow") || lower.contains("oauth client was not found")
-        || lower.contains("developer") || lower.contains("[10]") || lower.contains("not set up correctly")
-        || lower.contains("current app identifier")) {
-      return SHA1_HINT;
-    }
     if (msg.isEmpty()) return "Google Drive authorization failed";
     return msg;
+  }
+
+  private String installSha1s() {
+    Set<String> out = new LinkedHashSet<>();
+    try {
+      if (Build.VERSION.SDK_INT >= 28) {
+        PackageInfo pi = getPackageManager().getPackageInfo(
+          getPackageName(),
+          PackageManager.GET_SIGNING_CERTIFICATES
+        );
+        SigningInfo info = pi.signingInfo;
+        if (info != null) {
+          addSha1s(out, info.getApkContentsSigners());
+          addSha1s(out, info.getSigningCertificateHistory());
+        }
+      } else {
+        @SuppressWarnings("deprecation")
+        PackageInfo pi = getPackageManager().getPackageInfo(
+          getPackageName(),
+          PackageManager.GET_SIGNATURES
+        );
+        @SuppressWarnings("deprecation")
+        Signature[] sigs = pi.signatures;
+        addSha1s(out, sigs);
+      }
+    } catch (Exception e) {
+      Log.w(TAG, "could not read signing certs", e);
+    }
+    if (out.isEmpty()) return "(unknown)";
+    return String.join("  ", out);
+  }
+
+  private static void addSha1s(Set<String> out, Signature[] sigs) {
+    if (sigs == null) return;
+    for (Signature sig : sigs) {
+      if (sig == null) continue;
+      try {
+        MessageDigest md = MessageDigest.getInstance("SHA-1");
+        byte[] digest = md.digest(sig.toByteArray());
+        StringBuilder sb = new StringBuilder();
+        for (int i = 0; i < digest.length; i++) {
+          if (i > 0) sb.append(':');
+          sb.append(String.format("%02X", digest[i] & 0xff));
+        }
+        out.add(sb.toString());
+      } catch (Exception ignored) {}
+    }
   }
 }

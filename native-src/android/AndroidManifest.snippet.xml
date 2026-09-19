@@ -2,7 +2,7 @@
             android:name=".DriveConsentActivity"
             android:exported="false"
             android:excludeFromRecents="true"
-            android:launchMode="singleTask"
+            android:launchMode="standard"
             android:taskAffinity="com.dincey.habitjournal.driveconsent"
             android:theme="@style/AppTheme.NoActionBar" />
         <receiver

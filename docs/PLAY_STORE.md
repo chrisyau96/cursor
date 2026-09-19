@@ -206,7 +206,7 @@ Personal accounts created after 13 Nov 2023 often must run a closed test with **
 git pull
 ```
 
-Android Studio **Generate Signed Bundle** copies `index.html` and `assets/` into the AAB and stamps `version.json` (`63.0.6`). Settings footer must match Play (`Habit & Journal 63.0.6`). If Play shows 63.0.6 but the footer still says `v59` or `v62`, uninstall and reinstall from the opt-in link.
+Android Studio **Generate Signed Bundle** copies `index.html` and `assets/` into the AAB and stamps `version.json` (`63.0.7`). Settings footer must match Play (`Habit & Journal 63.0.7`). If Play shows 63.0.7 but the footer still says `v59` or `v62`, uninstall and reinstall from the opt-in link.
 
 Optional if you use Node:
 
@@ -228,10 +228,10 @@ GitHub Pages updates on every `main` merge. The Play app updates only when you s
 |---|---|
 | “Privacy policy is invalid” | Use `https://chrisyau96.github.io/cursor/privacy.html` |
 | Notifications never appear | Android 13+: Allow. Settings → Apps → Momentum → Notifications |
-| Drive popup every time | Android OAuth client SHA-1 must be Play **App signing key certificate**, not Upload key. Do not paste a client ID on the Play app |
-| Play version updates, Settings still says v59/v62 | Uninstall, install **63.0.6**. Footer must read **Habit & Journal 63.0.6**. |
-| Drive picker twice / **401 invalid_client** | Install **63.0.6**. Do not paste a client ID. Create an Android OAuth client with the **App signing key** SHA-1 (Upload key SHA-1 is the wrong cert for Play installs). |
-| Drive **sign-in did not finish** | Install **63.0.6**. 63.0.4 still lost Google’s result under `singleTask`. Connect now uses a separate task and a plugin callback. |
+| Drive popup every time | Android OAuth: Classical **and** Post-quantum App signing SHA-1 as two clients (same package). Not Upload key. Do not paste a client ID |
+| Play version updates, Settings still says v59/v62 | Uninstall, install **63.0.7**. Footer must read **Habit & Journal 63.0.7**. |
+| Drive picker twice / **401 invalid_client** | Install **63.0.7**. Do not paste a client ID. |
+| Drive **sign-in did not finish** | Install **63.0.7**. The Google helper is no longer `singleTask`. If error 10, the toast lists this phone’s SHA-1 — add that fingerprint as its own Android client (Quantum-ready needs Classical + Post-quantum). |
 | “Package name already used” | `com.dincey.habitjournal` must be unique; change `appId` in `capacitor.config.json` **before** the first upload |
 | Closed test not counting | Testers did not click the opt-in link, or you used Internal instead of Closed |
 | AAB rejected for target SDK | `targetSdk` is 36 in `android/variables.gradle` |

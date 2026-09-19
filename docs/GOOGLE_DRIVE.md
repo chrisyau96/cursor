@@ -131,22 +131,21 @@ That Web client ID is what Settings → Google Drive expects. You can also bake 
 
 ## F. Android client (do not paste this ID into the app)
 
-Play Console **App signing** has two certificates. They look similar. They are not the same.
+Play Console **App signing** has more than one certificate. They look similar. They are not the same.
 
 | Play Console heading | What it is | Use for OAuth? |
 |---|---|---|
-| **App signing key certificate** | The cert on the APK testers actually install from Play | **Yes — required** |
+| **App signing key → Classical SHA-1** | Cert on most Play installs (Android 16 and older) | **Yes — required** |
+| **App signing key → Post-quantum SHA-1** | Extra cert when the key is **Quantum-ready** | **Yes — a second Android client** |
 | **Upload key certificate** | The cert you use in Android Studio to upload the `.aab` | Only for a USB/local APK you signed yourself |
 
-One Android OAuth client has **one** SHA-1 field. You cannot put both fingerprints on the same client.
+One Android OAuth client has **one** SHA-1 field. Quantum-ready Play signing needs **two** Android clients (same package `com.dincey.habitjournal`, different SHA-1). Keep `20:FC:C6:…` if that is Classical. **Create another Android client** and paste the Post-quantum SHA-1 (the other copy button on the same App signing page). Do not replace Classical with Post-quantum on the same client.
 
-1. **Create client** → Application type **Android**.
-2. Name: `Habit Journal Android Play`.
-3. Package name: `com.dincey.habitjournal`
-4. SHA-1: Play Console → Test and release → Setup → **App signing** → section titled **App signing key certificate** (not Upload key) → SHA-1.
-5. Create. **Do not** paste that client ID into the app.
+Do **not** paste either client ID into the app. Google matches the installed APK automatically.
 
-Keep the existing `Habit Journal Android` client if its SHA-1 is the upload key (`A5:57:4B:…`). That one is for locally signed builds only. Play Internal testing will not match it. Google then shows *This client is not available to verify ownership because it is not a Google Play Store app*.
+If Connect still fails after 63.0.7, the toast lists **this phone's SHA-1**. That value must exist on an Android OAuth client. If it is not `20:FC:…`, add a client for the value in the toast.
+
+Google Cloud → Data Access must include `drive.file` (not only `drive.appdata`).
 
 Debug SHA-1 only if you install from Android Studio / USB (third Android client, same package):
 
@@ -164,15 +163,15 @@ Google matches the installed APK automatically. **Do not** paste the Android cli
 
 On the Play app, **do not paste any Google client ID**. Connect uses the **Android** OAuth client automatically (package `com.dincey.habitjournal` + Play App signing SHA-1). The client ID field is hidden. Tap **Connect Google Drive** and pick your account **once**.
 
-If Connect shows **Google Drive sign-in did not finish** on **63.0.3** or **63.0.4**, Google’s account picker result was cancelled because `MainActivity` is `singleTask` (63.0.4 still started the helper as a child of that activity). Install **63.0.6**. Connect runs `DriveConsentActivity` on its own task and posts the token back without `startActivityForResult`.
+If Connect shows **Google Drive sign-in did not finish** on **63.0.3** or **63.0.4**, Google’s account picker result was cancelled because `MainActivity` is `singleTask` (63.0.4 still started the helper as a child of that activity). Install **63.0.7**. Connect runs `DriveConsentActivity` on its own task and posts the token back without `startActivityForResult`.
 
-If Connect shows the account picker twice, then **Google rejected the OAuth client (Error 401 invalid_client)**, you are on **63.0.2**. That build sent a pasted client ID into Google’s web OAuth page and launched the picker a second time. Install **63.0.6**.
+If Connect shows the account picker twice, then **Google rejected the OAuth client (Error 401 invalid_client)**, you are on **63.0.2**. That build sent a pasted client ID into Google’s web OAuth page and launched the picker a second time. Install **63.0.7**.
 
-1. You must be on Play **63.0.6**. Settings footer must read **Habit & Journal 63.0.6**.
+1. You must be on Play **63.0.7**. Settings footer must read **Habit & Journal 63.0.7**.
 2. Android Studio **Generate Signed Bundle** copies `index.html` + `assets/` and stamps `version.json`.
 3. Play Console → Test and release → Setup → **App signing** → copy SHA-1 from **App signing key certificate** (not **Upload key certificate**).
 4. Google Cloud → **Create** another Android client: package `com.dincey.habitjournal`, that App signing SHA-1. Do not paste the client ID. One OAuth client cannot hold two SHA-1s.
-5. Uninstall the app, install **63.0.6** from the opt-in link, confirm the footer, tap Connect. Do not type a client ID.
+5. Uninstall the app, install **63.0.7** from the opt-in link, confirm the footer, tap Connect. Do not type a client ID.
 
 The **Web application** client ID is only for the website, not the Play app.
 
@@ -180,11 +179,11 @@ If Connect shows **Google Sign-In failed [16] Account reauth failed**:
 
 Play Console can show an old **62.0.x** while Settings flashes **v59** then **v62**. Those are different files. Play reads Android `versionName`. The footer is HTML that a service worker used to cache. **63.0.0** stamps the same version into Play and the footer, and the WebView loads `/?v=63.0.0` so old HTML cannot paint first.
 
-1. You must be on Play **63.0.6**. Settings footer must read **Habit & Journal 63.0.6**.
+1. You must be on Play **63.0.7**. Settings footer must read **Habit & Journal 63.0.7**.
 2. Android Studio **Generate Signed Bundle** copies `index.html` + `assets/` and stamps `version.json`.
 3. Play Console → Test and release → Setup → **App signing** → copy SHA-1 from **App signing key certificate** (not **Upload key certificate**).
 4. Google Cloud → **Create** another Android client: package `com.dincey.habitjournal`, that App signing SHA-1. Do not paste the client ID. One OAuth client cannot hold two SHA-1s.
-5. Uninstall the app, install **63.0.6** from the opt-in link, confirm the footer, Connect again.
+5. Uninstall the app, install **63.0.7** from the opt-in link, confirm the footer, Connect again.
 
 ### Connect steps
 

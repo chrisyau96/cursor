@@ -197,13 +197,15 @@ assert(Launch.parseAppUrl('momentum://widget/open').type === 'open', 'open widge
 assert(Launch.parseAppUrl('https://example.com/?widgetAction=complete&habitId=h9&date=2026-08-31').date === '2026-08-31', 'web query keeps date');
 assert(Launch.parseAppUrl('ftp://nope') === null, 'bad protocol ignored');
 
-assert(Launch.APP_VERSION === '63.0.6', 'app version is 63.0.6');
+assert(Launch.APP_VERSION === '63.0.7', 'app version is 63.0.7');
 assert(Launch.googleErrorHint({ message: 'clientId is null or empty' }).includes('Web client ID'), 'missing client id hint');
-assert(Launch.googleErrorHint({ message: 'Google Sign-In failed: [16] Account reauth failed' }).includes('63.0.6'), 'error 16 points at 63.0.6');
-assert(Launch.googleErrorHint({ message: 'DEVELOPER_ERROR: [10]' }).includes('SHA-1'), 'developer error points at SHA-1');
+assert(Launch.googleErrorHint({ message: 'Google Sign-In failed: [16] Account reauth failed' }).includes('63.0.7'), 'error 16 points at 63.0.7');
+assert(Launch.googleErrorHint({ message: 'DEVELOPER_ERROR: [10]' }).includes('[10]'), 'developer error 10 is not rewritten');
+assert(Launch.googleErrorHint({ message: "Google rejected this install (error 10). This phone's SHA-1: AA:BB" }).includes('AA:BB'), 'native SHA-1 toast is passed through');
 assert(Launch.googleErrorHint({ message: 'Google sign-in cancelled' }).includes('cancelled'), 'cancel is not SHA-1');
 assert(Launch.googleErrorHint({ errorMessage: 'clientId is null or empty' }).includes('Web client ID'), 'errorMessage is read');
-assert(Launch.googleErrorHint({ message: 'Error 401: invalid_client flowName=GeneralOAuthFlow' }).includes('SHA-1'), 'invalid_client points at Android SHA-1');
+assert(Launch.googleErrorHint({ message: 'Error 401: invalid_client flowName=GeneralOAuthFlow' }).includes('63.0.7'), 'invalid_client points at 63.0.7');
+assert(!Launch.googleErrorHint({ message: 'Error 401: invalid_client flowName=GeneralOAuthFlow' }).includes('SHA-1'), 'invalid_client is not blamed on SHA-1');
 assert(!Launch.googleErrorHint({ message: 'Error 401: invalid_client' }).includes('Paste the Web'), 'Play app does not ask to paste a client ID');
 
 const launchSrc = readFileSync(path.join(root, '../assets/js/launch.js'), 'utf8');
@@ -219,7 +221,7 @@ assert(main.includes('DriveAuthPlugin.REQUEST_AUTHORIZE'), 'MainActivity still f
 assert(!main.includes('launchDriveConsent'), 'MainActivity does not start Drive consent for-result');
 assert(main.includes('purgeStaleWebViewCaches'), 'MainActivity purges stale WebView caches on version change');
 const versionJson = JSON.parse(readFileSync(path.join(root, '../version.json'), 'utf8'));
-assert(versionJson.versionName === '63.0.6' && versionJson.versionCode === 19, 'version.json is 63.0.6 / 19');
+assert(versionJson.versionName === '63.0.7' && versionJson.versionCode === 20, 'version.json is 63.0.7 / 20');
 const launcherBg = readFileSync(path.join(root, '../android/app/src/main/res/values/ic_launcher_background.xml'), 'utf8');
 assert(launcherBg.includes('#000000'), 'launcher background is black to match the dog icon');
 const gradle = readFileSync(path.join(root, '../android/app/build.gradle'), 'utf8');
@@ -227,26 +229,26 @@ assert(gradle.includes('version.json'), 'Gradle reads version.json');
 assert(gradle.includes('syncWebAssets'), 'Gradle copies web assets into the AAB');
 assert(gradle.includes('stampAppVersion'), 'Gradle stamps versionName into bundled HTML/JS');
 const capCfg = readFileSync(path.join(root, '../capacitor.config.json'), 'utf8');
-assert(capCfg.includes('/?v=63.0.6'), 'WebView start URL is cache-busted');
+assert(capCfg.includes('/?v=63.0.7'), 'WebView start URL is cache-busted');
 const html = readFileSync(path.join(root, '../index.html'), 'utf8');
 assert(html.includes('isNativePlatform'), 'native app does not keep a website service worker');
 assert(html.includes('unregister'), 'native unregisters service workers');
-assert(html.includes("MOMENTUM_APP_VERSION = '63.0.6'"), 'index stamps 63.0.6 in the head');
+assert(html.includes("MOMENTUM_APP_VERSION = '63.0.7'"), 'index stamps 63.0.7 in the head');
 assert(!/v59|v62\.5/.test(html), 'index footer does not hardcode an old version');
 const appSrc = readFileSync(path.join(root, '../assets/js/app.js'), 'utf8');
-assert(appSrc.includes("||'63.0.6'"), 'in-app footer version is 63.0.6');
+assert(appSrc.includes("||'63.0.7'"), 'in-app footer version is 63.0.7');
 
 execSync('node scripts/sync-android-web.mjs', { cwd: path.join(root, '..'), stdio: 'pipe' });
 const bundledApp = readFileSync(path.join(root, '../android/app/src/main/assets/public/assets/js/app.js'), 'utf8');
-assert(bundledApp.includes("||'63.0.6'"), 'Android public assets footer is 63.0.6');
+assert(bundledApp.includes("||'63.0.7'"), 'Android public assets footer is 63.0.7');
 const bundledLaunch = readFileSync(path.join(root, '../android/app/src/main/assets/public/assets/js/launch.js'), 'utf8');
 assert(/DriveAuth\?\.authorize/.test(bundledLaunch), 'Android public assets include DriveAuth Connect');
 assert(!/return await requestToken\('consent'\)/.test(bundledLaunch), 'bundled Android assets do not GIS-fallback');
 assert(bundledLaunch.includes('if (!isNative() && !clientId())'), 'bundled Play app Connect skips pasted client ID');
 const bundledHtml = readFileSync(path.join(root, '../android/app/src/main/assets/public/index.html'), 'utf8');
-assert(bundledHtml.includes('63.0.6') && bundledHtml.includes('unregister'), 'bundled index is 63.0.6 and skips native SW');
+assert(bundledHtml.includes('63.0.7') && bundledHtml.includes('unregister'), 'bundled index is 63.0.7 and skips native SW');
 const bundledCap = readFileSync(path.join(root, '../android/app/src/main/assets/capacitor.config.json'), 'utf8');
-assert(bundledCap.includes('/?v=63.0.6'), 'bundled Capacitor config cache-busts the start URL');
+assert(bundledCap.includes('/?v=63.0.7'), 'bundled Capacitor config cache-busts the start URL');
 
 const plugin = readFileSync(path.join(root, '../android/app/src/main/java/com/dincey/habitjournal/DriveAuthPlugin.java'), 'utf8');
 assert(!/CredentialManager|GetSignInWithGoogleOption|GetGoogleIdOption/.test(plugin), 'DriveAuth skips Credential Manager');
@@ -260,10 +262,16 @@ assert(consent.includes('https://www.googleapis.com/auth/drive.file'), 'DriveCon
 assert(consent.includes('taskAffinity'), 'DriveConsent comment documents a separate task');
 assert(consent.includes('completeOk'), 'DriveConsent posts the token back to the plugin');
 assert(consent.includes('parsed.hasResolution()'), 'DriveConsent continues Drive consent after account pick');
+assert(!consent.includes('openid'), 'DriveConsent requests drive.file only');
+assert(consent.includes('installSha1s'), 'DriveConsent reports this install SHA-1 on error 10');
+assert(!consent.includes('SHA1_HINT'), 'DriveConsent does not blame every failure on SHA-1');
 assert(!/builder\.requestOfflineAccess|\.requestOfflineAccess\(/.test(consent), 'DriveConsent does not open web OAuth via requestOfflineAccess');
 const manifest = readFileSync(path.join(root, '../android/app/src/main/AndroidManifest.xml'), 'utf8');
 assert(manifest.includes('android:name=".DriveConsentActivity"'), 'manifest registers DriveConsentActivity');
 assert(manifest.includes('android:taskAffinity="com.dincey.habitjournal.driveconsent"'), 'DriveConsentActivity has its own task');
+const consentBlock = manifest.split('android:name=".DriveConsentActivity"')[1].split('</activity>')[0];
+assert(consentBlock.includes('launchMode="standard"'), 'DriveConsentActivity is standard so Google can return a result');
+assert(!consentBlock.includes('singleTask'), 'Drive helper is not singleTask');
 
 const delay = Launch.nextWebTimerDelay([{ at: Date.parse('2026-08-31T22:00:00') }], Date.parse('2026-08-31T10:00:00'));
 assert(delay && delay.delay > 0, 'web timer finds next slot');
